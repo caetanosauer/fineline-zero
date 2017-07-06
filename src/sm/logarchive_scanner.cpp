@@ -164,7 +164,7 @@ bool MergeInput::finished()
 {
     if (!runFile || runFile->length == 0) { return true; }
     auto lr = logrec();
-    return lr->type() == t_skip || (endPID != 0 && lr->pid() >= endPID);
+    return lr->type() == skip_log || (endPID != 0 && lr->pid() >= endPID);
 }
 
 void MergeInput::next()

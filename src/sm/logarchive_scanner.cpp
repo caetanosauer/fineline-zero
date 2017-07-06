@@ -42,7 +42,7 @@ void ArchiveScan::open(PageID startPID, PageID endPID, lsn_t startLSN, lsn_t end
         if (it->open(startPID)) {
             auto lr = it->logrec();
             it++;
-            if (singlePage && lr->type() == logrec_t::t_page_img_format) {
+            if (singlePage && lr->type() == t_page_img_format) {
                 // Any entries beyond it (including it are ignored)
                 heapBegin = it.base();
                 ADD_TSTAT(la_img_trimmed, heapBegin - inputs.begin());
@@ -164,7 +164,7 @@ bool MergeInput::finished()
 {
     if (!runFile || runFile->length == 0) { return true; }
     auto lr = logrec();
-    return lr->type() == logrec_t::t_skip || (endPID != 0 && lr->pid() >= endPID);
+    return lr->type() == t_skip || (endPID != 0 && lr->pid() >= endPID);
 }
 
 void MergeInput::next()
@@ -175,4 +175,3 @@ void MergeInput::next()
     keyPID = logrec()->pid();
     keyLSN = logrec()->lsn();
 }
-

@@ -6,7 +6,6 @@
 
 class ShoreEnv;
 class sm_options;
-class FailureThread;
 class SkewShiftingThread;
 template <class T> class CrashThread;
 
@@ -19,7 +18,6 @@ public:
 
     virtual void setupOptions();
     virtual void run();
-    void mediaFailure(unsigned);
     void randomRootPageFailure();
     void crashFilthy();
 	bool running();
@@ -47,7 +45,6 @@ protected:
     bool opt_warmup;
     int opt_crashDelay;
     bool opt_crashDelayAfterInit;
-    int opt_failDelay;
     int opt_skewShiftDelay;
 
     bool hasFailed;
@@ -84,7 +81,6 @@ protected:
 private:
     std::vector<base_client_t*> clients;
     bool clientsForked;
-    FailureThread* failure_thread;
 };
 
 #endif

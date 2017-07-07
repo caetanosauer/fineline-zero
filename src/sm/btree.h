@@ -18,7 +18,6 @@ class bt_cursor_t;
 struct btree_lf_stats_t;
 struct btree_int_stats_t;
 class w_keystr_t;
-class verify_volume_result;
 struct okvl_mode;
 /**
  * Data access API for B+Tree.
@@ -127,12 +126,6 @@ public:
     static rc_t                        verify_tree(
         StoreID store, int hash_bits, bool &consistent);
 
-    /**
-     * \brief Verifies consistency of all BTree indexes in the volume.
-     * @copydetails btree_impl::_ux_verify_volume()
-     */
-    static rc_t            verify_volume(
-        int hash_bits, verify_volume_result &result);
 public:
     /*
      * for use by logrecs for undo

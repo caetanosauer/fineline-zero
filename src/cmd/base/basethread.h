@@ -4,7 +4,6 @@
 
 #include "thread_wrapper.h"
 #include "sm_base.h"
-#include "vol.h"
 #include "logarchiver.h"
 #include "xct.h"
 

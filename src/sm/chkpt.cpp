@@ -73,7 +73,6 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include "w_okvl_inl.h"    // Lock information gathering
 struct RawLock;            // Lock information gathering
 #include "restart.h"
-#include "vol.h"
 #include "worker_thread.h"
 #include "stopwatch.h"
 #include "logrec_support.h"
@@ -190,8 +189,8 @@ chkpt_m::chkpt_m(const sm_options& options, chkpt_t* chkpt_info)
     _log_based = options.get_bool_option("sm_chkpt_log_based", false);
     _print_propstats = options.get_bool_option("sm_chkpt_print_propstats", false);
 
-    // _use_log_archive mandatory with nodb mode
-    bool no_db_mode = options.get_bool_option("sm_no_db", false);
+    // FINELINE: nodb mode always on
+    bool no_db_mode = true;
     bool write_elision = options.get_bool_option("sm_write_elision", false);
     if (no_db_mode || write_elision) {
         _use_log_archive = true;
@@ -641,7 +640,7 @@ void chkpt_m::take(chkpt_t* chkpt)
     fs::rename(fpath, newpath);
     smlevel_0::log->get_storage()->add_checkpoint(begin_lsn);
 
-    if (_use_log_archive) {
+    if (_use_log_archive && !archived_lsn.is_null()) {
         // In no-db mode, the min_rec_lsn value is meaningless, since there is
         // no page cleaner. The equivalent in this case, i.e., the point up
         // to which the recovery log can be truncated, is determined by the

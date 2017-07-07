@@ -7,12 +7,9 @@ set(loginspect_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/logrecinfo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/loganalysis.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/propstats.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/dbscan.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/addbackup.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/xctlatency.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tracerestore.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/archstats.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/nodbgen.cpp
     )
 
 add_library (loginspect ${loginspect_SRCS})

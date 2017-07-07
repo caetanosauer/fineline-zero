@@ -40,7 +40,6 @@ public:
     bool evict_one(bf_idx);
 
 protected:
-    /** the buffer pool this cleaner deals with. */
     bf_tree_m*                  _bufferpool;
     bool                        _swizzling_enabled;
     bool                        _write_elision;
@@ -56,12 +55,6 @@ protected:
 
     // Maximum number of pick_victim attempts before throwing "eviction stuck" error
     unsigned _max_attempts;
-
-    // Cleaner is waken up every this many eviction attempts
-    unsigned _wakeup_cleaner_attempts;
-
-    // Dirty pages are flushed after this many eviction attempts
-    unsigned _clean_only_attempts;
 
 private:
     /**
@@ -86,8 +79,6 @@ private:
      * looking up the parent, latching, etc, so we save some work.
      */
     bool unswizzle_and_update_emlsn(bf_idx idx);
-
-    void flush_dirty_page(const bf_tree_cb_t& cb);
 
     virtual void do_work ();
 };

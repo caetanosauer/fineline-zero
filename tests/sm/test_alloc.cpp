@@ -4,7 +4,6 @@
 #include "generic_page.h"
 #include "stnode_page.h"
 #include "alloc_cache.h"
-#include "vol.h"
 
 btree_test_env *test_env;
 

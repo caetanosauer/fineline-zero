@@ -867,9 +867,7 @@ int ShoreEnv::start_sm()
         // after loading, which is not the case.
 
         // Make sure that catalog index (stid 1) exists
-        vol_t* vol = ss_m::vol;
-        w_assert0(vol);
-        w_assert0(vol->is_alloc_store(1));
+        w_assert0(smlevel_0::stnode->is_allocated(1));
 
         // "speculate" that the database is loaded
         _loaded = true;

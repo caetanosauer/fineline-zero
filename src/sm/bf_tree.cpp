@@ -6,8 +6,6 @@
 
 #include "bf_hashtable.h"
 #include "bf_tree_cb.h"
-#include "bf_tree_cleaner.h"
-#include "page_cleaner_decoupled.h"
 #include "bf_tree.h"
 
 #include "smthread.h"
@@ -17,7 +15,6 @@
 
 #include "sm_base.h"
 #include "sm.h"
-#include "vol.h"
 #include "alloc_cache.h"
 
 #include <boost/static_assert.hpp>
@@ -86,7 +83,6 @@ int64_t w_findprime(int64_t min)
 ///////////////////////////////////   Initialization and Release BEGIN ///////////////////////////////////
 
 bf_tree_m::bf_tree_m(const sm_options& options)
-    : _cleaner(nullptr)
 {
     // sm_bufboolsize given in MB -- default 8GB
     long bufpoolsize = options.get_int_option("sm_bufpoolsize", 8192) * 1024 * 1024;
@@ -109,13 +105,13 @@ bf_tree_m::bf_tree_m(const sm_options& options)
     _write_elision = options.get_bool_option("sm_write_elision", false);
 
     // No-DB options
-    _no_db_mode = options.get_bool_option("sm_no_db", false);
+    // _no_db_mode = options.get_bool_option("sm_no_db", false);
+    // FINELINE: No-DB mode now mandatory
+    _no_db_mode = true;
     _batch_segment_size = options.get_int_option("sm_batch_segment_size", 1);
     _batch_warmup = _batch_segment_size > 1;
 
     _log_fetches = options.get_bool_option("sm_log_page_fetches", false);
-
-    _media_failure_pid = 0;
 
     // Warm-up options
     // Warm-up hit ratio must be an int between 0 and 100
@@ -224,10 +220,6 @@ bf_tree_m::bf_tree_m(const sm_options& options)
     _hashtable = new bf_hashtable<bf_idx_pair>(buckets);
     w_assert0(_hashtable != NULL);
 
-    _cleaner_decoupled = options.get_bool_option("sm_cleaner_decoupled", false);
-
-    _instant_restore = options.get_bool_option("sm_restore_instant", true);
-
     _evictioner = std::make_shared<page_evictioner_base>(this, options);
     _async_eviction = options.get_bool_option("sm_async_eviction", false);
     if (_async_eviction) { _evictioner->fork(); }
@@ -235,20 +227,9 @@ bf_tree_m::bf_tree_m(const sm_options& options)
 
 void bf_tree_m::shutdown()
 {
-    // Order in which threads are destroyed is very important!
-    if (_background_restorer) {
-        _background_restorer->stop();
-        _background_restorer = nullptr;
-    }
-
     if(_async_eviction) {
         _evictioner->stop();
         _evictioner = nullptr;
-    }
-
-    if (_cleaner) {
-        _cleaner->stop();
-        _cleaner = nullptr;
     }
 }
 
@@ -275,11 +256,6 @@ bf_tree_m::~bf_tree_m()
         ::free (buf);
         _buffer = NULL;
     }
-}
-
-std::shared_ptr<page_cleaner_base> bf_tree_m::get_cleaner()
-{
-    return _cleaner;
 }
 
 ///////////////////////////////////   Initialization and Release END ///////////////////////////////////
@@ -408,21 +384,12 @@ void bf_tree_m::post_init()
 {
     if (_no_db_mode && _batch_warmup) {
         constexpr bool virgin_pages = true;
-        auto vol_pages = smlevel_0::vol->num_used_pages();
+        auto vol_pages = smlevel_0::alloc->num_pages();
         auto segcount = vol_pages  / _batch_segment_size
             + (vol_pages % _batch_segment_size ? 1 : 0);
         _restore_coord = std::make_shared<RestoreCoord> (_batch_segment_size,
                 segcount, SegmentRestorer::bf_restore, virgin_pages);
     }
-
-    if(_cleaner_decoupled) {
-        w_assert0(smlevel_0::logArchiver);
-        _cleaner = std::make_shared<page_cleaner_decoupled>(ss_m::get_options());
-    }
-    else{
-        _cleaner = std::make_shared<bf_tree_cleaner>(ss_m::get_options());
-    }
-    _cleaner->fork();
 }
 
 void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page, bool only_if_dirty)
@@ -455,60 +422,8 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page, bool onl
     }
 }
 
-void bf_tree_m::set_media_failure()
-{
-    w_assert0(smlevel_0::logArchiver);
-
-    auto vol_pages = smlevel_0::vol->num_used_pages();
-
-    constexpr bool virgin_pages = false;
-    constexpr bool start_locked = true;
-    auto segcount = vol_pages  / _batch_segment_size
-        + (vol_pages % _batch_segment_size ? 1 : 0);
-    _restore_coord = std::make_shared<RestoreCoord> (_batch_segment_size,
-            segcount, SegmentRestorer::bf_restore, virgin_pages,
-            _instant_restore, start_locked);
-
-    smlevel_0::vol->open_backup();
-    lsn_t backup_lsn = smlevel_0::vol->get_backup_lsn();
-
-    _media_failure_pid = vol_pages;
-
-    // Make sure log is archived until failureLSN
-    lsn_t failure_lsn = Logger::log_sys<restore_begin_log>(vol_pages);
-    ERROUT(<< "Media failure injected! Waiting for log archiver to reach LSN "
-            << failure_lsn);
-    stopwatch_t timer;
-    smlevel_0::logArchiver->archiveUntilLSN(failure_lsn);
-    ERROUT(<< "Failure LSN reached in " << timer.time() << " seconds");
-
-    _restore_coord->set_lsns(backup_lsn, failure_lsn);
-    _restore_coord->start();
-
-    _background_restorer = std::make_shared<BgRestorer>
-        (_restore_coord, [this] { unset_media_failure(); });
-    _background_restorer->fork();
-    _background_restorer->wakeup();
-}
-
-void bf_tree_m::unset_media_failure()
-{
-    _media_failure_pid = 0;
-    // Background restorer cannot be destroyed here because it is the caller
-    // of this method via a callback. For now, well just let it linger as a
-    // "zombie" thread
-    // _background_restorer = nullptr;
-    Logger::log_sys<restore_end_log>();
-    smlevel_0::vol->close_backup();
-    ERROUT(<< "Restore done!");
-    _restore_coord = nullptr;
-}
-
 void bf_tree_m::notify_archived_lsn(lsn_t archived_lsn)
 {
-    if (_cleaner) {
-        _cleaner->notify_archived_lsn(archived_lsn);
-    }
 }
 
 ///////////////////////////////////   Page fix/unfix BEGIN         ///////////////////////////////////
@@ -593,29 +508,10 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
             }
         }
 
-        // The result of calling this function determines if we'll behave
-        // in normal mode or in failure mode below, and it does that in an
-        // atomic way, i.e., we can't switch from one mode to another in
-        // the middle of a fix. Note that we can operate in normal mode
-        // even if a failure occurred and we missed it here, because vol_t
-        // still operates normally even during the failure (remember, we
-        // just simulate a media failure)
-        bool media_failure = is_media_failure(pid);
-
         if (idx == 0)
         {
             if (only_if_hit) {
                 return RC(stINUSE);
-            }
-
-            // Wait for instant restore to restore this segment
-            if (do_recovery && !virgin_page && media_failure)
-            {
-                // copy into local variable to avoid race condition with setting member to null
-                timer.reset();
-                auto restore = _restore_coord;
-                if (restore) { restore->fetch(pid); }
-                ADD_TSTAT(bf_batch_wait_time, timer.time_us());
             }
 
             // STEP 1) Grab a free frame to read into
@@ -647,38 +543,10 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
             // Read page from disk
             page = &_buffer[idx];
 
-            if (!virgin_page && !_no_db_mode) {
-                INC_TSTAT(bf_fix_nonroot_miss_count);
-
-                if (parent && emlsn.is_null() && _maintain_emlsn) {
-                    // Get emlsn from parent
-                    general_recordid_t recordid = find_page_id_slot(parent, pid);
-                    btree_page_h parent_h;
-                    parent_h.fix_nonbufferpool_page(parent);
-                    emlsn = parent_h.get_emlsn_general(recordid);
-                }
-
-                bool from_backup = media_failure && !do_recovery;
-                W_DO(_read_page(pid, cb, from_backup));
-                cb.init(pid, page->lsn);
-                if (from_backup) { cb.pin_for_restore(); }
-            }
-            else {
-                // initialize contents of virgin page
-                cb.init(pid, lsn_t::null);
-                ::memset(page, 0, sizeof(generic_page));
-                page->pid = pid;
-
-                // Only way I could think of to destroy background restorer
-                static std::atomic<bool> i_shall_destroy {false};
-                if (!is_media_failure() && !_restore_coord && _background_restorer) {
-                    bool expected = false;
-                    if (i_shall_destroy.compare_exchange_strong(expected, true)) {
-                        _background_restorer->join();
-                        _background_restorer = nullptr;
-                    }
-                }
-            }
+            // initialize contents of virgin page
+            cb.init(pid, lsn_t::null);
+            ::memset(page, 0, sizeof(generic_page));
+            page->pid = pid;
 
             // When a page is first fetched from storage, we always check
             // if recovery is needed (we might not recover it right now,
@@ -807,22 +675,6 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
     }
 }
 
-rc_t bf_tree_m::_read_page(PageID pid, bf_tree_cb_t& cb, bool from_backup)
-{
-    w_assert1(cb.latch().is_mine());
-    auto page = get_page(&cb);
-
-    rc_t rc = RCOK;
-    if (from_backup) { smlevel_0::vol->read_backup(pid, 1, page); }
-    else { rc = smlevel_0::vol->read_page(pid, page); }
-    if (rc.is_error()) {
-        _hashtable->remove(pid);
-        cb.latch().latch_release();
-        _add_free_block(get_idx(&cb));
-    }
-    return rc;
-}
-
 void bf_tree_m::fuzzy_checkpoint(chkpt_t& chkpt) const
 {
     if (_no_db_mode) { return; }
@@ -845,53 +697,6 @@ void bf_tree_m::fuzzy_checkpoint(chkpt_t& chkpt) const
             if (rec.is_null()) { rec = cb.get_page_lsn(); }
             chkpt.mark_page_dirty(cb._pid, cb.get_page_lsn(), rec);
         }
-    }
-}
-
-void bf_tree_m::prefetch_pages(PageID first, unsigned count)
-{
-    static thread_local std::vector<generic_page*> frames;
-    frames.resize(count);
-
-    // First grab enough free frames to read into
-    for (unsigned i = 0; i < count; i++) {
-        bf_idx idx;
-        while (true) {
-            W_COERCE(_grab_free_block(idx));
-            auto& cb = get_cb(idx);
-            w_rc_t check_rc = cb.latch().latch_acquire(LATCH_EX,
-                    timeout_t::WAIT_IMMEDIATE);
-            if (check_rc.is_error()) { _add_free_block(idx); }
-            else { break; }
-        }
-        frames[i] = get_page(idx);
-    }
-
-    bool media_failure = is_media_failure();
-
-    // Then read into them using iovec
-    smlevel_0::vol->read_vector(first, count, frames, media_failure);
-
-    // Finally, add the frames to the hash table if not already there and
-    // initialize the control blocks
-    for (unsigned i = 0; i < count; i++) {
-        PageID pid = first + i;
-        auto& cb = *get_cb(frames[i]);
-        auto idx = get_idx(&cb);
-
-        constexpr bf_idx parent_idx = 0;
-        bool registered = _hashtable->insert_if_not_exists(pid,
-                bf_idx_pair(idx, parent_idx));
-
-        if (registered) {
-            cb.init(pid, frames[i]->lsn);
-            // cb.set_check_recovery(true);
-
-            if (media_failure) { cb.pin_for_restore(); }
-        }
-        else { _add_free_block(idx); }
-
-        cb.latch().latch_release();
     }
 }
 
@@ -1297,7 +1102,7 @@ w_rc_t bf_tree_m::fix_root (generic_page*& page, StoreID store,
     bf_idx idx = _root_pages[store];
     if (!_is_valid_idx(idx)) {
         // Load root page
-        PageID root_pid = smlevel_0::vol->get_store_root(store);
+        PageID root_pid = smlevel_0::stnode->get_root_pid(store);
         W_DO(fix(NULL, page, root_pid, mode, conditional, virgin));
 
         bf_idx_pair p;
@@ -1533,59 +1338,3 @@ PageID bf_tree_m::normalize_pid(PageID pid) const {
 }
 
 bool pidCmp(const PageID& a, const PageID& b) { return a < b; }
-
-void WarmupThread::fixChildren(btree_page_h& parent, size_t& fixed, size_t max)
-{
-    btree_page_h page;
-    if (parent.get_foster() > 0) {
-        page.fix_nonroot(parent, parent.get_foster_opaqueptr(), LATCH_SH);
-        fixed++;
-        fixChildren(page, fixed, max);
-        page.unfix();
-    }
-
-    if (parent.is_leaf()) {
-        return;
-    }
-
-    page.fix_nonroot(parent, parent.pid0_opaqueptr(), LATCH_SH);
-    fixed++;
-    w_assert1(parent.level() > page.level());
-    fixChildren(page, fixed, max);
-    page.unfix();
-
-    size_t nrecs = parent.nrecs();
-    for (size_t j = 0; j < nrecs; j++) {
-        if (fixed >= max) {
-            return;
-        }
-        PageID pid = parent.child_opaqueptr(j);
-        page.fix_nonroot(parent, pid, LATCH_SH);
-        fixed++;
-        w_assert1(parent.level() > page.level());
-        fixChildren(page, fixed, max);
-        page.unfix();
-    }
-}
-
-void WarmupThread::run()
-{
-    size_t npages = smlevel_0::bf->get_size();
-    vol_t* vol = smlevel_0::vol;
-    stnode_cache_t* stcache = vol->get_stnode_cache();
-    vector<StoreID> stids;
-    stcache->get_used_stores(stids);
-
-    // Load all pages in depth-first until buffer is full or all pages read
-    btree_page_h parent;
-    vector<PageID> pids;
-    size_t fixed = 0;
-    for (size_t i = 0; i < stids.size(); i++) {
-        parent.fix_root(stids[i], LATCH_SH);
-        fixed++;
-        fixChildren(parent, fixed, npages);
-    }
-
-    ERROUT(<< "Finished warmup! Pages fixed: " << fixed << " of " << npages <<
-            " with DB size " << vol->get_alloc_cache()->get_last_allocated_pid());
-}

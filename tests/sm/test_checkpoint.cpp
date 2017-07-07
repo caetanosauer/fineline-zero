@@ -2,7 +2,6 @@
 #include "sm_base.h"
 #include "log_core.h"
 #include "bf_tree.h"
-#include "vol.h"
 #include "chkpt.h"
 #include "xct_logger.h"
 

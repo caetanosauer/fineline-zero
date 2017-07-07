@@ -1,11 +1,6 @@
-/*
- * (c) Copyright 2011-2013, Hewlett-Packard Development Company, LP
- */
-
 #include "w_defines.h"
 
 #include "sm_base.h"
-#include "vol.h"
 #include "alloc_cache.h"
 #include "smthread.h"
 #include "xct_logger.h"
@@ -35,6 +30,8 @@ alloc_cache_t::alloc_cache_t(stnode_cache_t& stcache, bool virgin, bool clustere
         extent_id_t ext = stcache.get_last_extent(0);
         W_COERCE(load_alloc_page(0, ext));
     }
+
+    _cluster_stores = clustered;
 }
 
 rc_t alloc_cache_t::load_alloc_page(StoreID stid, extent_id_t ext)
@@ -88,6 +85,7 @@ bool alloc_cache_t::is_allocated(PageID pid)
 
 rc_t alloc_cache_t::sx_allocate_page(PageID& pid, StoreID stid)
 {
+    if (!_cluster_stores) { stid = 0; }
     sys_xct_section_t ssx(true);
 
     // get pid and update last_alloc_page in critical section

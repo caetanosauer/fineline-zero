@@ -20,7 +20,7 @@
 #include "sm.h"
 #include "xct.h"
 #include "bf_tree.h"
-#include "vol.h"
+#include "alloc_cache.h"
 #include "xct_logger.h"
 
 rc_t btree_impl::_sx_split_foster(btree_page_h& page, PageID& new_page_id,
@@ -36,7 +36,7 @@ rc_t btree_impl::_sx_split_foster(btree_page_h& page, PageID& new_page_id,
     /*
      * Step 1: Allocate a new page for the foster child
      */
-    W_DO(smlevel_0::vol->alloc_a_page(new_page_id, page.store()));
+    W_DO(smlevel_0::alloc->sx_allocate_page(new_page_id, page.store()));
 
     /*
      * Step 2: Create new foster child and move records into it, logging its
@@ -46,7 +46,7 @@ rc_t btree_impl::_sx_split_foster(btree_page_h& page, PageID& new_page_id,
     rc_t rc = new_page.fix_nonroot(page, new_page_id,
             LATCH_EX, false, true);
     if (rc.is_error()) {
-        W_DO(smlevel_0::vol ->deallocate_page(new_page_id));
+        W_DO(smlevel_0::alloc->sx_deallocate_page(new_page_id));
         return rc;
     }
 

@@ -8,15 +8,14 @@
 #include "w_defines.h"
 #include "latch.h"
 #include "tatas.h"
-#include "vol.h"
 #include "generic_page.h"
 #include "bf_hashtable.h"
 #include "bf_tree_cb.h"
 #include <iosfwd>
-#include "page_cleaner.h"
 #include "page_evictioner.h"
 #include "restart.h"
 #include "restore.h"
+#include "stnode_page.h"
 
 #include <array>
 
@@ -27,7 +26,6 @@ struct bf_tree_cb_t; // include bf_tree_cb.h in implementation codes
 class test_bf_tree;
 class test_bf_fixed;
 class page_evictioner_base;
-class bf_tree_cleaner;
 class btree_page_h;
 struct EvictionContext;
 
@@ -66,10 +64,8 @@ constexpr uint32_t SWIZZLED_PID_BIT = 0x80000000;
 class bf_tree_m {
     friend class test_bf_tree; // for testcases
     friend class test_bf_fixed; // for testcases
-    friend class bf_tree_cleaner; // for page cleaning
     friend class page_evictioner_base;  // for page evictioning
     friend class WarmupThread;
-    friend class page_cleaner_decoupled;
     friend class page_evictioner_gclock;
     friend class GenericPageIterator;
 
@@ -172,9 +168,6 @@ public:
 
     /** returns the current latch mode of the page. */
     latch_mode_t latch_mode(const generic_page* p);
-
-    /** Prefetches pages into free frames using iovec */
-    void prefetch_pages(PageID first, unsigned count);
 
     /**
      * upgrade SH-latch on the given page to EX-latch.
@@ -297,15 +290,6 @@ public:
 
     size_t get_size() { return _block_cnt; }
 
-    std::shared_ptr<page_cleaner_base> get_cleaner();
-
-    template <typename... Args>
-    void wakeup_cleaner(Args... args)
-    {
-        auto cleaner = get_cleaner();
-        if (cleaner) { cleaner->wakeup(args...); }
-    }
-
     bool is_no_db_mode() const { return _no_db_mode; }
 
     bool is_warmup_done() const { return _warmup_done; }
@@ -313,14 +297,6 @@ public:
     bool has_dirty_frames() const;
 
     void fuzzy_checkpoint(chkpt_t& chkpt) const;
-
-    void set_media_failure();
-    void unset_media_failure();
-
-    PageID get_media_failure_pid() { return _media_failure_pid; }
-    bool is_media_failure() { return _media_failure_pid > 0; }
-    bool is_media_failure(PageID pid) { return _media_failure_pid > 0 &&
-        pid < _media_failure_pid; }
 
     // Used for decoupled cleaning
     void notify_archived_lsn(lsn_t);
@@ -391,9 +367,6 @@ private:
 
     /// returns true iff idx is in the valid range.  for assertion.
     bool   _is_valid_idx (bf_idx idx) const;
-
-    /// Called by fix to read a page from the database (or the backup)
-    rc_t _read_page(PageID pid, bf_tree_cb_t& cb, bool from_backup = false);
 
     /**
      * returns true if idx is in the valid range and also the block is used.  for assertion.
@@ -473,9 +446,6 @@ private:
     /** spin lock to protect all freelist related stuff. */
     tatas_lock           _freelist_lock;
 
-    /** the dirty page cleaner. */
-    std::shared_ptr<page_cleaner_base>   _cleaner;
-
     /** worker thread responsible for evicting pages. */
     std::shared_ptr<page_evictioner_base> _evictioner;
 
@@ -490,12 +460,6 @@ private:
     bool                 _maintain_emlsn;
 
     bool _write_elision;
-
-    std::atomic<PageID> _media_failure_pid;
-
-    bool _cleaner_decoupled;
-
-    bool _instant_restore;
 
     bool _no_db_mode;
 
@@ -515,9 +479,6 @@ private:
     using RestoreCoord = RestoreCoordinator<
         std::function<decltype(SegmentRestorer::bf_restore)>>;
     std::shared_ptr<RestoreCoord> _restore_coord;
-
-    using BgRestorer = BackgroundRestorer<RestoreCoord, std::function<void(void)>>;
-    std::shared_ptr<BgRestorer> _background_restorer;
 };
 
 /**

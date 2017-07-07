@@ -50,34 +50,6 @@ private:
     bool wait_for_warmup;
 };
 
-class FailureThread : public thread_wrapper_t
-{
-public:
-    FailureThread(unsigned delay, bool* flag)
-        : delay(delay), flag(flag)
-    {
-    }
-
-    virtual ~FailureThread() {}
-
-    virtual void run()
-    {
-        ::sleep(delay);
-
-        smlevel_0::bf->set_media_failure();
-
-        // disable eager archiving
-        // smlevel_0::logArchiver->setEager(false);
-
-        *flag = true;
-        lintel::atomic_thread_fence(lintel::memory_order_release);
-    }
-
-private:
-    unsigned delay;
-    bool* flag;
-};
-
 class SkewShiftingThread : public worker_thread_t
 {
 public:
@@ -158,8 +130,6 @@ void KitsCommand::setupOptions()
             failure (negative disables)")
         ("crashDelayAfterInit", po::value<bool>(&opt_crashDelayAfterInit)->default_value(true),
             "Start counting crash delay only after SM is initialized (and recovered if in ARIES)")
-        ("failDelay", po::value<int>(&opt_failDelay)->default_value(-1),
-            "Time to wait before marking the volume as failed (simulates media failure)")
         ("skewShiftDelay", po::value<int>(&opt_skewShiftDelay)->default_value(0),
             "Shift skewed are every N seconds")
     ;
@@ -172,7 +142,7 @@ ShoreEnv* KitsCommand::getShoreEnv()
 }
 
 KitsCommand::KitsCommand()
-    : mtype(MT_UNDEF), clientsForked(false), failure_thread(nullptr)
+    : mtype(MT_UNDEF), clientsForked(false)
 {}
 
 void KitsCommand::run()
@@ -182,11 +152,6 @@ void KitsCommand::run()
     if (opt_load) {
         shoreEnv->load();
         cout << "Loading finished!" << endl;
-    }
-
-    // Spawn failure thread if requested
-    if (opt_failDelay >= 0) {
-        mediaFailure(opt_failDelay);
     }
 
     if (opt_skew && opt_skewShiftDelay > 0) {
@@ -199,11 +164,6 @@ void KitsCommand::run()
 
     finish();
 
-    if (failure_thread) {
-        failure_thread->join();
-        delete failure_thread;
-    }
-
     if (skew_shifter) {
         skew_shifter->stop();
     }
@@ -215,18 +175,10 @@ void KitsCommand::run()
     // crash_thread aborts the program, so we don't worry about joining it
 }
 
-void KitsCommand::mediaFailure(unsigned delay)
-{
-    //FailureThread* failure_thread = nullptr;
-    hasFailed = false;
-    failure_thread = new FailureThread(delay, &hasFailed);
-    failure_thread->fork();
-}
-
 void KitsCommand::randomRootPageFailure()
 {
     std::vector<StoreID> stores;
-    smlevel_0::vol->get_stnode_cache()->get_used_stores(stores);
+    smlevel_0::stnode->get_used_stores(stores);
     int randomStore = random()%(stores.size() -1);
     // StoreID stid = stores.at(randomStore);
     // PageID root_pid = smlevel_0::vol->get_stnode_cache()->get_root_pid(stid);
@@ -404,21 +356,6 @@ void KitsCommand::doWork()
     lsn_t last_log_tail = smlevel_0::log->durable_lsn();
 
     forkClients();
-
-    if (opt_failDelay > 0) {
-        // Start benchmark and wait for failure thread to mark device failed
-        sleep(opt_failDelay);
-        while (!hasFailed) {
-            sleep(1);
-            lintel::atomic_thread_fence(lintel::memory_order_consume);
-        }
-
-        // Now wait for device to be restored -- check every 1 second
-        while (smlevel_0::bf->is_media_failure()) {
-            sleep(1);
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        }
-    }
 
     // If running for a time duration, wait specified number of seconds
     if (mtype == MT_TIME_DUR) {

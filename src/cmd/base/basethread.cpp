@@ -3,7 +3,6 @@
 #include <chkpt.h>
 #include <sm.h>
 #include <restart.h>
-#include <vol.h>
 #include <btree.h>
 #include <bf_tree.h>
 

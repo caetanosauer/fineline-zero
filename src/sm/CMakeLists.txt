@@ -5,7 +5,6 @@ set(sm_STAT_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/bf_hashtable.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/bf_tree.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/bf_tree_cleaner.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/btcursor.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/btree.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/btree_impl.cpp
@@ -41,8 +40,6 @@ set(sm_STAT_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/mem_mgmt.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/logrec.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/page_evictioner.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/page_cleaner.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/page_cleaner_decoupled.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/partition.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/restart.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/restore.cpp
@@ -51,7 +48,6 @@ set(sm_STAT_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/smstats.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/smthread.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/stnode_page.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/vol.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/xct.cpp
 )
 

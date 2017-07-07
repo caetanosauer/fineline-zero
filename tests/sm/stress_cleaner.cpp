@@ -3,7 +3,6 @@
 #include "stopwatch.h"
 #include "sm_options.h"
 #include "log_core.h"
-#include "vol.h"
 #include "alloc_cache.h"
 #include "stnode_page.h"
 #include "bf_tree.h"

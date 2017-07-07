@@ -4,7 +4,6 @@
 #include "log_core.h"
 #include "logarchiver.h"
 #include "restore.h"
-#include "vol.h"
 #include "btree_page.h"
 #include "alloc_cache.h"
 #include "sm_options.h"

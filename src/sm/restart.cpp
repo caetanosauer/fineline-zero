@@ -77,7 +77,8 @@ restart_thread_t::restart_thread_t(const sm_options& options)
 
     instantRestart = options.get_bool_option("sm_restart_instant", true);
     log_based = options.get_bool_option("sm_restart_log_based_redo", true);
-    no_db_mode = options.get_bool_option("sm_no_db", false);
+    // FINELINE: nodb mode always on
+    no_db_mode = true;
     write_elision = options.get_bool_option("sm_write_elision", false);
     take_chkpt = options.get_bool_option("sm_chkpt_after_log_analysis", false);
     // CS TODO: instant restart should also allow log-based redo

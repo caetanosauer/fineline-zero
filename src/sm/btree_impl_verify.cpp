@@ -17,7 +17,6 @@
 
 // these are for volume-wide verifications
 #include "sm.h"
-#include "vol.h"
 #include "xct.h"
 #include "sm_base.h"
 #include "bf_tree.h"
@@ -354,77 +353,4 @@ bool verification_context::is_bitmap_clean () const
         }
     }
     return true;
-}
-
-rc_t btree_impl::_ux_verify_volume(
-    int hash_bits, verify_volume_result &result)
-{
-    smlevel_0::bf->wakeup_cleaner(true, 1);
-    vol_t *vol = ss_m::vol;
-    w_assert1(vol);
-    generic_page buf;
-    PageID endpid = (PageID) (vol->num_used_pages());
-    // CS TODO should skip non-btree PIDs
-    for (PageID pid = 0; pid < endpid; ++pid) {
-        // TODO we should skip large chunks of unused areas to speedup.
-        // TODO we should scan more than one page at a time to speedup.
-        if (!vol->is_allocated_page(pid)) {
-            continue;
-        }
-        W_DO (vol->read_page(pid, &buf));
-        btree_page_h page;
-        page.fix_nonbufferpool_page(&buf);
-        if (page.tag() == t_btree_p && !page.is_to_be_deleted()) {
-            verification_context *context = result.get_or_create_context(page.root(), hash_bits);
-            w_assert0(context);
-            w_assert0(result.get_context(page.root()));
-            W_DO (_ux_verify_feed_page (page, *context));
-
-            if (page.pid() == page.root()) {
-                // root needs corresponding expectations from outside.
-                w_keystr_t infimum, supremum;
-                infimum.construct_neginfkey();
-                supremum.construct_posinfkey();
-                context->add_expectation(page.root(), NOCHECK_ROOT_LEVEL, false, infimum);
-                context->add_expectation(page.root(), NOCHECK_ROOT_LEVEL, true, supremum);
-            }
-        }
-    }
-    return RCOK;
-}
-
-verify_volume_result::verify_volume_result ()
-{
-}
-verify_volume_result::~verify_volume_result()
-{
-    for (std::map<PageID, verification_context*>::iterator iter = _results.begin();
-         iter != _results.end(); ++iter) {
-        verification_context *context = iter->second;
-        delete context;
-    }
-    _results.clear();
-}
-verification_context*
-verify_volume_result::get_or_create_context (
-    PageID root_pid, int hash_bits)
-{
-    verification_context *context = get_context(root_pid);
-    if (context != NULL) {
-        return context;
-    } else {
-        // this store_id is first seen. let's create
-        context = new verification_context (hash_bits);
-        _results.insert(std::pair<PageID, verification_context*>(root_pid, context));
-        return context;
-    }
-}
-verification_context* verify_volume_result::get_context (PageID root_pid)
-{
-    std::map<PageID, verification_context*>::const_iterator iter = _results.find(root_pid);
-    if (iter != _results.end()) {
-        return iter->second;
-    } else {
-        return NULL;
-    }
 }

@@ -3,7 +3,6 @@
  */
 
 #include "sm_base.h"
-#include "vol.h"
 #include "stnode_page.h"
 #include "alloc_cache.h"
 #include "xct_logger.h"

@@ -3,7 +3,6 @@
 #include "stopwatch.h"
 #include "sm_options.h"
 #include "log_core.h"
-#include "vol.h"
 #include "thread_wrapper.h"
 
 #include <boost/program_options.hpp>

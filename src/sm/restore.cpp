@@ -6,7 +6,6 @@
 #include "logarchiver.h"
 #include "log_core.h"
 #include "bf_tree.h"
-#include "vol.h"
 #include "sm_options.h"
 #include "xct_logger.h"
 
@@ -20,17 +19,13 @@ void SegmentRestorer::bf_restore(unsigned segment_begin, unsigned segment_end,
 {
     PageID first_pid = segment_begin * segment_size;
     PageID total_pages = (segment_end - segment_begin) * segment_size;
-    if (smlevel_0::bf->is_media_failure(first_pid)) {
-        auto count = std::min(total_pages,
-                smlevel_0::bf->get_media_failure_pid() - first_pid);
-        smlevel_0::bf->prefetch_pages(first_pid, count);
-    }
 
     for (unsigned s = segment_begin; s < segment_end; s++) {
         first_pid = s * segment_size;
         GenericPageIterator pbegin {first_pid, segment_size, virgin_pages};
         GenericPageIterator pend;
 
+        // CS TODO: pass backupLSN rather than lsn_t::null
         // CS TODO there seems to be a weird memory leak in ArchiveScan
         static thread_local ArchiveScan archive_scan{smlevel_0::logArchiver->getIndex()};
         // ArchiveScan archive_scan{smlevel_0::logArchiver->getIndex()};

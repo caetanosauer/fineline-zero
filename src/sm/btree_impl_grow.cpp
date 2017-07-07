@@ -15,7 +15,7 @@
 #include "btree_impl.h"
 #include "w_key.h"
 #include "xct.h"
-#include "vol.h"
+#include "alloc_cache.h"
 
 rc_t btree_impl::_ux_create_tree_core(const StoreID& stid, const PageID& root_pid)
 {
@@ -114,7 +114,7 @@ btree_impl::_sx_grow_tree(btree_page_h& rp)
 {
     PageID new_pid;
     // allocate a page as separate system transaction
-    W_DO(smlevel_0::vol->alloc_a_page(new_pid, rp.store()));
+    W_DO(smlevel_0::alloc->sx_allocate_page(new_pid, rp.store()));
 
     sys_xct_section_t sxs;
     W_DO(sxs.check_error_on_start());
@@ -126,7 +126,7 @@ btree_impl::_sx_grow_tree(btree_page_h& rp)
 
     if (rp.get_foster () == 0) {
         // other concurrent thread might have done it
-        W_DO(smlevel_0::vol->deallocate_page(new_pid));
+        W_DO(smlevel_0::alloc->sx_deallocate_page(new_pid));
         return RCOK;
     }
 

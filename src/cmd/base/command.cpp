@@ -10,13 +10,10 @@
 #include "propstats.h"
 #include "logpagestats.h"
 #include "loganalysis.h"
-#include "dbscan.h"
-#include "addbackup.h"
 #include "xctlatency.h"
 #include "tracerestore.h"
 #include "archstats.h"
 #include "logrecinfo.h"
-#include "nodbgen.h"
 
 #include <boost/foreach.hpp>
 
@@ -47,9 +44,6 @@ void Command::init()
     REGISTER_COMMAND("mergeruns", MergeRuns);
     REGISTER_COMMAND("verifylog", VerifyLog);
     REGISTER_COMMAND("truncatelog", TruncateLog);
-    REGISTER_COMMAND("dbscan", DBScan);
-    REGISTER_COMMAND("nodbgen", NoDBGen);
-    REGISTER_COMMAND("addbackup", AddBackup);
     REGISTER_COMMAND("xctlatency", XctLatency);
     REGISTER_COMMAND("agglog", AggLog);
     REGISTER_COMMAND("logpagestats", LogPageStats);

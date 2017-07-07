@@ -1126,15 +1126,6 @@ public:
      */
     static void             dump_page_lsn_chain(std::ostream &o);
 
-    /**
-     * \brief Verifies consistency of all BTree indexes in the volume.
-     * \ingroup SSMVOL
-     * @copydetails btree_impl::_ux_verify_volume()
-     * @see verify_index()
-     */
-    static rc_t            verify_volume(
-        int hash_bits, verify_volume_result &result);
-
 
 
     /**\addtogroup SSMSTORE

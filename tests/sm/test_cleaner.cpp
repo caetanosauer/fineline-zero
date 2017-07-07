@@ -1,7 +1,6 @@
 #include "btree_test_env.h"
 #include "sm_base.h"
 #include "log_core.h"
-#include "vol.h"
 #include "logarchiver.h"
 #include "page_cleaner_decoupled.h"
 

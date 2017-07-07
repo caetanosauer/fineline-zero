@@ -7,7 +7,7 @@
 #include "sm.h"
 #include "xct.h"
 #include "btree.h"
-#include "vol.h"
+#include "alloc_cache.h"
 #include "lock.h"
 
 /*==============================================================*
@@ -19,9 +19,10 @@ rc_t ss_m::create_index(StoreID &stid)
     // W_DO(lm->intent_vol_lock(vid, okvl_mode::IX)); // take IX on volume
 
     // CS TODO: page allocation should transfer ownership to stnode
-    PageID root;
-    W_DO(vol->create_store(root, stid));
-    W_DO(bt->create(stid, root));
+    PageID root_pid;
+    W_DO(alloc->sx_allocate_page(root_pid));
+    W_DO(stnode->sx_create_store(root_pid, stid));
+    W_DO(bt->create(stid, root_pid));
 
     W_DO(lm->intent_store_lock(stid, okvl_mode::X)); // take X on this new index
 
@@ -128,7 +129,7 @@ rc_t ss_m::open_store (StoreID stid, PageID &root_pid, bool for_update)
 }
 rc_t ss_m::open_store_nolock (StoreID stid, PageID &root_pid)
 {
-    PageID shpid = vol->get_store_root(stid);
+    PageID shpid = stnode->get_root_pid(stid);
     if (shpid == 0) {
         return RC(eBADSTID);
     }

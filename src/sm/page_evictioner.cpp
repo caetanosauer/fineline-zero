@@ -19,15 +19,9 @@ page_evictioner_base::page_evictioner_base(bf_tree_m* bufferpool, const sm_optio
     _random_pick = options.get_bool_option("sm_evict_random", false);
     _use_clock = options.get_bool_option("sm_evict_use_clock", false);
     _log_evictions = options.get_bool_option("sm_log_page_evictions", false);
-    _wakeup_cleaner_attempts = options.get_int_option("sm_evict_wakeup_cleaner_attempts", 0);
-    _clean_only_attempts = options.get_int_option("sm_evict_clean_only_attempts", 0);
     _write_elision = options.get_bool_option("sm_write_elision", false);
-    _no_db_mode = options.get_bool_option("sm_no_db", false);
-
-    if (options.get_bool_option("sm_evict_dirty_pages", false)) {
-        // this option overrides clean_only_attempts
-        _clean_only_attempts = 1;
-    }
+    // FINELINE: nodb mode always on
+    _no_db_mode = true;
 
     if (_use_clock) { _clock_ref_bits.resize(_bufferpool->get_block_cnt(), false); }
 
@@ -92,15 +86,8 @@ bool page_evictioner_base::evict_one(bf_idx victim)
         return false;
     }
 
-    // When media failure is detected, all pages currently in buffer pool should be
-    // considered dirty. Since that's tricky to do without quiescing the system,
-    // we just detect those frames here and add to the dirty page table, so that
-    // single-page recovery takes care of bringing them to correct state after
-    // restore.
-    // bool media_failure = _bufferpool->is_media_failure() && !cb._check_recovery;
     lsn_t page_lsn = cb.get_page_lsn();
-    bool media_failure = _bufferpool->is_media_failure(cb._pid);
-    if (_no_db_mode || _write_elision || cb.is_dirty() || media_failure) {
+    if (_no_db_mode || _write_elision || cb.is_dirty()) {
         // CS TODO: apparently page LSN can be null for unallocated pages
         // (i.e., "holes" in extents)
         if (!page_lsn.is_null()) {
@@ -110,12 +97,10 @@ bool page_evictioner_base::evict_one(bf_idx victim)
 
     // We're passed the point of no return: eviction must happen no mather what
 
-    // Check if page needs to be flushed
-    bool was_dirty = cb.is_dirty();
-    if (was_dirty && !_write_elision) { flush_dirty_page(cb); }
     w_assert1(cb.latch().is_mine());
 
     if (_log_evictions) {
+        constexpr bool was_dirty = false;
         Logger::log_sys<evict_page_log>(cb._pid, was_dirty, page_lsn);
     }
 
@@ -137,28 +122,6 @@ bool page_evictioner_base::evict_one(bf_idx victim)
 
     INC_TSTAT(bf_evict);
     return true;
-}
-
-void page_evictioner_base::flush_dirty_page(const bf_tree_cb_t& cb)
-{
-    // WAL rule
-    W_COERCE(smlevel_0::log->flush(cb.get_page_lsn()));
-
-    // Straight-forward write -- no need to do it asynchronously or worry about
-    // any race conditions. We hold EX latch and the entry hasn't been removed
-    // from the buffer-pool hash table yet. Any thread attempting to fix the
-    // page will be waiting on the EX latch, after which it will notice that the
-    // CB pin count is -1, which means it must try the fix again.
-    generic_page* page = _bufferpool->get_page(&cb);
-    W_COERCE(smlevel_0::vol->write_page(cb._pid, page));
-    smlevel_0::vol->sync();
-
-    // Log the write operation so that log analysis sees the page as clean.
-    // clean_lsn cannot be page_lsn, otherwise page is considered dirty, so
-    // simply use any LSN above that (clean_lsn doesn't have to be of a valid
-    // log record)
-    lsn_t clean_lsn = page->lsn + 1;
-    Logger::log_sys<page_write_log>(cb._pid, clean_lsn, 1);
 }
 
 void page_evictioner_base::ref(bf_idx idx)
@@ -190,14 +153,6 @@ bf_idx page_evictioner_base::pick_victim()
         attempts++;
         if (attempts >= _max_attempts) {
             W_FATAL_MSG(fcINTERNAL, << "Eviction got stuck!");
-        }
-        else if (_wakeup_cleaner_attempts > 0 && attempts % _wakeup_cleaner_attempts == 0)
-        {
-            _bufferpool->wakeup_cleaner();
-        }
-        else if (_clean_only_attempts > 0 && attempts >= _clean_only_attempts)
-        {
-            ignore_dirty = true;
         }
 
         auto& cb = _bufferpool->get_cb(idx);

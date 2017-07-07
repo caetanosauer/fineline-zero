@@ -60,7 +60,6 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include "btree.h"
 #include "chkpt.h"
 #include "sm.h"
-#include "vol.h"
 #include "bf_tree.h"
 #include "restart.h"
 #include "sm_options.h"
@@ -99,12 +98,13 @@ bool        smlevel_0::statistics_enabled = true;
  */
 
 // Certain operations have to exclude xcts
+// // CS TODO get rid of this
 static srwlock_t          _begin_xct_mutex;
 
-BackupManager* smlevel_0::bk = 0;
-vol_t* smlevel_0::vol = 0;
 bf_tree_m* smlevel_0::bf = 0;
 log_core* smlevel_0::log = 0;
+stnode_cache_t* smlevel_0::stnode = 0;
+alloc_cache_t* smlevel_0::alloc = 0;
 LogArchiver* smlevel_0::logArchiver = 0;
 
 lock_m* smlevel_0::lm = 0;
@@ -264,8 +264,6 @@ ss_m::_construct_once()
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing volume manager");
 
-    vol = new vol_t(_options);
-
     ERROUT(<< "[" << timer.time_ms() << "] Initializing buffer manager");
 
     bf = new bf_tree_m(_options);
@@ -275,8 +273,11 @@ ss_m::_construct_once()
 
     ERROUT(<< "[" << timer.time_ms() << "] Building volume manager caches");
 
+    bool cluster_stores = _options.get_bool_option("sm_vol_cluster_stores", true);
     if (recovery->isInstant() || !logBasedRedo) {
-        vol->build_caches(format, chkpt_info);
+        stnode = new stnode_cache_t(format);
+        alloc = new alloc_cache_t(*stnode, format, cluster_stores);
+        stnode->dump(cerr);
     }
 
     smlevel_0::statistics_enabled = _options.get_bool_option("sm_statistics", true);
@@ -304,7 +305,11 @@ ss_m::_construct_once()
         recovery->wakeup();
         recovery->join();
         // metadata caches can only be constructed now
-        if (logBasedRedo) { vol->build_caches(format, nullptr); }
+        if (logBasedRedo) {
+            stnode = new stnode_cache_t(format);
+            alloc = new alloc_cache_t(*stnode, format, cluster_stores);
+            stnode->dump(cerr);
+        }
     }
 
     ERROUT(<< "[" << timer.time_ms() << "] Finished SM initialization");
@@ -373,15 +378,10 @@ ss_m::_destruct_once()
         ERROUT(<< "SM performing clean shutdown");
 
         W_COERCE(log->flush_all());
-        do {
-            bf->wakeup_cleaner(true, 1 /* wait for 1 full round */);
-        } while (bf->has_dirty_frames());
         smthread_t::check_actual_pin_count(0);
 
         if (truncate) { W_COERCE(_truncate_log()); }
         else { chkpt->take(); }
-
-        ERROUT(<< "All pages cleaned successfully");
     }
     else {
         ERROUT(<< "SM performing dirty shutdown");
@@ -413,10 +413,6 @@ ss_m::_destruct_once()
         delete logArchiver; // LL: decoupled cleaner in bf still needs archiver
         logArchiver = 0;    //     so we delete it only after bf is gone
     }
-
-    ERROUT(<< "Terminating volume");
-    vol->shutdown();
-    delete vol; vol = 0;
 
     ERROUT(<< "Terminating log manager");
     log->shutdown();
@@ -789,13 +785,6 @@ void ss_m::dump_page_lsn_chain(std::ostream &o, const PageID &pid) {
 void ss_m::dump_page_lsn_chain(std::ostream &o, const PageID &pid, const lsn_t &max_lsn) {
     // using static method since restart_thread_t is not guaranteed to be active
     restart_thread_t::dump_page_lsn_chain(o, pid, max_lsn);
-}
-
-rc_t ss_m::verify_volume(
-    int hash_bits, verify_volume_result &result)
-{
-    W_DO(btree_m::verify_volume(hash_bits, result));
-    return RCOK;
 }
 
 #if defined(__GNUC__) && __GNUC_MINOR__ > 6

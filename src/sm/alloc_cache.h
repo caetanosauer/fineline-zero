@@ -63,6 +63,11 @@ public:
 
     static bool is_alloc_pid(PageID pid) { return pid % extent_size == 0; }
 
+    PageID num_pages() const
+    {
+        return get_last_allocated_pid() + 1;
+    }
+
 private:
 
     /**
@@ -90,6 +95,8 @@ private:
 
     /** This lath protects access to last_alloc_page */
     mutable srwlock_t _latch;
+
+    bool _cluster_stores;
 
     /** Reads the alloc page of given extent to update last_alloc_page */
     rc_t load_alloc_page(StoreID stid, extent_id_t ext);

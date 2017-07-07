@@ -14,7 +14,6 @@
 #include "sm_base.h"
 #include "vec_t.h"
 #include "alloc_cache.h"
-#include "vol.h"
 #include "restore.h"
 #include <sstream>
 #include "logrec_handler.h"

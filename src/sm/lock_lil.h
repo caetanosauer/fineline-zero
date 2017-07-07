@@ -22,7 +22,6 @@
 #include "w_rc.h"
 #include "latches.h"
 #include "stnode_page.h" // only for stnode_page::max
-#include "vol.h"
 
 /** max number of volumes overall. */
 const uint16_t MAX_VOL_GLOBAL = 1;

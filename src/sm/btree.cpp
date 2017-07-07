@@ -16,7 +16,6 @@
 #include "w_key.h"
 #include "xct.h"
 #include "vec_t.h"
-#include "vol.h"
 
 void btree_m::construct_once()
 {
@@ -136,11 +135,6 @@ rc_t btree_m::verify_tree(
         StoreID store, int hash_bits, bool &consistent)
 {
     return btree_impl::_ux_verify_tree(store, hash_bits, consistent);
-}
-rc_t btree_m::verify_volume(
-        int hash_bits, verify_volume_result &result)
-{
-    return btree_impl::_ux_verify_volume(hash_bits, result);
 }
 
 void

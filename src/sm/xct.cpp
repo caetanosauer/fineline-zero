@@ -345,6 +345,7 @@ xct_t::xct_t(sm_stats_t* stats, int timeout, bool sys_xct,
     w_assert9(timeout_c() >= 0 || timeout_c() == timeout_t::WAIT_FOREVER);
 
     // CS: acquires xlist mutex and adds thix xct to the list
+    // CS TODO: no need to keep a list of txns with no-steal
     put_in_order();
 
     w_assert3(state() == xct_active);

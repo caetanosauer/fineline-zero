@@ -672,21 +672,6 @@ public:
     static rc_t                        _ux_verify_feed_page(
         btree_page_h &page, verification_context &context);
 
-    /**
-     * \brief Verifies consistency of all BTree indexes in the volume.
-     * \details Unlike verify_index() this method sequentially scans
-     * all pages in this volume to efficiently conduct the batch-verification.
-     * However, you cannot have concurrent update operations while
-     * you are running this verification. It might cause deadlocks!
-     * To allow concurrent transaction while verifying, consider using _ux_verify_tree().
-     * @param[in] vid The volume of interest.
-     * @param[in] hash_bits the number of bits we use for hashing per BTree, at most 31.
-     * @param[out] result Results of the verification.
-     * @see _ux_verify_tree()
-     */
-    static rc_t                       _ux_verify_volume(
-        int hash_bits, verify_volume_result &result);
-
     /** initialize context for in-query verification.*/
     static void inquery_verify_init(StoreID store);
     /** checks one page against the given expectation. */

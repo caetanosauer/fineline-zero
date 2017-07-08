@@ -185,16 +185,8 @@ chkpt_m::chkpt_m(const sm_options& options, chkpt_t* chkpt_info)
     _min_xct_lsn = chkpt_info->get_min_xct_lsn();
     _last_end_lsn = chkpt_info->get_last_scan_start();
     if (_last_end_lsn.is_null()) { _last_end_lsn = lsn_t(1, 0); }
-    _use_log_archive = options.get_bool_option("sm_chkpt_use_log_archive", false);
     _log_based = options.get_bool_option("sm_chkpt_log_based", false);
     _print_propstats = options.get_bool_option("sm_chkpt_print_propstats", false);
-
-    // FINELINE: nodb mode always on
-    bool no_db_mode = true;
-    bool write_elision = options.get_bool_option("sm_write_elision", false);
-    if (no_db_mode || write_elision) {
-        _use_log_archive = true;
-    }
 
     if (_print_propstats) {
         _propstats_ofs.open("propstats_chkpt.txt", std::ofstream::out | std::ofstream::trunc);
@@ -609,11 +601,8 @@ void chkpt_m::take(chkpt_t* chkpt)
     W_COERCE(ss_m::log->flush(begin_lsn));
     w_assert0(!begin_lsn.is_null());
 
-    lsn_t archived_lsn = lsn_t::null;
-    if (_use_log_archive) {
-        // In no-db mode, updates that have been archived are considered clean
-        archived_lsn = smlevel_0::logArchiver->getIndex()->getLastLSN();
-    }
+    // In no-db mode, updates that have been archived are considered clean
+    lsn_t archived_lsn = smlevel_0::logArchiver->getIndex()->getLastLSN();
 
     if (!chkpt_given) {
         if (_log_based) {
@@ -625,7 +614,6 @@ void chkpt_m::take(chkpt_t* chkpt)
         else {
             chkpt->init();
             smlevel_0::recovery->checkpoint_dirty_pages(*chkpt);
-            smlevel_0::bf->fuzzy_checkpoint(*chkpt);
             xct_t::fuzzy_checkpoint(*chkpt);
             chkpt->set_last_scan_start(begin_lsn);
         }
@@ -640,7 +628,7 @@ void chkpt_m::take(chkpt_t* chkpt)
     fs::rename(fpath, newpath);
     smlevel_0::log->get_storage()->add_checkpoint(begin_lsn);
 
-    if (_use_log_archive && !archived_lsn.is_null()) {
+    if (!archived_lsn.is_null()) {
         // In no-db mode, the min_rec_lsn value is meaningless, since there is
         // no page cleaner. The equivalent in this case, i.e., the point up
         // to which the recovery log can be truncated, is determined by the

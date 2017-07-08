@@ -112,7 +112,7 @@ public:
     // Used for debugging
     bool _is_frame_latched(generic_page* frame, latch_mode_t mode);
 
-    void recover_if_needed(bf_tree_cb_t& cb, generic_page* page, bool only_if_dirty = true);
+    void recover_if_needed(bf_tree_cb_t& cb, generic_page* page);
 
     /**
      * Fixes a non-root page in the bufferpool. This method receives the parent page and efficiently
@@ -290,13 +290,7 @@ public:
 
     size_t get_size() { return _block_cnt; }
 
-    bool is_no_db_mode() const { return _no_db_mode; }
-
     bool is_warmup_done() const { return _warmup_done; }
-
-    bool has_dirty_frames() const;
-
-    void fuzzy_checkpoint(chkpt_t& chkpt) const;
 
     // Used for decoupled cleaning
     void notify_archived_lsn(lsn_t);
@@ -460,8 +454,6 @@ private:
     bool                 _maintain_emlsn;
 
     bool _write_elision;
-
-    bool _no_db_mode;
 
     bool _batch_warmup;
     size_t _batch_segment_size;

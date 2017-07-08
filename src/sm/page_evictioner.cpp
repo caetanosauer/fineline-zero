@@ -20,8 +20,6 @@ page_evictioner_base::page_evictioner_base(bf_tree_m* bufferpool, const sm_optio
     _use_clock = options.get_bool_option("sm_evict_use_clock", false);
     _log_evictions = options.get_bool_option("sm_log_page_evictions", false);
     _write_elision = options.get_bool_option("sm_write_elision", false);
-    // FINELINE: nodb mode always on
-    _no_db_mode = true;
 
     if (_use_clock) { _clock_ref_bits.resize(_bufferpool->get_block_cnt(), false); }
 
@@ -87,12 +85,10 @@ bool page_evictioner_base::evict_one(bf_idx victim)
     }
 
     lsn_t page_lsn = cb.get_page_lsn();
-    if (_no_db_mode || _write_elision || cb.is_dirty()) {
-        // CS TODO: apparently page LSN can be null for unallocated pages
-        // (i.e., "holes" in extents)
-        if (!page_lsn.is_null()) {
-            smlevel_0::recovery->add_dirty_page(cb._pid, page_lsn);
-        }
+    // CS TODO: apparently page LSN can be null for unallocated pages
+    // (i.e., "holes" in extents)
+    if (!page_lsn.is_null()) {
+        smlevel_0::recovery->add_dirty_page(cb._pid, page_lsn);
     }
 
     // We're passed the point of no return: eviction must happen no mather what
@@ -115,11 +111,6 @@ bool page_evictioner_base::evict_one(bf_idx victim)
 
     cb.latch().latch_release();
 
-//     if (_bufferpool->is_no_db_mode()) {
-//         auto lsn = smlevel_0::recovery->get_dirty_page_emlsn(cb._pid);
-//         w_assert0(!lsn.is_null());
-//     }
-
     INC_TSTAT(bf_evict);
     return true;
 }
@@ -131,8 +122,6 @@ void page_evictioner_base::ref(bf_idx idx)
 
 bf_idx page_evictioner_base::pick_victim()
 {
-    bool ignore_dirty = _write_elision || _no_db_mode;
-
      auto next_idx = [this]
      {
          if (_current_frame > _bufferpool->_block_cnt) {
@@ -209,8 +198,6 @@ bf_idx page_evictioner_base::pick_victim()
                 // ... B-tree pages that have a foster child
                 // (requires unswizzling, which is not supported)
                 // || (p.tag() == t_btree_p && p.get_foster() != 0)
-                // ... dirty pages, unless we're told to ignore them
-                || (!ignore_dirty && cb.is_dirty())
                 // ... unused frames, which don't hold a valid page
                 || !cb._used
                 // ... pinned frames, i.e., someone required it not be evicted

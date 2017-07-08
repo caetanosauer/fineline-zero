@@ -105,9 +105,6 @@ bf_tree_m::bf_tree_m(const sm_options& options)
     _write_elision = options.get_bool_option("sm_write_elision", false);
 
     // No-DB options
-    // _no_db_mode = options.get_bool_option("sm_no_db", false);
-    // FINELINE: No-DB mode now mandatory
-    _no_db_mode = true;
     _batch_segment_size = options.get_int_option("sm_batch_segment_size", 1);
     _batch_warmup = _batch_segment_size > 1;
 
@@ -382,7 +379,7 @@ void bf_tree_m::_add_free_block(bf_idx idx)
 
 void bf_tree_m::post_init()
 {
-    if (_no_db_mode && _batch_warmup) {
+    if (_batch_warmup) {
         constexpr bool virgin_pages = true;
         auto vol_pages = smlevel_0::alloc->num_pages();
         auto segcount = vol_pages  / _batch_segment_size
@@ -392,7 +389,7 @@ void bf_tree_m::post_init()
     }
 }
 
-void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page, bool only_if_dirty)
+void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
 {
     if (!cb._check_recovery || !smlevel_0::recovery) { return; }
 
@@ -401,16 +398,14 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page, bool onl
 
     auto pid = cb._pid;
     auto expected_lsn = smlevel_0::recovery->get_dirty_page_emlsn(pid);
-    if (!only_if_dirty || (!expected_lsn.is_null() && page->lsn < expected_lsn)) {
-        btree_page_h p;
-        p.fix_nonbufferpool_page(page);
-        constexpr bool use_archive = true;
-        // CS TODO: this is required to replay a btree_split correctly
-        page->pid = pid;
-        _localSprIter.open(pid, page->lsn, expected_lsn, use_archive);
-        _localSprIter.apply(p);
-        w_assert0(page->lsn >= expected_lsn);
-    }
+    btree_page_h p;
+    p.fix_nonbufferpool_page(page);
+    constexpr bool use_archive = true;
+    // CS TODO: this is required to replay a btree_split correctly
+    page->pid = pid;
+    _localSprIter.open(pid, page->lsn, expected_lsn, use_archive);
+    _localSprIter.apply(p);
+    w_assert0(page->lsn >= expected_lsn);
 
     w_assert0(page->pid == pid);
     w_assert0(cb._pid == pid);
@@ -481,15 +476,13 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
 
     // Wait for log replay before attempting to fix anything
     //->  nodb mode only! (for instant restore see below)
-    bool nodb_used_restore = false;
-    if (_no_db_mode && do_recovery && !virgin_page && _restore_coord && !_warmup_done)
+    if (do_recovery && !virgin_page && _restore_coord && !_warmup_done)
     {
         // copy into local variable to avoid race condition with setting member to null
         timer.reset();
         auto restore = _restore_coord;
         if (restore) {
             restore->fetch(pid);
-            nodb_used_restore = true;
         }
         ADD_TSTAT(bf_batch_wait_time, timer.time_us());
     }
@@ -618,9 +611,8 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
         // w_assert1(page->lsn == cb.get_page_lsn());
 
         if (do_recovery) {
-            const bool only_if_dirty = !nodb_used_restore;
             if (virgin_page) { cb.set_check_recovery(false); }
-            else { recover_if_needed(cb, page, only_if_dirty); }
+            else { recover_if_needed(cb, page); }
         }
         w_assert1(cb._pin_cnt >= 0);
 
@@ -672,31 +664,6 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
         }
 
         return RCOK;
-    }
-}
-
-void bf_tree_m::fuzzy_checkpoint(chkpt_t& chkpt) const
-{
-    if (_no_db_mode) { return; }
-
-    for (size_t i = 1; i < _block_cnt; i++) {
-        auto& cb = get_cb(i);
-        /*
-         * CS: We don't latch or pin because a fuzzy checkpoint doesn't care
-         * about false positives (i.e., pages marked dirty that are actually
-         * clean).  Thus, if any of the cb variables changes inbetween, the
-         * fuzzy checkpoint is still correct, because LSN updates are atomic
-         * and monotonically increasing.
-         */
-        if (cb.is_in_use() && cb.is_dirty()) {
-            // There's a small time window after page_lsn is updated for the first
-            // time and before rec_lsn is set, where is_dirty() returns true but
-            // rec_lsn is still null. In that case, we can use the page_lsn instead,
-            // since it is what rec_lsn will be eventually set to.
-            auto rec = cb.get_rec_lsn();
-            if (rec.is_null()) { rec = cb.get_page_lsn(); }
-            chkpt.mark_page_dirty(cb._pid, cb.get_page_lsn(), rec);
-        }
     }
 }
 
@@ -1182,23 +1149,6 @@ bool bf_tree_m::is_dirty(const bf_idx idx) const {
 
 bool bf_tree_m::is_used (bf_idx idx) const {
     return _is_active_idx(idx);
-}
-
-bool bf_tree_m::has_dirty_frames() const
-{
-    if (_no_db_mode) { return false; }
-
-    for (bf_idx i = 1; i < _block_cnt; i++) {
-        auto& cb = get_cb(i);
-        if (!cb.pin()) { continue; }
-        if (cb.is_dirty() && cb._used) {
-            cb.unpin();
-            return true;
-        }
-        cb.unpin();
-    }
-
-    return false;
 }
 
 void bf_tree_m::set_page_lsn(generic_page* p, lsn_t lsn)

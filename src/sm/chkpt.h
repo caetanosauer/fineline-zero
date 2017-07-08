@@ -252,7 +252,6 @@ private:
     lsn_t _min_xct_lsn;
     lsn_t _last_end_lsn;
 
-    bool _use_log_archive;
     bool _log_based;
     bool _print_propstats;
     size_t _dirty_page_count;

@@ -87,7 +87,6 @@ bool BlockAssembly::start(run_number_t run)
     currentPID = 0;
     currentPIDpos = pos;
     currentPIDfpos = fpos;
-    currentPIDprevLSN = lsn_t::null;
     maxPID = std::numeric_limits<PageID>::min();
 
     buckets.clear();
@@ -118,7 +117,6 @@ bool BlockAssembly::add(logrec_t* lr)
         currentPID = lr->pid();
         currentPIDpos = pos;
         currentPIDfpos = fpos;
-        currentPIDprevLSN = lr->page_prev_lsn();
 
         if (lr->pid() / bucketSize >= nextBucket) {
             PageID shpid = (lr->pid() / bucketSize) * bucketSize;
@@ -144,11 +142,6 @@ bool BlockAssembly::add(logrec_t* lr)
     w_assert1(pos > 0 || fpos % blockSize == 0);
 
     memcpy(dest + pos, lr, lr->length());
-
-    if (enableCompression && lr->type() == page_img_format_log) {
-        // Adjust per-page log chain to satisfy redo assertions
-        reinterpret_cast<logrec_t*>(dest + pos)->set_page_prev_lsn(currentPIDprevLSN);
-    }
 
     pos += lr->length();
     fpos += lr->length();

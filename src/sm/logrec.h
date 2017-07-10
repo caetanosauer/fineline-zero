@@ -83,10 +83,6 @@ struct baseLogHeader
     PageID             _pid; // 4 bytes
     /* 4 + 4=8 */
 
-
-    // CS TODO: temporary placeholder for old vid
-    uint16_t _fill_vid;
-
     uint16_t             _page_tag; // tag_t 2 bytes
     /* 8 + 4= 12 */
     StoreID              _stid; // 4 bytes
@@ -105,15 +101,6 @@ struct baseLogHeader
      * NB: this latter suggestion is what we have now done.
      */
 
-    /**
-     * For per-page chains of log-records.
-     * Note that some types of log records (split, merge) impact two pages.
-     * The page_prev_lsn is for the "primary" page.
-     * \ingroup Single-Page-Recovery
-     */
-    lsn_t               _page_prv;
-    /* 16+8 = 24 */
-
     bool is_valid() const;
 };
 
@@ -122,9 +109,9 @@ struct xidChainLogHeader
 
 
     tid_t               _xid;      // NOT IN SINGLE-LOG SYSTEM TRANSACTION!  (xct)tid of this xct
-    /* 24+8 = 32 */
+    /* 16+8 = 24 */
     lsn_t               _xid_prv;     // NOT IN SINGLE-LOG SYSTEM TRANSACTION! (xct)previous logrec of this xct
-    /* 32+8 = 40 */
+    /* 24+8 = 32 */
 };
 
 enum kind_t {
@@ -251,8 +238,8 @@ public:
         max_data_sz = max_sz - hdr_non_ssx_sz - sizeof(lsn_t)
     };
 
-       static_assert(hdr_non_ssx_sz == 40, "Wrong logrec header size");
-       static_assert(hdr_single_sys_xct_sz == 40 - 16, "Wrong logrec header size");
+       static_assert(hdr_non_ssx_sz == 32, "Wrong logrec header size");
+       static_assert(hdr_single_sys_xct_sz == 16, "Wrong logrec header size");
 
        tid_t   tid() const;
        StoreID        stid() const;
@@ -263,17 +250,6 @@ public:
     uint16_t              tag() const;
     smsize_t             length() const;
     const lsn_t&         undo_nxt() const;
-    /**
-     * Returns the LSN of previous log that modified this page.
-     * \ingroup Single-Page-Recovery
-     */
-    const lsn_t&         page_prev_lsn() const;
-    const lsn_t&         page2_prev_lsn() const;
-    /**
-     * Sets the LSN of previous log that modified this page.
-     * \ingroup Single-Page-Recovery
-     */
-    void                 set_page_prev_lsn(const lsn_t &lsn);
     const lsn_t&         xid_prev() const;
     void                 set_xid_prev(const lsn_t &lsn);
     void                 set_undo_nxt(const lsn_t &lsn);
@@ -443,11 +419,6 @@ inline bool baseLogHeader::is_valid() const
  * to the page.
  */
 struct multi_page_log_t {
-    /**
-     * _page_prv for another page touched by the operation.
-     * \ingroup Single-Page-Recovery
-     */
-    lsn_t       _page2_prv; // +8
 
     /** Page ID of another page touched by the operation. */
     PageID     _page2_pid; // +4
@@ -455,7 +426,7 @@ struct multi_page_log_t {
     /** for alignment only. */
     uint32_t    _fill4;    // +4.
 
-    multi_page_log_t(PageID page2_pid) : _page2_prv(lsn_t::null), _page2_pid(page2_pid) {
+    multi_page_log_t(PageID page2_pid) : _page2_pid(page2_pid) {
     }
 };
 
@@ -543,26 +514,6 @@ logrec_t::undo_nxt() const
     // overloaded _xid_prev.
     // return _undo_nxt;
     return xid_prev();
-}
-
-inline const lsn_t&
-logrec_t::page_prev_lsn() const
-{
-    // What do we need to assert in order to make sure there IS a page_prv?
-    return header._page_prv;
-}
-
-inline const lsn_t&
-logrec_t::page2_prev_lsn() const
-{
-    if (!is_multi_page()) { return lsn_t::null; }
-    return data_ssx_multi()->_page2_prv;
-}
-inline void
-logrec_t::set_page_prev_lsn(const lsn_t &lsn)
-{
-    // What do we need to assert in order to make sure there IS a page_prv?
-    header._page_prv = lsn;
 }
 
 inline tid_t logrec_t::tid() const

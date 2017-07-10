@@ -106,8 +106,6 @@ bool ArchiveScan::next(logrec_t*& lr)
         }
     }
 
-    w_assert1(prevLSN.is_null() || lr->pid() > prevPID ||
-            lr->has_page_img(lr->pid()) || lr->page_prev_lsn() == prevLSN);
     prevLSN = lr->lsn();
     prevPID = lr->pid();
 

@@ -87,9 +87,6 @@ void LogReplayer::replay(LogScan logs, PageIter& pagesBegin, PageIter pagesEnd)
         }
 
         if (lr->lsn() > fixable.lsn()) {
-            w_assert0(lr->page_prev_lsn() == lsn_t::null ||
-                    lr->page_prev_lsn() == p->lsn || lr->has_page_img(pid));
-
             lr->redo(&fixable);
         }
 

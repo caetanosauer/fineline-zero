@@ -564,11 +564,6 @@ operator<<(ostream& o, logrec_t& l)
         else  o << " [UNDO-PRV=" << l.xid_prev() << "]";
     }
 
-    o << " [page-prv " << l.page_prev_lsn();
-    if (l.is_multi_page()) {
-        o << " page2-prv " << l.page2_prev_lsn();
-    }
-    o << "]";
 
     o.flags(f);
     return o;

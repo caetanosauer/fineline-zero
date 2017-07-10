@@ -88,9 +88,6 @@ public:
             logrec->set_root_page();
         }
 
-        // set page LSN chain
-        logrec->set_page_prev_lsn(p->get_page_lsn());
-
         // If it's a log for piggy-backed SSX, we call log->insert without updating _last_log
         // because this is a single log independent from other logs in outer transaction.
         if (xd->is_piggy_backed_single_log_sys_xct()) {
@@ -134,14 +131,11 @@ public:
             logrec->set_root_page();
         }
 
-        // set page LSN chain
-        logrec->set_page_prev_lsn(p->get_page_lsn());
         // For multi-page log, also set LSN chain with a branch.
         w_assert1(logrec->is_multi_page());
         w_assert1(logrec->is_single_sys_xct());
         multi_page_log_t *multi = logrec->data_ssx_multi();
         w_assert1(multi->_page2_pid != 0);
-        multi->_page2_prv = p2->get_page_lsn();
 
         // If it's a log for piggy-backed SSX, we call log->insert without updating _last_log
         // because this is a single log independent from other logs in outer transaction.

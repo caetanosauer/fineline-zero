@@ -34,21 +34,12 @@ void SprIterator::apply(fixable_page_h &p)
 
     while (next(lr)) {
         w_assert1(lr->valid_header(lsn_t::null));
-        w_assert1(replayed_count == 1 || lr->is_multi_page() ||
-               (prev_lsn == lr->page_prev_lsn() && p.pid() == lr->pid()));
 
         if (lr->is_redo() && p.lsn() < lr->lsn()) {
             DBGOUT1(<< "SPR page(" << p.pid()
                     << ") LSN=" << p.lsn() << ", log=" << *lr);
 
             w_assert1(pid == lr->pid() || pid == lr->pid2());
-            w_assert1(lr->has_page_img(pid) || pid != lr->pid()
-                    || (lr->page_prev_lsn() == lsn_t::null
-                    || lr->page_prev_lsn() == p.lsn()));
-
-            w_assert1(pid != lr->pid2() || (lr->page2_prev_lsn() == lsn_t::null ||
-                        lr->page2_prev_lsn() == p.lsn()));
-
             lr->redo(&p);
         }
 

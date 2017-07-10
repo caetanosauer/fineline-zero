@@ -221,7 +221,6 @@ bool ArchiverHeap::push(logrec_t* lr, bool duplicate)
         // contents were already saved with the memcpy operation above.
         lr->remove_info_for_pid(lr->pid());
         lr->set_pid(lr->pid2());
-        lr->set_page_prev_lsn(lr->page2_prev_lsn());
         w_assert1(lr->valid_header(lsn));
         if (!push(lr, false)) {
             // If duplicated did not fit, then insertion of the original must

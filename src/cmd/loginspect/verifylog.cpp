@@ -115,20 +115,6 @@ void VerifyHandler::checkAlloc(logrec_t& r)
     }
 }
 
-void VerifyHandler::checkRedo(logrec_t& r, PageID pid, lsn_t lsn, lsn_t prev_lsn)
-{
-    lsn_t currPageLSN = getCurrentPageLSN(pid);
-    checkLSN(lsn, currPageLSN, prev_lsn);
-    pageLSNs[pid] = lsn;
-
-    // if (allocatedPages.find(pid) == allocatedPages.end()) {
-    //     std::cout << "on " << lsn
-    //         << " update on pid " << pid
-    //         << " which is not allocated" << std::endl;
-    //     w_assert0(false);
-    // }
-}
-
 void VerifyHandler::invoke(logrec_t& r)
 {
     w_assert0(r.valid_header());
@@ -137,12 +123,6 @@ void VerifyHandler::invoke(logrec_t& r)
     PageID pid = r.pid();
 
     if (r.is_redo()) {
-        checkRedo(r, pid, lsn, r.page_prev_lsn());
-
-        if (r.is_multi_page()) {
-            checkRedo(r, r.pid2(), lsn, r.page2_prev_lsn());
-        }
-
         if (alloc_cache_t::is_alloc_pid(pid)) {
             // checkAlloc(r);
         }

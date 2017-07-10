@@ -124,7 +124,6 @@ private:
     PageID currentPID;
     size_t currentPIDpos;
     size_t currentPIDfpos;
-    lsn_t currentPIDprevLSN;
     bool enableCompression;
 
     // if using a variable-bucket index, this is the number of page IDs

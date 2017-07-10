@@ -480,117 +480,18 @@ void restart_thread_t::dump_page_lsn_chain(std::ostream &o, const PageID &pid, c
     }
 }
 
-void grow_buffer(char*& buffer, size_t& buffer_capacity, size_t pos, logrec_t** lr)
-{
-    DBGOUT1(<< "Doubling SPR buffer capacity");
-    buffer_capacity *= 2;
-    char* tmp = new char[buffer_capacity];
-    memcpy(tmp, buffer, buffer_capacity/2);
-    delete[] buffer;
-    buffer = tmp;
-    if (lr) {
-        *lr = (logrec_t*) (buffer + pos);
-        w_assert1((*lr)->length() <= buffer_capacity - pos);
-    }
-}
-
 SprIterator::SprIterator()
-    : buffer_capacity{1 << 18 /* 256KB */}
-    , archive_scan{smlevel_0::logArchiver ? smlevel_0::logArchiver->getIndex() : nullptr}
+    : archive_scan{smlevel_0::logArchiver ? smlevel_0::logArchiver->getIndex() : nullptr}
 {
-    // Allocate initial buffer -- expand later if needed
-    buffer = new char[buffer_capacity];
 }
 
 SprIterator::~SprIterator()
 {
-    delete[] buffer;
 }
 
-void SprIterator::open(PageID pid, lsn_t firstLSN, lsn_t lastLSN, bool prioritizeArchive)
+void SprIterator::open(PageID pid)
 {
-    last_lsn = lsn_t::null,
-    replayed_count = 0;
-    lr_offsets.clear();
-    size_t pos = 0;
-
-    if (!lastLSN.is_null()) {
-        // make sure log is durable until the lsn we're trying to fetch
-        smlevel_0::log->flush(lastLSN);
-    }
-
-    lsn_t archivedLSN = lsn_t::null;
-    if (smlevel_0::logArchiver) {
-        archivedLSN = smlevel_0::logArchiver->getIndex()->getLastLSN();
-    }
-
-    lsn_t nxt = lastLSN;
-    bool left_early = false;
-    while (firstLSN < nxt && nxt != lsn_t::null) {
-        // If nxt has been archived already, fetch it from the archive
-        if (nxt < archivedLSN && prioritizeArchive) {
-            left_early = true;
-            break;
-        }
-
-        // STEP 1: Fecth log record and copy it into buffer
-        lsn_t lsn = nxt;
-        logrec_t* lr = (logrec_t*) (buffer + pos);
-        rc_t rc = smlevel_0::log->fetch(lsn, buffer + pos, NULL, true);
-
-        if ((rc.is_error()) && (eEOF == rc.err_num())) {
-            // EOF -- scan finished
-            left_early = true;
-            break;
-        }
-        else { W_COERCE(rc); }
-        w_assert1(lsn == nxt);
-
-        if (sizeof(logrec_t) > buffer_capacity - pos) {
-            grow_buffer(buffer, buffer_capacity, pos, &lr);
-        }
-
-        lr_offsets.push_back(pos);
-        pos += lr->length();
-
-        // STEP 2: Obtain LSN of previous log record on the same page (nxt)
-
-        // follow next pointer. This log might touch multi-pages. So, check both cases.
-        if (pid == lr->pid())
-        {
-            // Target pid matches the first page ID in the log recoredd
-            nxt = lr->page_prev_lsn();
-        }
-        else {
-            w_assert1(lr->is_multi_page());
-            // Multi-page log record, this is a page rebalance log record (split or merge)
-            // while the 2nd page is the source page
-            // In this case, the page we are trying to recover was the source page during
-            // a page rebalance operation, follow the proper log chain
-            w_assert1(lr->data_ssx_multi()->_page2_pid == pid);
-            nxt = lr->data_ssx_multi()->_page2_prv;
-        }
-
-        // If log record contains a page image, the scan can stop since the
-        // page is initialized with this log record
-        if (lr->has_page_img(pid)) { break; }
-    }
-
-    if ((lastLSN.is_null() || left_early) && ss_m::logArchiver) {
-        // Reached EOF when scanning log backwards looking for current_lsn.
-        // This means that the log record we're looking for is not in the recovery
-        // log anymore and has probably been archived already.
-        // Note that we should only get here if write elision is active, because
-        // otherwise the log recycler in log_storage should now allow deletion
-        // of old log files as long as they might be needed for restart recovery.
-
-        // What we have to do now is fetch the log records between current_lsn and
-        // nxt (both exclusive intervals) from the log archive and add them into
-        // the buffer as well.
-        archive_scan.open(pid, pid+1, firstLSN);
-    }
-
-    lr_iter = lr_offsets.crbegin();
+    archive_scan.open(pid, pid+1, lsn_t::null);
 }
 
 bool SprIterator::next(logrec_t*& lr)
@@ -600,19 +501,6 @@ bool SprIterator::next(logrec_t*& lr)
         replayed_count++;
         return true;
     }
-
-    lsn_t curr_lsn = lsn_t::null;
-    while (curr_lsn <= last_lsn && lr_iter != lr_offsets.crend()) {
-        lr = reinterpret_cast<logrec_t*>(buffer + *lr_iter);
-        lr_iter++;
-        curr_lsn = lr->lsn();
-    }
-    if (curr_lsn > last_lsn) {
-        replayed_count++;
-        last_lsn = curr_lsn;
-        return true;
-    }
-
     return false;
 }
 

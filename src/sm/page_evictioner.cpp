@@ -17,7 +17,7 @@ page_evictioner_base::page_evictioner_base(bf_tree_m* bufferpool, const sm_optio
     _swizzling_enabled = options.get_bool_option("sm_bufferpool_swizzle", false);
     _maintain_emlsn = options.get_bool_option("sm_bf_maintain_emlsn", false);
     _random_pick = options.get_bool_option("sm_evict_random", false);
-    _use_clock = options.get_bool_option("sm_evict_use_clock", false);
+    _use_clock = options.get_bool_option("sm_evict_use_clock", true);
     _log_evictions = options.get_bool_option("sm_log_page_evictions", false);
     _write_elision = options.get_bool_option("sm_write_elision", false);
 
@@ -178,6 +178,18 @@ bf_idx page_evictioner_base::pick_victim()
         // Only evict if clock refbit is not set
         if (_use_clock && _clock_ref_bits[idx]) {
             _clock_ref_bits[idx] = false;
+            cb.latch().latch_release();
+            continue;
+        }
+
+        // FINELINE: no-steal mode
+        lsn_t evict_lsn = std::min(_bufferpool->get_archived_lsn(),
+                smlevel_0::log->get_oldest_active_lsn());
+        if (cb.get_page_lsn().is_null() || cb.get_page_lsn() >= evict_lsn)
+        {
+            ERROUT(<< "Eviction failed on LSN for pid " << cb._pid <<
+                    " page_lsn=" << cb.get_page_lsn() <<
+                    " evict_lsn=" << evict_lsn);
             cb.latch().latch_release();
             continue;
         }

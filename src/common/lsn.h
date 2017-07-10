@@ -249,7 +249,7 @@ public:
         return (ONE << PARTITION_SHIFT)-1;
     }
 
-    lsn_t() : _data(0) { }
+    lsn_t() noexcept : _data(0) { }
     lsn_t(lsndata_t data) : _data(data) { }
 
     lsn_t(uint32_t f, sm_diskaddr_t r) :

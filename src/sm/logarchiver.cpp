@@ -42,7 +42,8 @@ LogArchiver::LogArchiver(const sm_options& options)
     // CS TODO: archiver currently only works with 1MB blocks
         // options.get_int_option("sm_archiver_block_size", DFT_BLOCK_SIZE);
 
-    eager = options.get_bool_option("sm_archiver_eager", DFT_EAGER);
+    // FINELINE: log archive always eager
+    eager = true;
     readWholeBlocks = options.get_bool_option(
             "sm_archiver_read_whole_blocks", DFT_READ_WHOLE_BLOCKS);
     slowLogGracePeriod = options.get_int_option(

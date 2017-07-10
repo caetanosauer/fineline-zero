@@ -124,21 +124,14 @@ public:
     SprIterator();
     ~SprIterator();
 
-    void open(PageID pid, lsn_t firstLSN, lsn_t lastLSN,
-            bool prioritizeArchive = true);
+    void open(PageID pid);
 
     bool next(logrec_t*& lr);
 
     void apply(fixable_page_h& page);
 
 private:
-
-    char* buffer;
-    size_t buffer_capacity;
-    std::vector<uint32_t> lr_offsets;
-    std::vector<uint32_t>::const_reverse_iterator lr_iter;
     ArchiveScan archive_scan;
-
     lsn_t last_lsn;
     unsigned replayed_count;
 };

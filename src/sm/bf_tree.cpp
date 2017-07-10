@@ -220,6 +220,8 @@ bf_tree_m::bf_tree_m(const sm_options& options)
     _evictioner = std::make_shared<page_evictioner_base>(this, options);
     _async_eviction = options.get_bool_option("sm_async_eviction", false);
     if (_async_eviction) { _evictioner->fork(); }
+
+    _archived_lsn = smlevel_0::logArchiver->getIndex()->getLastLSN();
 }
 
 void bf_tree_m::shutdown()
@@ -397,15 +399,12 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
     w_assert1(cb.get_page_lsn() == page->lsn);
 
     auto pid = cb._pid;
-    auto expected_lsn = smlevel_0::recovery->get_dirty_page_emlsn(pid);
     btree_page_h p;
     p.fix_nonbufferpool_page(page);
-    constexpr bool use_archive = true;
     // CS TODO: this is required to replay a btree_split correctly
     page->pid = pid;
-    _localSprIter.open(pid, page->lsn, expected_lsn, use_archive);
+    _localSprIter.open(pid);
     _localSprIter.apply(p);
-    w_assert0(page->lsn >= expected_lsn);
 
     w_assert0(page->pid == pid);
     w_assert0(cb._pid == pid);
@@ -419,6 +418,7 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
 
 void bf_tree_m::notify_archived_lsn(lsn_t archived_lsn)
 {
+    _archived_lsn = archived_lsn;
 }
 
 ///////////////////////////////////   Page fix/unfix BEGIN         ///////////////////////////////////

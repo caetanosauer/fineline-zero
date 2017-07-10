@@ -295,6 +295,8 @@ public:
     // Used for decoupled cleaning
     void notify_archived_lsn(lsn_t);
 
+    lsn_t get_archived_lsn() const { return _archived_lsn; }
+
     /**
      * Tries to unswizzle the given child page from the parent page.  If, for
      * some reason, unswizzling was impossible or troublesome, gives up and
@@ -460,6 +462,8 @@ private:
     bool _warmup_done;
 
     bool _log_fetches;
+
+    std::atomic<lsn_t> _archived_lsn;
 
     static thread_local unsigned _fix_cnt;
     static thread_local unsigned _hit_cnt;

@@ -240,11 +240,15 @@ ss_m::_construct_once()
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing log archiver");
 
-    // LOG ARCHIVER
-    bool archiving = _options.get_bool_option("sm_archiving", false);
-    if (archiving) {
-        logArchiver = new LogArchiver(_options);
-        logArchiver->fork();
+    // FineLine: log archiver always on; restart recovery consists of archiving
+    // the unsorted portion of the log
+    logArchiver = new LogArchiver(_options);
+    logArchiver->fork();
+    lsn_t durable_lsn = log->durable_lsn();
+    if (durable_lsn > lsn_t(1,0)) {
+        logArchiver->archiveUntilLSN(durable_lsn);
+        ERROUT(<< "[" << timer.time_ms() << "] Log archiver reached durable_lsn: "
+                << durable_lsn);
     }
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing restart manager");
@@ -256,7 +260,7 @@ ss_m::_construct_once()
     // Log analysis provides info required to initialize vol_t
     Logger::log_sys<loganalysis_begin_log>();
     recovery = new restart_thread_t(_options);
-    recovery->log_analysis();
+    // recovery->log_analysis();
     chkpt_t* chkpt_info = recovery->get_chkpt();
 
     bool logBasedRedo = _options.get_bool_option("sm_restart_log_based_redo", true);

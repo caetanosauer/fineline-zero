@@ -58,10 +58,8 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include "w.h"
 #include "sm_base.h"
 #include "btree.h"
-#include "chkpt.h"
 #include "sm.h"
 #include "bf_tree.h"
-#include "restart.h"
 #include "sm_options.h"
 #include "tid_t.h"
 #include "log_carray.h"
@@ -72,6 +70,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include "btree_page.h"
 #include "allocator.h"
 #include "log_core.h"
+#include "logarchiver.h"
 #include "xct_logger.h"
 
 
@@ -110,10 +109,6 @@ LogArchiver* smlevel_0::logArchiver = 0;
 lock_m* smlevel_0::lm = 0;
 
 char smlevel_0::zero_page[page_sz];
-
-chkpt_m* smlevel_0::chkpt = 0;
-
-restart_thread_t* smlevel_0::recovery = 0;
 
 btree_m* smlevel_0::bt = 0;
 
@@ -257,16 +252,7 @@ ss_m::_construct_once()
             Logger::log_sys<benchmark_start_log>();
     }
 
-    // Log analysis provides info required to initialize vol_t
-    Logger::log_sys<loganalysis_begin_log>();
-    recovery = new restart_thread_t(_options);
-    // recovery->log_analysis();
-    chkpt_t* chkpt_info = recovery->get_chkpt();
-
-    bool logBasedRedo = _options.get_bool_option("sm_restart_log_based_redo", true);
     bool format = _options.get_bool_option("sm_format", false);
-
-    ERROUT(<< "[" << timer.time_ms() << "] Initializing volume manager");
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing buffer manager");
 
@@ -278,11 +264,9 @@ ss_m::_construct_once()
     ERROUT(<< "[" << timer.time_ms() << "] Building volume manager caches");
 
     bool cluster_stores = _options.get_bool_option("sm_vol_cluster_stores", true);
-    if (recovery->isInstant() || !logBasedRedo) {
-        stnode = new stnode_cache_t(format);
-        alloc = new alloc_cache_t(*stnode, format, cluster_stores);
-        stnode->dump(cerr);
-    }
+    stnode = new stnode_cache_t(format);
+    alloc = new alloc_cache_t(*stnode, format, cluster_stores);
+    stnode->dump(cerr);
 
     smlevel_0::statistics_enabled = _options.get_bool_option("sm_statistics", true);
 
@@ -292,29 +276,13 @@ ss_m::_construct_once()
     if (! bt) { W_FATAL(eOUTOFMEMORY); }
     bt->construct_once();
 
-    chkpt = new chkpt_m(_options, chkpt_info);
-    if (! chkpt)  { W_FATAL(eOUTOFMEMORY); }
-
     SSM = this;
 
     smthread_t::mark_pin_count();
 
     do_prefetch = _options.get_bool_option("sm_prefetch", false);
 
-    ERROUT(<< "[" << timer.time_ms() << "] Starting recovery thread");
-
     bf->post_init();
-
-    if (!recovery->isInstant()) {
-        recovery->wakeup();
-        recovery->join();
-        // metadata caches can only be constructed now
-        if (logBasedRedo) {
-            stnode = new stnode_cache_t(format);
-            alloc = new alloc_cache_t(*stnode, format, cluster_stores);
-            stnode->dump(cerr);
-        }
-    }
 
     ERROUT(<< "[" << timer.time_ms() << "] Finished SM initialization");
 }
@@ -359,19 +327,6 @@ ss_m::_destruct_once()
         smthread_t::detach_xct(xct());
     }
 
-    // retire chkpt thread (calling take() directly still possible)
-    chkpt->stop();
-
-    ERROUT(<< "Terminating recovery manager");
-
-    if (recovery) {
-        if (shutdown_clean) {
-            recovery->wakeup();
-            recovery->join();
-        }
-        else { recovery->stop(); }
-    }
-
     // remove all transactions, aborting them in case of clean shutdown
     xct_t::cleanup(shutdown_clean);
     w_assert1(xct_t::num_active_xcts() == 0);
@@ -385,7 +340,6 @@ ss_m::_destruct_once()
         smthread_t::check_actual_pin_count(0);
 
         if (truncate) { W_COERCE(_truncate_log()); }
-        else { chkpt->take(); }
     }
     else {
         ERROUT(<< "SM performing dirty shutdown");
@@ -393,13 +347,6 @@ ss_m::_destruct_once()
 
     // Stop cleaner and evictioner
     bf->shutdown();
-
-    delete chkpt; chkpt = 0;
-
-    if (recovery) {
-        delete recovery;
-        recovery = 0;
-    }
 
     ERROUT(<< "Terminating log archiver");
     if (logArchiver) { logArchiver->shutdown(); }
@@ -469,9 +416,6 @@ rc_t ss_m::_truncate_log()
         logArchiver->archiveUntilLSN(log->durable_lsn());
         logArchiver->getIndex()->deleteRuns(replFactor);
     }
-
-    // this should be an "empty" checkpoint
-    chkpt->take();
 
     log->get_storage()->delete_old_partitions();
 
@@ -686,18 +630,6 @@ ss_m::chain_xct(bool lazy)
     return RCOK;
 }
 
-/*--------------------------------------------------------------*
- *  ss_m::checkpoint()
- *  For debugging, smsh
- *--------------------------------------------------------------*/
-rc_t
-ss_m::checkpoint()
-{
-    // Just kick the chkpt thread
-    chkpt->take();
-    return RCOK;
-}
-
 rc_t
 ss_m::activate_archiver()
 {
@@ -778,17 +710,6 @@ ss_m::get_durable_lsn(lsn_t& anlsn)
 {
   anlsn = log->durable_lsn();
   return (RCOK);
-}
-
-void ss_m::dump_page_lsn_chain(std::ostream &o) {
-    dump_page_lsn_chain(o, 0, lsn_t::max);
-}
-void ss_m::dump_page_lsn_chain(std::ostream &o, const PageID &pid) {
-    dump_page_lsn_chain(o, pid, lsn_t::max);
-}
-void ss_m::dump_page_lsn_chain(std::ostream &o, const PageID &pid, const lsn_t &max_lsn) {
-    // using static method since restart_thread_t is not guaranteed to be active
-    restart_thread_t::dump_page_lsn_chain(o, pid, max_lsn);
 }
 
 #if defined(__GNUC__) && __GNUC_MINOR__ > 6

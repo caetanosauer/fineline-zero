@@ -27,6 +27,7 @@
 #include "btree_page_h.h"
 #include "log_core.h"
 #include "xct.h"
+#include "logarchiver.h"
 #include "xct_logger.h"
 
 // Template definitions
@@ -348,12 +349,6 @@ void bf_tree_m::set_warmup_done()
         _warmup_done = true;
         _restore_coord = nullptr;
         Logger::log_sys<warmup_done_log>();
-
-        // Start backgroud recovery after warmup, in order to not interfere
-        // with on-demand recovery.
-        if (smlevel_0::recovery && smlevel_0::recovery->isInstant()) {
-            smlevel_0::recovery->wakeup();
-        }
     }
 }
 
@@ -393,7 +388,7 @@ void bf_tree_m::post_init()
 
 void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
 {
-    if (!cb._check_recovery || !smlevel_0::recovery) { return; }
+    if (!cb._check_recovery) { return; }
 
     w_assert1(cb.latch().is_mine());
     w_assert1(cb.get_page_lsn() == page->lsn);

@@ -324,9 +324,6 @@ rc_t ArchiveIndex::closeCurrentRun(lsn_t runEndLSN, unsigned level, PageID maxPI
 
             // Notify other services that depend on archived LSN
             if (level == 1) {
-                if (smlevel_0::recovery) {
-                    smlevel_0::recovery->notify_archived_lsn(runEndLSN);
-                }
                 if (smlevel_0::bf) {
                     smlevel_0::bf->notify_archived_lsn(runEndLSN);
                 }

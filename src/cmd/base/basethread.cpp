@@ -1,10 +1,9 @@
 #include "basethread.h"
 
-#include <chkpt.h>
 #include <sm.h>
-#include <restart.h>
 #include <btree.h>
 #include <bf_tree.h>
+#include <lock.h>
 
 #include <log_lsn_tracker.h>
 #include <log_core.h>
@@ -96,16 +95,11 @@ void basethread_t::start_other()
         smlevel_0::lm = new lock_m(_options);
         cerr << "OK" << endl;
 
-        cerr << "Initializing checkpoint manager ... ";
-        smlevel_0::chkpt = new chkpt_m(_options);
-        cerr << "OK" << endl;
-
         cerr << "Initializing b-tree manager ... ";
         smlevel_0::bt = new btree_m;
 
         assert(
                 smlevel_0::lm &&
-                smlevel_0::chkpt &&
                 smlevel_0::bt
               );
 

@@ -99,7 +99,6 @@ class lock_request_t; // forward
 class xct_lock_info_t; // forward
 class smthread_t; // forward
 class lil_private_table;
-class chkpt_t;
 class logrec_t; // forward
 class fixable_page_h; // forward
 
@@ -335,8 +334,6 @@ public:
     static uint32_t    num_active_xcts();
 
     static size_t get_loser_count();
-
-    static void fuzzy_checkpoint(chkpt_t& chkpt);
 
 /**\cond skip */
     // used for compensating (top-level actions)

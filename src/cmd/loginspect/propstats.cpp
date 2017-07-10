@@ -4,13 +4,12 @@
 #include "log_storage.h"
 #include "stnode_page.h"
 #include "alloc_cache.h"
-#include "chkpt.h"
 
 class PropStatsHandler : public Handler {
 public:
     // Use chkpt object to keep track of dirty pages
     // This allows us to reuse the logic of log analysis
-    chkpt_t chkpt;
+    // chkpt_t chkpt;
 
     size_t psize;
 
@@ -83,7 +82,7 @@ public:
             }
         }
 
-        chkpt.mark_page_clean(pid, clean_lsn);
+        // chkpt.mark_page_clean(pid, clean_lsn);
     }
 
     void mark_dirty(PageID pid, lsn_t lsn, StoreID store)
@@ -96,7 +95,7 @@ public:
         if (is_static_store(store)) {
             static_pids.insert(pid);
         }
-        chkpt.mark_page_dirty(pid, lsn, lsn);
+        // chkpt.mark_page_dirty(pid, lsn, lsn);
     }
 
     virtual void invoke(logrec_t& r)
@@ -146,7 +145,7 @@ public:
             PageID pid = *(reinterpret_cast<PageID*>(r.data_ssx()));
             bool was_dirty = *(reinterpret_cast<bool*>(r.data_ssx() + sizeof(PageID)));
             if (!was_dirty) {
-                chkpt.buf_tab.erase(pid);
+                // chkpt.buf_tab.erase(pid);
                 if (track_rec_lsn) { page_lsns[pid].clear(); }
             }
         }
@@ -181,14 +180,14 @@ public:
 
         size_t dirty_page_count = 0;
         size_t pages_static = 0;
-        for (auto e : chkpt.buf_tab) {
-            if (e.second.is_dirty()) {
-                dirty_page_count++;
-            }
-            if (static_pids.count(e.first) > 0) {
-                pages_static++;
-            }
-        }
+        // for (auto e : chkpt.buf_tab) {
+            // if (e.second.is_dirty()) {
+                // dirty_page_count++;
+            // }
+            // if (static_pids.count(e.first) > 0) {
+                // pages_static++;
+            // }
+        // }
 
         out() << "" << dirty_page_count
             << " " << redo_length / 1048576

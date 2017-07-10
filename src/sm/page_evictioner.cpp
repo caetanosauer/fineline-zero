@@ -84,19 +84,13 @@ bool page_evictioner_base::evict_one(bf_idx victim)
         return false;
     }
 
-    lsn_t page_lsn = cb.get_page_lsn();
-    // CS TODO: apparently page LSN can be null for unallocated pages
-    // (i.e., "holes" in extents)
-    if (!page_lsn.is_null()) {
-        smlevel_0::recovery->add_dirty_page(cb._pid, page_lsn);
-    }
-
     // We're passed the point of no return: eviction must happen no mather what
 
     w_assert1(cb.latch().is_mine());
 
     if (_log_evictions) {
         constexpr bool was_dirty = false;
+        lsn_t page_lsn = cb.get_page_lsn();
         Logger::log_sys<evict_page_log>(cb._pid, was_dirty, page_lsn);
     }
 

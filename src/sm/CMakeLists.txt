@@ -16,7 +16,6 @@ set(sm_STAT_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/btree_impl_verify.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/btree_page.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/btree_page_h.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/chkpt.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/eventlog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/fixable_page_h.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/generic_page.cpp

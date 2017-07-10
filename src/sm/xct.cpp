@@ -21,7 +21,6 @@
 #include <sm.h>
 #include "tls.h"
 #include <sstream>
-#include "chkpt.h"
 #include "logrec.h"
 #include "bf_tree.h"
 #include "lock_raw.h"
@@ -729,51 +728,6 @@ size_t xct_t::get_loser_count()
     }
 
     return res;
-}
-
-void xct_t::fuzzy_checkpoint(chkpt_t& chkpt)
-{
-    /* CS: this code was copied from the old fuzzy checkpoints implemented
-     * by Wey Guy -- see old versions of the file chkpt.cpp (Oct-Nov 2014)
-     */
-    xct_t* xd;
-    // CS: Old code did not acquire the list mutex (passed false in the
-    // constructor below), but that is not safe bacause the xct_t object may
-    // get destroyed while we are still using it below. There used to be a loop
-    // checking if the mutex is held, but that did not work either. The whole
-    // concurrency control mechanism of the xct list is in fact dubious. It
-    // seems like the safest way is to always acquire the list mutex during
-    // checkpoints, but that badly impacts performance. A more scalable
-    // implementation of the transaction manager is desperatley needed; or,
-    // even better, we use either a no-steal protocol or decoupled (log-based)
-    // checkpoints so we never have to inspect the xct list when taking a
-    // checkpoint.
-    xct_i iter(true);
-
-    while ((xd = iter.next())) {
-        W_COERCE(xd->latch().latch_acquire(LATCH_SH));
-
-        if (xd->state() != xct_ended && xd->first_lsn().valid()) {
-            auto& entry = chkpt.mark_xct_active(xd->tid(), xd->first_lsn(), xd->last_lsn());
-
-            if (!xd->is_sys_xct()) {
-                RawXct* rx = xd->raw_lock_xct();
-                RawLock* lock = rx->private_first;
-                while (lock) {
-                    if (lock->mode.contains_dirty_key_lock()) {
-                        if (lock->state == RawLock::ACTIVE) {
-                            auto mode = rx->private_hash_map.get_granted_mode(lock->hash);
-                            entry.add_lock(mode, lock->hash);
-                        }
-                    }
-                    lock = lock->xct_next;
-                }
-            }
-
-        }
-
-        xd->latch().latch_release();
-    }
 }
 
 /*********************************************************************

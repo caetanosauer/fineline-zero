@@ -761,24 +761,6 @@ void ShoreEnv::gatherstats_sm(ostream &stream)
     _last_sm_stats = stats;
 }
 
-size_t ShoreEnv::get_total_pages_to_recover()
-{
-    return smlevel_0::recovery->get_chkpt()->buf_tab.size();
-}
-
-size_t ShoreEnv::get_dirty_page_count()
-{
-    return smlevel_0::recovery->get_dirty_page_count();
-}
-
-bool ShoreEnv::has_log_analysis_finished()
-{
-    bool hasFinished = false;
-    if (smlevel_0::recovery)
-        hasFinished = smlevel_0::recovery->hasLogAnalysisFinished();
-    return hasFinished;
-}
-
 void ShoreEnv::wait_for_warmup()
 {
     while (true) {
@@ -912,12 +894,6 @@ int ShoreEnv::start_sm()
  *            request periodic checkpoints.
  *
  *********************************************************************/
-
-int ShoreEnv::checkpoint()
-{
-    _pssm->checkpoint();
-    return 0;
-}
 
 void ShoreEnv::activate_archiver()
 {

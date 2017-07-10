@@ -36,12 +36,12 @@
 #include "log_core.h"
 
 #include <map>
+#include <atomic>
 
 #include "skewer.h"
 #include "reqs.h"
 #include "table_desc.h"
 #include <boost/program_options.hpp>
-#include "restart.h"
 
 using std::map;
 

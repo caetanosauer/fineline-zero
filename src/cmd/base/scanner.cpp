@@ -1,7 +1,6 @@
 #include "scanner.h"
 
 #include <logarchive_scanner.h>
-#include <chkpt.h>
 #include <sm.h>
 #include <restart.h>
 #include <dirent.h>

@@ -115,8 +115,6 @@ logrec_t::get_type_str(kind_t type)
 		return "evict_page";
 	case fetch_page_log :
 		return "fetch_page";
-	case xct_abort_log :
-		return "xct_abort";
 	case xct_end_log :
 		return "xct_end";
 	case xct_latency_dump_log :
@@ -307,8 +305,6 @@ void logrec_t::redo()
     redo<btree_page_h*>(nullptr);
 }
 
-static __thread kind_t undoing_context = t_max_logrec; // for accounting TODO REMOVE
-
 
 /*********************************************************************
  *
@@ -321,25 +317,6 @@ static __thread kind_t undoing_context = t_max_logrec; // for accounting TODO RE
  *********************************************************************/
 void logrec_t::undo()
 {
-    w_assert0(!is_single_sys_xct()); // UNDO shouldn't be called for single-log sys xct
-    undoing_context = kind_t(header._type);
-    DBG( << "Undo  log rec: " << *this
-        << " size: " << header._len  << " xid_prevlsn: " << xid_prev());
-
-    // Only system transactions involve multiple pages, while there
-    // is no UNDO for system transactions, so we only need to mark
-    // recovery flag for the current UNDO page
-
-    // If there is a page, mark the page for recovery, this is for page access
-    // validation purpose to allow recovery operation to by-pass the
-    // page concurrent access check
-    // In most cases we do not have a page from caller, therefore
-    // we need to go to individual undo function to mark the recovery flag.
-    // All the page related operations are in Btree_logrec.cpp, including
-    // operations for system and user transactions, note that operations
-    // for system transaction have REDO but no UNDO
-    // The actual UNDO implementation in Btree_impl.cpp
-
     using PagePtr = fixable_page_h*;
     switch (header._type) {
 	case btree_insert_log :
@@ -361,8 +338,6 @@ void logrec_t::undo()
 		W_FATAL(eINTERNAL);
 		break;
     }
-
-    undoing_context = t_max_logrec;
 }
 
 /*********************************************************************
@@ -431,7 +406,6 @@ operator<<(ostream& o, logrec_t& l)
 
     o << "len=" << l.length() << " ";
     o << l.type_str() << ":" << l.cat_str();
-    if (l.is_root_page()) { o << " ROOT"; }
     o << " p(" << l.pid() << ")";
     if (l.is_multi_page()) {
         o << " src-" << l.pid2();
@@ -530,192 +504,6 @@ operator<<(ostream& o, logrec_t& l)
     o.flags(f);
     return o;
 }
-
-#if LOGREC_ACCOUNTING
-
-class logrec_accounting_impl_t {
-private:
-    static __thread uint64_t bytes_written_fwd [t_max_logrec];
-    static __thread uint64_t bytes_written_bwd [t_max_logrec];
-    static __thread uint64_t bytes_written_bwd_cxt [t_max_logrec];
-    static __thread uint64_t insertions_fwd [t_max_logrec];
-    static __thread uint64_t insertions_bwd [t_max_logrec];
-    static __thread uint64_t insertions_bwd_cxt [t_max_logrec];
-    static __thread double            ratio_bf       [t_max_logrec];
-    static __thread double            ratio_bf_cxt   [t_max_logrec];
-
-    static const char *type_str(int _type);
-    static void reinit();
-public:
-    logrec_accounting_impl_t() {  reinit(); }
-    ~logrec_accounting_impl_t() {}
-    static void account(logrec_t &l, bool fwd);
-    static void account_end(bool fwd);
-    static void print_account_and_clear();
-};
-static logrec_accounting_impl_t dummy;
-void logrec_accounting_impl_t::reinit()
-{
-    for(int i=0; i < t_max_logrec; i++) {
-        bytes_written_fwd[i] =
-        bytes_written_bwd[i] =
-        bytes_written_bwd_cxt[i] =
-        insertions_fwd[i] =
-        insertions_bwd[i] =
-        insertions_bwd_cxt[i] =  0;
-        ratio_bf[i] = 0.0;
-        ratio_bf_cxt[i] = 0.0;
-    }
-}
-// this doesn't have to be thread-safe, as I'm using it only
-// to figure out the ratios
-void logrec_accounting_t::account(logrec_t &l, bool fwd)
-{
-    logrec_accounting_impl_t::account(l,fwd);
-}
-void logrec_accounting_t::account_end(bool fwd)
-{
-    logrec_accounting_impl_t::account_end(fwd);
-}
-
-void logrec_accounting_impl_t::account_end(bool fwd)
-{
-    // Set the context to end so we can account for all
-    // overhead related to that.
-    if(!fwd) {
-        undoing_context = t_xct_end;
-    }
-}
-void logrec_accounting_impl_t::account(logrec_t &l, bool fwd)
-{
-    unsigned b = l.length();
-    int      t = l.type();
-    int      tcxt = l.type();
-    if(fwd) {
-        w_assert0((undoing_context == t_max_logrec)
-               || (undoing_context == t_xct_end));
-    } else {
-        if(undoing_context != t_max_logrec) {
-            tcxt = undoing_context;
-        } else {
-            // else it's something like a compensate  or xct_end
-            // and we'll chalk it up to t_xct_abort, which
-            // is not undoable.
-            tcxt = t_xct_abort;
-        }
-    }
-    if(fwd) {
-        bytes_written_fwd[t] += b;
-        insertions_fwd[t] ++;
-    }
-    else {
-        bytes_written_bwd[t] += b;
-        bytes_written_bwd_cxt[tcxt] += b;
-        insertions_bwd[t] ++;
-        insertions_bwd_cxt[tcxt] ++;
-    }
-    if(bytes_written_fwd[t]) {
-        ratio_bf[t] = double(bytes_written_bwd_cxt[t]) /
-            double(bytes_written_fwd[t]);
-    } else {
-        ratio_bf[t] = 1;
-    }
-    if(bytes_written_fwd[tcxt]) {
-        ratio_bf_cxt[tcxt] = double(bytes_written_bwd_cxt[tcxt]) /
-            double(bytes_written_fwd[tcxt]);
-    } else {
-        ratio_bf_cxt[tcxt] = 1;
-    }
-}
-
-void logrec_accounting_t::print_account_and_clear()
-{
-    logrec_accounting_impl_t::print_account_and_clear();
-}
-void logrec_accounting_impl_t::print_account_and_clear()
-{
-    uint64_t anyb=0;
-    for(int i=0; i < t_max_logrec; i++) {
-        anyb += insertions_bwd[i];
-    }
-    if(!anyb) {
-        reinit();
-        return;
-    }
-    // don't bother unless there was an abort.
-    // I mean something besides just compensation records
-    // being chalked up to bytes backward or insertions backward.
-    if( insertions_bwd[t_compensate] == anyb ) {
-        reinit();
-        return;
-    }
-
-    char out[200]; // 120 is adequate
-    sprintf(out,
-        "%s %20s  %8s %8s %8s %12s %12s %12s %10s %10s PAGESIZE %d\n",
-        "LOGREC",
-        "record",
-        "ins fwd", "ins bwd", "rec undo",
-        "bytes fwd", "bytes bwd",  "bytes undo",
-        "B:F",
-        "BUNDO:F",
-        SM_PAGESIZE
-        );
-    fprintf(stdout, "%s", out);
-    uint64_t btf=0, btb=0, btc=0;
-    uint64_t itf=0, itb=0, itc=0;
-    for(int i=0; i < t_max_logrec; i++) {
-        btf += bytes_written_fwd[i];
-        btb += bytes_written_bwd[i];
-        btc += bytes_written_bwd_cxt[i];
-        itf += insertions_fwd[i];
-        itb += insertions_bwd[i];
-        itc += insertions_bwd_cxt[i];
-
-        if( insertions_fwd[i] + insertions_bwd[i] + insertions_bwd_cxt[i] > 0)
-        {
-            sprintf(out,
-            "%s %20s  %8lu %8lu %8lu %12lu %12lu %12lu %10.7f %10.7f PAGESIZE %d \n",
-            "LOGREC",
-            type_str(i) ,
-            insertions_fwd[i],
-            insertions_bwd[i],
-            insertions_bwd_cxt[i],
-            bytes_written_fwd[i],
-            bytes_written_bwd[i],
-            bytes_written_bwd_cxt[i],
-            ratio_bf[i],
-            ratio_bf_cxt[i],
-            SM_PAGESIZE
-            );
-            fprintf(stdout, "%s", out);
-        }
-    }
-    sprintf(out,
-    "%s %20s  %8lu %8lu %8lu %12lu %12lu %12lu %10.7f %10.7f PAGESIZE %d\n",
-    "LOGREC",
-    "TOTAL",
-    itf, itb, itc,
-    btf, btb, btc,
-    double(btb)/double(btf),
-    double(btc)/double(btf),
-    SM_PAGESIZE
-    );
-    fprintf(stdout, "%s", out);
-    reinit();
-}
-
-__thread uint64_t logrec_accounting_impl_t::bytes_written_fwd [t_max_logrec];
-__thread uint64_t logrec_accounting_impl_t::bytes_written_bwd [t_max_logrec];
-__thread uint64_t logrec_accounting_impl_t::bytes_written_bwd_cxt [t_max_logrec];
-__thread uint64_t logrec_accounting_impl_t::insertions_fwd [t_max_logrec];
-__thread uint64_t logrec_accounting_impl_t::insertions_bwd [t_max_logrec];
-__thread uint64_t logrec_accounting_impl_t::insertions_bwd_cxt [t_max_logrec];
-__thread double            logrec_accounting_impl_t::ratio_bf       [t_max_logrec];
-__thread double            logrec_accounting_impl_t::ratio_bf_cxt   [t_max_logrec];
-
-#endif
-
 
 template void logrec_t::template redo<btree_page_h*>(btree_page_h*);
 template void logrec_t::template redo<fixable_page_h*>(fixable_page_h*);

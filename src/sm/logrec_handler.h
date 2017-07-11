@@ -173,11 +173,7 @@ struct LogrecHandler<btree_insert_log, PagePtr>
     static void undo(logrec_t* lr)
     {
         btree_insert_t* dp = (btree_insert_t*) lr->data();
-
-        if (true == dp->sys_txn)
-        {
-            return;
-        }
+        if (dp->sys_txn) { return; }
 
         w_keystr_t key;
         key.construct_from_keystr(dp->data, dp->klen);

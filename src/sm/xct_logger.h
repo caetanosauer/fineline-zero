@@ -82,10 +82,6 @@ public:
         LogrecSerializer<LR>::serialize(p, logrec, args...);
         w_assert1(logrec->valid_header());
 
-        if (p->tag() != t_btree_p || p->root() == p->pid()) {
-            logrec->set_root_page();
-        }
-
         // If it's a log for piggy-backed SSX, we call log->insert without updating _last_log
         // because this is a single log independent from other logs in outer transaction.
         if (xd->is_piggy_backed_single_log_sys_xct()) {
@@ -121,13 +117,6 @@ public:
         logrec->init_page_info(p);
         LogrecSerializer<LR>::serialize(p, p2, logrec, args...);
         w_assert1(logrec->valid_header());
-
-        if (p->tag() != t_btree_p || p->root() == p->pid()) {
-            logrec->set_root_page();
-        }
-        if (p2->tag() != t_btree_p || p2->root() == p2->pid()) {
-            logrec->set_root_page();
-        }
 
         // For multi-page log, also set LSN chain with a branch.
         w_assert1(logrec->is_multi_page());

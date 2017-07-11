@@ -255,7 +255,6 @@ void LogConsumer::initLogScanner(LogScanner* logScanner)
     // CS TODO use flags to filter -- there's gotta be a better way than this
     logScanner->setIgnore(comment_log);
     logScanner->setIgnore(chkpt_begin_log);
-    logScanner->setIgnore(xct_abort_log);
     logScanner->setIgnore(xct_end_log);
     logScanner->setIgnore(restore_begin_log);
     logScanner->setIgnore(restore_segment_log);

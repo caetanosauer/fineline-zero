@@ -371,7 +371,6 @@ xct_t::~xct_t()
         smlevel_0::log->get_oldest_lsn_tracker()->leave(
                 reinterpret_cast<uintptr_t>(this));
     }
-    LOGREC_ACCOUNTING_PRINT // see logrec.h
 
     _teardown(false);
     w_assert3(_in_compensated_op==0);
@@ -1152,7 +1151,6 @@ xct_t::_abort()
     }
 
     if (_last_lsn.valid()) {
-        LOGREC_ACCOUNT_END_XCT(true); // see logrec.h
         /*
          *  If xct generated some log, write a Xct End Record.
          *  We flush because if this was a prepared
@@ -1170,20 +1168,20 @@ xct_t::_abort()
         // Does not wait for the checkpoint to finish, checkpoint is a non-blocking operation
         // chkpt_serial_m::read_acquire();
 
-        change_state(xct_freeing_space);
-        // CS TODO: removed xct_freeing_space (no 2pc support anyway)
+        // change_state(xct_freeing_space);
         // Logger::log<xct_freeing_space_log>();
 
         // Does not wait for the checkpoint to finish, checkpoint is a non-blocking operation
         // chkpt_serial_m::read_release();
 
-        if (_xct_chain_len > 0) {
-            // we need to flush only if it's chained or prepared xct
-            _sync_logbuf();
-        } else {
-            // otherwise, we don't have to flush
-            _sync_logbuf(false);
-        }
+        // CS: not needed in FineLine
+//         if (_xct_chain_len > 0) {
+//             // we need to flush only if it's chained or prepared xct
+//             _sync_logbuf();
+//         } else {
+//             // otherwise, we don't have to flush
+//             _sync_logbuf(false);
+//         }
 
         // don't allow a chkpt to occur between changing the state and writing
         // the log record, since otherwise it might try to change the state
@@ -1194,7 +1192,7 @@ xct_t::_abort()
 
         // Log transaction abort for both cases: 1) normal abort, 2) UNDO
         change_state(xct_ended);
-        Logger::log<xct_abort_log>();
+        // Logger::log<xct_abort_log>();
 
         // Does not wait for the checkpoint to finish, checkpoint is a non-blocking operation
         // chkpt_serial_m::read_release();
@@ -1297,8 +1295,6 @@ rc_t xct_t::update_last_logrec(logrec_t* l, lsn_t lsn)
 {
     // _last_log = 0;
     _last_lsn = lsn;
-
-    LOGREC_ACCOUNT(*l, !consuming); // see logrec.h
 
     // log insert effectively set_lsn to the lsn of the *next* byte of
     // the log.

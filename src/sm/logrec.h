@@ -75,7 +75,7 @@ struct baseLogHeader
 {
     uint16_t _len;  // length of the log record
     u_char _type; // kind_t (included from logtype_gen.h)
-    u_char _flags;
+    u_char _flags; // CS TODO: UNUSED
     /* 4 */
 
     // Was _pid; broke down to save 2 bytes:
@@ -87,19 +87,6 @@ struct baseLogHeader
     /* 8 + 4= 12 */
     StoreID              _stid; // 4 bytes
     /* 12 + 4= 16*/
-
-
-
-    // lsn_t            _undo_nxt; // (xct) used in CLR only
-    /*
-     * originally: you might think it would be nice to use one lsn_t for
-     * both _xid_prev and for _undo_lsn, but for the moment we need both because
-     * at the last minute, fill_xct_attr() is called and that fills in
-     * _xid_prev, clobbering its value with the prior generated log record's lsn.
-     * It so happens that set_clr() is called prior to fill_xct_attr().
-     * It might do to set _xid_prev iff it's not already set, in fill_xct_attr().
-     * NB: this latter suggestion is what we have now done.
-     */
 
     bool is_valid() const;
 };
@@ -116,7 +103,7 @@ enum kind_t {
     alloc_format_log = 8,
     evict_page_log = 9,
     add_backup_log = 10,
-    xct_abort_log = 11,
+    // xct_abort_log = 11,
     fetch_page_log = 12,
     xct_end_log = 13,
     // t_xct_end_group = 14,
@@ -186,7 +173,6 @@ public:
     bool             is_undo() const;
     bool             is_cpsn() const;
     bool             is_multi_page() const;
-    bool             is_root_page() const;
     bool             is_logical() const;
     bool             is_system() const;
     bool             is_single_sys_xct() const;
@@ -230,7 +216,6 @@ public:
 public:
     uint16_t              tag() const;
     smsize_t             length() const;
-    void                 set_root_page();
     void                 set_pid(const PageID& p);
     kind_t               type() const;
     const char*          type_str() const
@@ -295,13 +280,6 @@ protected:
 
         /** log by system transaction which is fused with begin/commit record. */
         t_single_sys_xct    = 0x80
-    };
-
-    enum flag_t {
-        // If this logrec refers to a root page (in a general sense, a root is
-        // any page which cannot be recovered by SPR because no other page
-        // points to it
-        t_root_page     = 0x02
     };
 
     u_char             cat() const;
@@ -427,12 +405,6 @@ logrec_t::cat() const
     return get_logrec_cat(static_cast<kind_t>(header._type));
 }
 
-inline void
-logrec_t::set_root_page()
-{
-    header._flags |= t_root_page;
-}
-
 inline bool
 logrec_t::is_system() const
 {
@@ -460,12 +432,6 @@ inline bool
 logrec_t::is_undo() const
 {
     return (cat() & t_undo) != 0;
-}
-
-inline bool
-logrec_t::is_root_page() const
-{
-    return (header._flags & t_root_page) != 0;
 }
 
 inline bool
@@ -522,7 +488,6 @@ constexpr u_char logrec_t::get_logrec_cat(kind_t type)
 	case evict_page_log : return t_system;
 	case fetch_page_log : return t_system;
 
-	case xct_abort_log : return t_logical;
 	case xct_end_log : return t_logical;
 
 	case alloc_page_log : return t_redo|t_single_sys_xct;
@@ -547,34 +512,5 @@ constexpr u_char logrec_t::get_logrec_cat(kind_t type)
         default: return t_bad_cat;
     }
 }
-
-// define 0 or 1
-// Should never use this in production. This code is in place
-// so that we can empirically estimate the fudge factors
-// for rollback for the various log record types.
-#define LOGREC_ACCOUNTING 0
-#if LOGREC_ACCOUNTING
-class logrec_accounting_t {
-public:
-    static void account(logrec_t &l, bool fwd);
-    static void account_end(bool fwd);
-    static void print_account_and_clear();
-};
-#define LOGREC_ACCOUNTING_PRINT logrec_accounting_t::print_account_and_clear();
-#define LOGREC_ACCOUNT(x,y) \
-        if(!smlevel_0::in_recovery()) { \
-            logrec_accounting_t::account((x),(y)); \
-        }
-#define LOGREC_ACCOUNT_END_XCT(y) \
-        if(!smlevel_0::in_recovery()) { \
-            logrec_accounting_t::account_end((y)); \
-        }
-#else
-#define LOGREC_ACCOUNTING_PRINT
-#define LOGREC_ACCOUNT(x,y)
-#define LOGREC_ACCOUNT_END_XCT(y)
-#endif
-
-/*<std-footer incl-file-exclusion='LOGREC_H'>  -- do not edit anything below this line -- */
 
 #endif          /*</std-footer>*/

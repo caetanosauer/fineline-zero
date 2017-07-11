@@ -1588,6 +1588,12 @@ xct_t::rollback(const lsn_t &save_pt)
 {
     DBGTHRD(<< "xct_t::rollback to " << save_pt);
 
+    if (!smthread_t::is_abortable()) {
+        W_FATAL_MSG(eINTERNAL, <<
+                "Transaction too large -- cannot rollback! " <<
+                "Increase tc_t::UndoBufferSize and recompile");
+    }
+
     if(!log) {
         cerr
         << "Cannot roll back with logging turned off. "
@@ -1611,84 +1617,22 @@ xct_t::rollback(const lsn_t &save_pt)
     w_assert0(!_rolling_back);
     _rolling_back = true;
 
-    // undo_nxt is the lsn of last recovery log for this txn
-    lsn_t nxt = _undo_nxt;
-    W_DO(log->flush(nxt));
-
-    DBGOUT3(<<"Initial rollback, from: " << nxt << " to: " << save_pt);
-
-    logrec_t* lrbuf = new logrec_t;
-
-    while (save_pt < nxt)
-    {
-        rc =  log->fetch(nxt, lrbuf, 0, true);
-        if(rc.is_error() && rc.err_num()==eEOF)
-        {
-            DBGX(<< " fetch returns EOF" );
-            goto done;
-        }
-        w_assert3(!lrbuf->is_skip());
-        logrec_t& r = *lrbuf;
-
-        DBGOUT1(<<"Rollback, current undo lsn: " << nxt);
-
-        if (r.is_undo())
-        {
-            w_assert0(!r.is_cpsn());
-           w_assert1(nxt == r.lsn_ck());
-            // r is undoable
-            w_assert1(!r.is_single_sys_xct());
-            w_assert1(!r.is_multi_page()); // All multi-page logs are SSX, so no UNDO.
-            /*
-             *  Undo action of r.
-             */
-
-            fixable_page_h page;
-
-            r.undo(page.is_fixed() ? &page : 0);
-
-            // Not a compensation log record, use xid_prev() which is
-            // previous logrec of this xct
-            nxt = r.xid_prev();
-            DBGOUT1(<<"Rollback, log record is not compensation, xid_prev: " << nxt);
-        }
-        else  if (r.is_cpsn())
-        {
-            if (r.is_single_sys_xct())
-            {
-                nxt = lsn_t::null;
-            }
-            else
-            {
-                nxt = r.undo_nxt();
-            }
-            // r.xid_prev() could just as well be null
-
-        }
-        else
-        {
-            // r is not undoable
-            if (r.is_single_sys_xct())
-            {
-                nxt = lsn_t::null;
-            }
-            else
-            {
-                nxt = r.xid_prev();
-            }
-            // w_assert9(r.undo_nxt() == lsn_t::null);
-        }
+    /*
+     * CS FineLine txn rollback. Log records are inserted into undo
+     * buffer from "left to right", so iterating forwards gives
+     * the correct undo order.
+     */
+    char* undo_buf = smthread_t::get_undo_buf();
+    const char* undo_end = smthread_t::get_undo_buf_end();
+    while (undo_buf < undo_end) {
+        logrec_t* lr = reinterpret_cast<logrec_t*>(undo_buf);
+        undo_buf += lr->length();
+        lr->undo();
+        w_assert0(lr->is_undo());
     }
 
-    delete lrbuf;
-
-    _undo_nxt = nxt;
     _read_watermark = lsn_t::null;
     _xct_chain_len = 0;
-
-done:
-
-    DBGX( << "leaving rollback: compensated op " << _in_compensated_op);
     _in_compensated_op --;
     _rolling_back = false;
     w_assert3(_anchor == lsn_t::null ||

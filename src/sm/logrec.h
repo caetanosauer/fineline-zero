@@ -210,8 +210,7 @@ public:
 
     void redo();
 
-    template <class PagePtr>
-    void             undo(PagePtr);
+    void undo();
 
     void init_header(kind_t);
 

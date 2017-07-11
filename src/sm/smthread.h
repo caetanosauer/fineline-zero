@@ -77,6 +77,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include <mutex>
 #include <memory>
 #include <list>
+#include <array>
 
 #include "timeout.h"
 #include "latches.h"
@@ -201,7 +202,11 @@ class smthread_t {
     struct tcb_t {
         // CS: moved out of xct_t
         logrec_t _logbuf;
+        static constexpr size_t UndoBufferSize = 64 * 1024;
+        std::array<char, UndoBufferSize> _undo_buf;
         logrec_t _logbuf2; // for "piggy-backed" SSX
+        uint32_t _undo_offset;
+        bool _abortable;
 
         xct_t*   xct;
         int      pin_count;      // number of rsrc_m pins
@@ -240,6 +245,8 @@ class smthread_t {
         }
 
         tcb_t(tcb_t* outer) :
+            _undo_offset(UndoBufferSize),
+            _abortable(true),
             xct(0),
             pin_count(0),
             prev_pin_count(0),
@@ -341,6 +348,39 @@ public:
     static logrec_t* get_logbuf()
     {
         return &tcb()._logbuf;
+    }
+
+    static void insert_undo_logrec(const logrec_t* lr)
+    {
+        if (!is_abortable() || !lr->is_undo()) { return; }
+
+        auto& offset = tcb()._undo_offset;
+        char* ptr = &tcb()._undo_buf[0];
+        if (offset < lr->length()) {
+            // W_FATAL_MSG(eINTERNAL, <<
+            //         "Transaction too large -- undo buffer full!");
+            tcb()._abortable = false;
+        }
+        char* dest = ptr + offset - lr->length();
+        memcpy(dest, lr, lr->length());
+        offset -= lr->length();
+    }
+
+    static bool is_abortable()
+    {
+        return tcb()._abortable;
+    }
+
+    static char* get_undo_buf()
+    {
+        return reinterpret_cast<char*>(&tcb()._undo_buf) +
+            tcb()._undo_offset;
+    }
+
+    static char* get_undo_buf_end()
+    {
+        return reinterpret_cast<char*>(&tcb()._undo_buf) +
+            sizeof(logrec_t);
     }
 
     static logrec_t* get_logbuf2()

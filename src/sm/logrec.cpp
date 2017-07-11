@@ -342,8 +342,7 @@ static __thread kind_t undoing_context = t_max_logrec; // for accounting TODO RE
  *  undo operation.
  *
  *********************************************************************/
-template <class PagePtr>
-void logrec_t::undo(PagePtr page)
+void logrec_t::undo()
 {
     w_assert0(!is_single_sys_xct()); // UNDO shouldn't be called for single-log sys xct
     undoing_context = kind_t(header._type);
@@ -364,6 +363,7 @@ void logrec_t::undo(PagePtr page)
     // for system transaction have REDO but no UNDO
     // The actual UNDO implementation in Btree_impl.cpp
 
+    using PagePtr = fixable_page_h*;
     switch (header._type) {
 	case btree_insert_log :
                 LogrecHandler<btree_insert_log, PagePtr>::undo(this);
@@ -757,4 +757,3 @@ __thread double            logrec_accounting_impl_t::ratio_bf_cxt   [t_max_logre
 
 template void logrec_t::template redo<btree_page_h*>(btree_page_h*);
 template void logrec_t::template redo<fixable_page_h*>(fixable_page_h*);
-template void logrec_t::template undo<fixable_page_h*>(fixable_page_h*);

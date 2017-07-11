@@ -97,7 +97,6 @@ public:
     rc_t            flush(const lsn_t &lsn, bool block=true, bool signal=true, bool *ret_flushed=NULL);
     rc_t    flush_all(bool block=true) {
                           return flush(curr_lsn().advance(-1), block); }
-    rc_t            compensate(const lsn_t &orig_lsn, const lsn_t& undo_lsn);
     rc_t            fetch(lsn_t &lsn, void* buf, lsn_t* nxt, const bool forward);
     bool fetch_direct(lsn_t lsn, logrec_t*& lr, lsn_t& prev_lsn);
 

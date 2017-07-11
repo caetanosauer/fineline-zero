@@ -259,7 +259,6 @@ public:
             bool                single_log_sys_xct = false,
             const tid_t&        tid = 0,
             const lsn_t&        last_lsn = lsn_t::null,
-            const lsn_t&        undo_nxt = lsn_t::null,
             bool                loser_xct = false
             );
     ~xct_t();
@@ -311,7 +310,6 @@ protected:
     void                        change_state(state_t new_state);
     void                        set_first_lsn(const lsn_t &) ;
     void                        set_last_lsn(const lsn_t &) ;
-    void                        set_undo_nxt(const lsn_t &) ;
 /**\endcond skip */
 
 public:
@@ -319,7 +317,6 @@ public:
     // used by checkpoint, restart:
     const lsn_t&                last_lsn() const;
     const lsn_t&                first_lsn() const;
-    const lsn_t&                undo_nxt() const;
     const logrec_t*             last_log() const;
 
     // used by restart, chkpt among others
@@ -335,20 +332,12 @@ public:
 
     static size_t get_loser_count();
 
-/**\cond skip */
     // used for compensating (top-level actions)
     const lsn_t&                anchor(bool grabit = true);
     void                        release_anchor(bool compensate
                                    ADD_LOG_COMMENT_SIG
                                    );
 
-    void                        compensate(const lsn_t&,
-                                          bool undoable
-                                          ADD_LOG_COMMENT_SIG
-                                          );
-    // for recovery:
-    void                        compensate_undo(const lsn_t&);
-/**\endcond skip */
 
     // For handling log-space warnings
     // If you've warned wrt a tx once, and the server doesn't
@@ -508,8 +497,6 @@ protected:
 
 private:
     bool                        one_thread_attached() const;   // assertion
-    // helper function for compensate() and compensate_undo()
-    void                        _compensate(const lsn_t&, bool undoable = false);
 
 public:
     bool                        is_piggy_backed_single_log_sys_xct() const { return _piggy_backed_single_log_sys_xct;}
@@ -609,7 +596,6 @@ public:
 protected: // all data members protected
     lsn_t                        _first_lsn;
     lsn_t                        _last_lsn;
-    lsn_t                        _undo_nxt;
 
     /**
      * Whenever a transaction acquires some lock,
@@ -974,27 +960,6 @@ xct_t::set_first_lsn(const lsn_t &l)
 {
     _first_lsn = l;
 }
-
-inline
-const lsn_t&
-xct_t::undo_nxt() const
-{
-    return _undo_nxt;
-}
-
-inline
-void
-xct_t::set_undo_nxt(const lsn_t &l)
-{
-    _undo_nxt = l;
-}
-
-// inline
-// const logrec_t*
-// xct_t::last_log() const
-// {
-//     return _last_log;
-// }
 
 
 /**\endcond skip */

@@ -26,7 +26,6 @@ public:
 
         logrec_t* logrec = _get_logbuf(xd);
         logrec->init_header(LR);
-        logrec->init_xct_info();
 
         LogrecSerializer<LR>::serialize(nullptr, logrec, args...);
         w_assert1(logrec->valid_header());
@@ -47,7 +46,6 @@ public:
         }
 
         lsn_t lsn;
-        logrec->set_xid_prev(xd->tid(), xd->last_lsn());
         W_COERCE(ss_m::log->insert(*logrec, &lsn));
         _insert_undo_logrec(logrec);
 
@@ -79,7 +77,6 @@ public:
         logrec_t* logrec = _get_logbuf(xd);
 
         logrec->init_header(LR);
-        logrec->init_xct_info();
         logrec->init_page_info(p);
 
         LogrecSerializer<LR>::serialize(p, logrec, args...);
@@ -103,7 +100,6 @@ public:
 
 
         lsn_t lsn;
-        logrec->set_xid_prev(xd->tid(), xd->last_lsn());
         W_COERCE(ss_m::log->insert(*logrec, &lsn));
         _insert_undo_logrec(logrec);
 
@@ -122,7 +118,6 @@ public:
 
         logrec_t* logrec = _get_logbuf(xd);
         logrec->init_header(LR);
-        logrec->init_xct_info();
         logrec->init_page_info(p);
         LogrecSerializer<LR>::serialize(p, p2, logrec, args...);
         w_assert1(logrec->valid_header());
@@ -137,7 +132,7 @@ public:
         // For multi-page log, also set LSN chain with a branch.
         w_assert1(logrec->is_multi_page());
         w_assert1(logrec->is_single_sys_xct());
-        multi_page_log_t *multi = logrec->data_ssx_multi();
+        multi_page_log_t *multi = logrec->data_multi();
         w_assert1(multi->_page2_pid != 0);
 
         // If it's a log for piggy-backed SSX, we call log->insert without updating _last_log
@@ -155,7 +150,6 @@ public:
 
 
         lsn_t lsn;
-        logrec->set_xid_prev(xd->tid(), xd->last_lsn());
         W_COERCE(ss_m::log->insert(*logrec, &lsn));
         _insert_undo_logrec(logrec);
 
@@ -181,7 +175,6 @@ public:
         logrec_t* logrec = new logrec_t;
 
         logrec->init_header(LR);
-        logrec->init_xct_info();
         LogrecSerializer<LR>::serialize(nullptr, logrec, args...);
         w_assert1(logrec->valid_header());
         w_assert1(logrec_t::get_logrec_cat(LR) == logrec_t::t_system);

@@ -105,8 +105,6 @@ logrec_t::get_type_str(kind_t type)
     switch (type)  {
 	case comment_log :
 		return "comment";
-	case compensate_log :
-		return "compensate";
 	case skip_log :
 		return "skip";
 	case chkpt_begin_log :
@@ -209,37 +207,16 @@ void logrec_t::init_header(kind_t type)
 
 void logrec_t::set_size(size_t l)
 {
-    char *dat = is_single_sys_xct() ? data_ssx() : data();
+    char *dat = data();
     if (l != ALIGN_BYTE(l)) {
         // zero out extra space to keep purify happy
         memset(dat+l, 0, ALIGN_BYTE(l)-l);
     }
     unsigned int tmp = ALIGN_BYTE(l)
-        + (is_single_sys_xct() ? hdr_single_sys_xct_sz : hdr_non_ssx_sz) + sizeof(lsn_t);
+        + (hdr_sz) + sizeof(lsn_t);
     tmp = (tmp + 7) & unsigned(-8); // force 8-byte alignment
     w_assert1(tmp <= sizeof(*this));
     header._len = tmp;
-}
-
-void logrec_t::init_xct_info()
-{
-    /* adjust _cat */
-    if (!is_single_sys_xct()) { // prv does not exist in single-log system transaction
-        set_xid_prev(lsn_t::null);
-    }
-    set_tid(0);
-}
-
-void logrec_t::set_xid_prev(tid_t tid, lsn_t last)
-{
-    if (!is_single_sys_xct()) {
-        set_tid(tid);
-        if(xid_prev().valid()) {
-            w_assert2(is_cpsn());
-        } else {
-            set_xid_prev (last);
-        }
-    }
 }
 
 /*
@@ -385,8 +362,6 @@ void logrec_t::undo()
 		break;
     }
 
-    xct()->compensate_undo(xid_prev());
-
     undoing_context = t_max_logrec;
 }
 
@@ -414,8 +389,8 @@ void logrec_t::remove_info_for_pid(PageID pid)
     lsn_t lsn = lsn_ck();
 
     if (type() == btree_split_log) {
-        size_t img_offset = reinterpret_cast<btree_bulk_delete_t*>(data_ssx())->size();
-        char* img = data_ssx() + img_offset;
+        size_t img_offset = reinterpret_cast<btree_bulk_delete_t*>(data())->size();
+        char* img = data() + img_offset;
         size_t img_size = reinterpret_cast<page_img_format_t*>(img)->size();
         char* end = reinterpret_cast<char*>(this) + length();
 
@@ -426,9 +401,9 @@ void logrec_t::remove_info_for_pid(PageID pid)
         else if (pid == pid2()) {
             // Use empty bulk delete and move page img
             // CS TODO: create a normal page_img_format log record
-            btree_bulk_delete_t* bulk = new (data_ssx()) btree_bulk_delete_t(pid2(),
+            btree_bulk_delete_t* bulk = new (data()) btree_bulk_delete_t(pid2(),
                     this->pid());
-            ::memmove(data_ssx() + bulk->size(), img, end - img);
+            ::memmove(data() + bulk->size(), img, end - img);
             set_size(bulk->size() + img_size);
         }
     }
@@ -455,14 +430,7 @@ operator<<(ostream& o, logrec_t& l)
     o << "LSN=" << l.lsn_ck() << " ";
 
     o << "len=" << l.length() << " ";
-
-    if (!l.is_single_sys_xct()) {
-        o << "TID=" << l.tid() << ' ';
-    } else {
-        o << "TID=SSX" << ' ';
-    }
     o << l.type_str() << ":" << l.cat_str();
-    if (l.is_cpsn()) { o << " CLR"; }
     if (l.is_root_page()) { o << " ROOT"; }
     o << " p(" << l.pid() << ")";
     if (l.is_multi_page()) {
@@ -558,12 +526,6 @@ operator<<(ostream& o, logrec_t& l)
         default: /* nothing */
                 break;
     }
-
-    if (!l.is_single_sys_xct()) {
-        if (l.is_cpsn())  o << " (UNDO-NXT=" << l.undo_nxt() << ')';
-        else  o << " [UNDO-PRV=" << l.xid_prev() << "]";
-    }
-
 
     o.flags(f);
     return o;

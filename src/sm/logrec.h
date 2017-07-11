@@ -104,19 +104,9 @@ struct baseLogHeader
     bool is_valid() const;
 };
 
-struct xidChainLogHeader
-{
-
-
-    tid_t               _xid;      // NOT IN SINGLE-LOG SYSTEM TRANSACTION!  (xct)tid of this xct
-    /* 16+8 = 24 */
-    lsn_t               _xid_prv;     // NOT IN SINGLE-LOG SYSTEM TRANSACTION! (xct)previous logrec of this xct
-    /* 24+8 = 32 */
-};
-
 enum kind_t {
     comment_log = 0,
-    compensate_log = 1,
+    // compensate_log = 1,
     skip_log = 2,
     chkpt_begin_log = 3,
     // t_chkpt_bf_tab = 4,
@@ -224,21 +214,13 @@ public:
 
     void set_size(size_t l);
 
-    void init_xct_info();
-
-    void set_xid_prev(tid_t tid, lsn_t last);
-
     enum {
         max_sz = 3 * sizeof(generic_page),
-        hdr_non_ssx_sz = sizeof(baseLogHeader) + sizeof(xidChainLogHeader),
-        hdr_single_sys_xct_sz = sizeof(baseLogHeader),
-        // max_data_sz is conservative.
-        // we don't allow the last 16 bytes to be used (anyway very rarely used)
-        max_data_sz = max_sz - hdr_non_ssx_sz - sizeof(lsn_t)
+        hdr_sz = sizeof(baseLogHeader),
+        max_data_sz = max_sz - hdr_sz - sizeof(lsn_t)
     };
 
-       static_assert(hdr_non_ssx_sz == 32, "Wrong logrec header size");
-       static_assert(hdr_single_sys_xct_sz == 16, "Wrong logrec header size");
+       static_assert(hdr_sz == 16, "Wrong logrec header size");
 
        tid_t   tid() const;
        StoreID        stid() const;
@@ -248,11 +230,6 @@ public:
 public:
     uint16_t              tag() const;
     smsize_t             length() const;
-    const lsn_t&         undo_nxt() const;
-    const lsn_t&         xid_prev() const;
-    void                 set_xid_prev(const lsn_t &lsn);
-    void                 set_undo_nxt(const lsn_t &lsn);
-    void                 set_tid(tid_t tid);
     void                 set_root_page();
     void                 set_pid(const PageID& p);
     kind_t               type() const;
@@ -264,12 +241,10 @@ public:
     const char*          cat_str() const;
     const char*          data() const;
     char*                data();
-    const char*          data_ssx() const;
-    char*                data_ssx();
     /** Returns the log record data as a multi-page SSX log. */
-    multi_page_log_t*           data_ssx_multi();
+    multi_page_log_t*           data_multi();
     /** Const version */
-    const multi_page_log_t*     data_ssx_multi() const;
+    const multi_page_log_t*     data_multi() const;
     const lsn_t&         lsn_ck() const {  return *_lsn_ck(); }
     const lsn_t&         lsn() const {  return *_lsn_ck(); }
     const lsn_t          get_lsn_ck() const {
@@ -282,32 +257,6 @@ public:
                                 where = lsn_ck;
                             }
     void                 corrupt();
-
-    // Hack to support compensation with generic loggers
-    // (see xct_logger.h)
-    void set_clr() {}
-
-    void set_clr(const lsn_t& c)
-    {
-        w_assert0(!is_single_sys_xct()); // CLR shouldn't be output in this case
-        header._flags |= t_cpsn;
-
-        // To shrink log records,
-        // we've taken out _undo_nxt and
-        // overloaded _prev.
-        // _undo_nxt = c;
-        xidInfo._xid_prv = c; // and _xid_prv is data area if is_single_sys_xct
-    }
-
-    const char* get_data_offset() const
-    {
-        return data_ssx();
-    }
-
-    char* get_data_offset()
-    {
-        return data_ssx();
-    }
 
     void remove_info_for_pid(PageID pid);
 
@@ -349,8 +298,6 @@ protected:
     };
 
     enum flag_t {
-        // If this logrec is a CLR
-        t_cpsn          = 0x01,
         // If this logrec refers to a root page (in a general sense, a root is
         // any page which cannot be recovered by SPR because no other page
         // points to it
@@ -361,16 +308,7 @@ protected:
 
     baseLogHeader header;
 
-    // single-log system transactions will overwrite this with _data
-    xidChainLogHeader xidInfo;
-
-    /*
-     * NOTE re sizeof header:
-     * NOTE For single-log system transaction, NEVER use this directly.
-     * Always use data_ssx() to get the pointer because it starts
-     * from 16 bytes ahead. See comments about single-log system transaction.
-    */
-    char            _data[max_sz - sizeof(baseLogHeader) - sizeof(xidChainLogHeader)];
+    char            _data[max_data_sz];
 
 
     // The last sizeof(lsn_t) bytes of data are used for
@@ -438,22 +376,6 @@ inline char*  logrec_t::data()
 {
     return _data;
 }
-inline const char*  logrec_t::data_ssx() const
-{
-    return _data - sizeof(xidChainLogHeader);
-}
-inline char*  logrec_t::data_ssx()
-{
-    return _data - sizeof(xidChainLogHeader);
-}
-inline smsize_t logrec_t::header_size() const
-{
-    if (is_single_sys_xct()) {
-        return hdr_single_sys_xct_sz;
-    } else {
-        return hdr_non_ssx_sz;
-    }
-}
 
 inline PageID
 logrec_t::pid() const
@@ -471,7 +393,7 @@ inline PageID logrec_t::pid2() const
 {
     if (!is_multi_page()) { return 0; }
 
-    const multi_page_log_t* multi_log = reinterpret_cast<const multi_page_log_t*> (data_ssx());
+    const multi_page_log_t* multi_log = reinterpret_cast<const multi_page_log_t*> (data());
     return multi_log->_page2_pid;
 }
 
@@ -479,18 +401,6 @@ inline void
 logrec_t::set_pid(const PageID& p)
 {
     header._pid = p;
-}
-
-inline void
-logrec_t::set_tid(tid_t tid)
-{
-    xidInfo._xid = tid;
-}
-
-inline void
-logrec_t::set_undo_nxt(const lsn_t& undo_nxt)
-{
-    xidInfo._xid_prv = undo_nxt;
 }
 
 inline uint16_t
@@ -503,37 +413,6 @@ inline smsize_t
 logrec_t::length() const
 {
     return header._len;
-}
-
-inline const lsn_t&
-logrec_t::undo_nxt() const
-{
-    // To shrink log records,
-    // we've taken out _undo_nxt and
-    // overloaded _xid_prev.
-    // return _undo_nxt;
-    return xid_prev();
-}
-
-inline tid_t logrec_t::tid() const
-{
-    if (is_single_sys_xct()) {
-        return tid_t {0};
-    }
-    return xidInfo._xid;
-}
-
-inline const lsn_t&
-logrec_t::xid_prev() const
-{
-    w_assert1(!is_single_sys_xct()); // otherwise this part is in data area!
-    return xidInfo._xid_prv;
-}
-inline void
-logrec_t::set_xid_prev(const lsn_t &lsn)
-{
-    w_assert1(!is_single_sys_xct()); // otherwise this part is in data area!
-    xidInfo._xid_prv = lsn;
 }
 
 inline kind_t
@@ -584,12 +463,6 @@ logrec_t::is_undo() const
 }
 
 inline bool
-logrec_t::is_cpsn() const
-{
-    return (header._flags & t_cpsn) != 0;
-}
-
-inline bool
 logrec_t::is_root_page() const
 {
     return (header._flags & t_root_page) != 0;
@@ -616,13 +489,13 @@ logrec_t::is_single_sys_xct() const
     return (cat() & t_single_sys_xct) != 0;
 }
 
-inline multi_page_log_t* logrec_t::data_ssx_multi() {
+inline multi_page_log_t* logrec_t::data_multi() {
     w_assert1(is_multi_page());
-    return reinterpret_cast<multi_page_log_t*>(data_ssx());
+    return reinterpret_cast<multi_page_log_t*>(data());
 }
-inline const multi_page_log_t* logrec_t::data_ssx_multi() const {
+inline const multi_page_log_t* logrec_t::data_multi() const {
     w_assert1(is_multi_page());
-    return reinterpret_cast<const multi_page_log_t*>(data_ssx());
+    return reinterpret_cast<const multi_page_log_t*>(data());
 }
 
 constexpr u_char logrec_t::get_logrec_cat(kind_t type)
@@ -649,7 +522,6 @@ constexpr u_char logrec_t::get_logrec_cat(kind_t type)
 	case evict_page_log : return t_system;
 	case fetch_page_log : return t_system;
 
-	case compensate_log : return t_logical;
 	case xct_abort_log : return t_logical;
 	case xct_end_log : return t_logical;
 

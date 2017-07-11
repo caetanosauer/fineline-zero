@@ -28,7 +28,7 @@ void RestoreTraceHandler::invoke(logrec_t& r)
         currentTick++;
     }
     else if (r.type() == restore_segment_log) {
-        uint32_t segment = *((uint32_t*) r.data_ssx());
+        uint32_t segment = *((uint32_t*) r.data());
         std::cout << currentTick << " " << segment << std::endl;
     }
 }

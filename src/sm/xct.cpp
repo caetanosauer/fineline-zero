@@ -166,25 +166,6 @@ std::atomic<tid_t> xct_t::_nxt_tid {0};
  *********************************************************************/
 tid_t                                xct_t::_oldest_tid = 0;
 
-inline bool   xct_t::should_consume_rollback_resv(int t) const
-{
-     if(state() == xct_aborting) {
-         w_assert0(_rolling_back);
-     } // but not the reverse: rolling_back
-     // could be true while we're active
-     // _core->xct_aborted means we called abort but
-     // we might be in freeing_space state right now, in
-     // which case, _rolling_back isn't true.
-    return
-        // _rolling_back means in rollback(),
-        // which can be in abort or in
-        // rollback_work.
-        _rolling_back || _core->_xct_aborting
-        // compensate is a special case:
-        // consume rollback space
-        || t == compensate_log ;
- }
-
 struct lock_info_ptr {
     xct_lock_info_t* _ptr;
 
@@ -273,7 +254,7 @@ xct_t::xct_core::xct_core(tid_t const &t, state_t s, int timeout)
  *********************************************************************/
 xct_t::xct_t(sm_stats_t* stats, int timeout, bool sys_xct,
            bool single_log_sys_xct, const tid_t& given_tid, const lsn_t& last_lsn,
-           const lsn_t& undo_nxt, bool loser_xct
+           bool loser_xct
             )
     :
     _core(new xct_core(
@@ -294,7 +275,6 @@ xct_t::xct_t(sm_stats_t* stats, int timeout, bool sys_xct,
     _inquery_verify_space(false),
     // _first_lsn, _last_lsn, _undo_nxt,
     _last_lsn(last_lsn),
-    _undo_nxt(undo_nxt),
     _read_watermark(lsn_t::null),
     _elr_mode (elr_none),
     // _last_log(0),
@@ -942,7 +922,7 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
          *  Start a new xct in place
          */
         _teardown(true);
-        _first_lsn = _last_lsn = _undo_nxt = lsn_t::null;
+        _first_lsn = _last_lsn = lsn_t::null;
         if (inherited_read_watermark.valid()) {
             _read_watermark = inherited_read_watermark;
         }
@@ -1324,10 +1304,6 @@ rc_t xct_t::update_last_logrec(logrec_t* l, lsn_t lsn)
     // the log.
     if ( ! _first_lsn.valid())  _first_lsn = _last_lsn;
 
-    if (!l->is_single_sys_xct()) {
-        _undo_nxt = (l->is_cpsn() ? l->undo_nxt() : _last_lsn);
-    }
-
     return RCOK;
 }
 
@@ -1360,6 +1336,8 @@ xct_t::release_anchor( bool and_compensate ADD_LOG_COMMENT_SIG )
 
     if(_in_compensated_op == 1) { // will soon be 0
 
+        // CS: FineLine does not require compensation!
+        //
         // NB: this whole section could be made a bit
         // more efficient in the -UDEBUG case, but for
         // now, let's keep in all the checks
@@ -1368,37 +1346,37 @@ xct_t::release_anchor( bool and_compensate ADD_LOG_COMMENT_SIG )
         // to the last compensate() of the bunch
 
         // Now see if this last item was supposed to be
-        // compensated:
-        if(and_compensate && (_anchor != lsn_t::null)) {
-           // if(_last_log) {
-           //     if ( _last_log->is_cpsn()) {
-           //          DBGX(<<"already compensated");
-           //          w_assert3(_anchor == _last_log->undo_nxt());
-           //     } else {
-           //         DBGX(<<"SETTING anchor:" << _anchor);
-           //         w_assert3(_anchor <= _last_lsn);
-           //         _last_log->set_clr(_anchor);
-           //     }
-           // } else {
-               DBGX(<<"no _last_log:" << _anchor);
-               /* Can we update the log record in the log buffer ? */
-               if( log &&
-                   !log->compensate(_last_lsn, _anchor).is_error()) {
-                   // Yup.
-                    INC_TSTAT(compensate_in_log);
-               } else {
-                   // Nope, write a compensation log record.
-                   // Really, we should return an rc from this
-                   // method so we can W_DO here, and we should
-                   // check for eBADCOMPENSATION here and
-                   // return all other errors  from the
-                   // above log->compensate(...)
+        // // compensated:
+        // if(and_compensate && (_anchor != lsn_t::null)) {
+        //    // if(_last_log) {
+        //    //     if ( _last_log->is_cpsn()) {
+        //    //          DBGX(<<"already compensated");
+        //    //          w_assert3(_anchor == _last_log->undo_nxt());
+        //    //     } else {
+        //    //         DBGX(<<"SETTING anchor:" << _anchor);
+        //    //         w_assert3(_anchor <= _last_lsn);
+        //    //         _last_log->set_clr(_anchor);
+        //    //     }
+        //    // } else {
+        //        DBGX(<<"no _last_log:" << _anchor);
+        //        /* Can we update the log record in the log buffer ? */
+        //        if( log &&
+        //            !log->compensate(_last_lsn, _anchor).is_error()) {
+        //            // Yup.
+        //             INC_TSTAT(compensate_in_log);
+        //        } else {
+        //            // Nope, write a compensation log record.
+        //            // Really, we should return an rc from this
+        //            // method so we can W_DO here, and we should
+        //            // check for eBADCOMPENSATION here and
+        //            // return all other errors  from the
+        //            // above log->compensate(...)
 
-                   Logger::log<compensate_log>(_anchor);
-                   INC_TSTAT(compensate_records);
-               }
-            // }
-        }
+        //            Logger::log<compensate_log>(_anchor);
+        //            INC_TSTAT(compensate_records);
+        //        }
+        //     // }
+        // }
 
         _anchor = lsn_t::null;
 
@@ -1446,134 +1424,6 @@ xct_t::anchor(bool grabit)
     DBGX(    << " anchor returns " << _last_lsn );
 
     return _last_lsn;
-}
-
-
-/*********************************************************************
- *
- *  xct_t::compensate_undo(lsn)
- *
- *  compensation during undo is handled slightly differently--
- *  the gist of it is the same, but the assertions differ, and
- *  we have to acquire the mutex first
- *********************************************************************/
-void
-xct_t::compensate_undo(const lsn_t& lsn)
-{
-    DBGX(    << " compensate_undo (" << lsn << ") -- state=" << state());
-
-    w_assert3(_in_compensated_op);
-    // w_assert9(state() == xct_aborting); it's active if in sm::rollback_work
-
-    // _compensate(lsn, _last_log?_last_log->is_undoable_clr() : false);
-    _compensate(lsn, false);
-}
-
-/*********************************************************************
- *
- *  xct_t::compensate(lsn, bool undoable)
- *
- *  Generate a compensation log record to compensate actions
- *  started at "lsn" (commit a top level action).
- *  Generates a new log record only if it has to do so.
- *
- *********************************************************************/
-void
-xct_t::compensate(const lsn_t& lsn, bool undoable ADD_LOG_COMMENT_SIG)
-{
-    DBGX(    << " compensate(" << lsn << ") -- state=" << state());
-
-    _compensate(lsn, undoable);
-
-    release_anchor(true ADD_LOG_COMMENT_USE);
-}
-
-/*********************************************************************
- *
- *  xct_t::_compensate(lsn, bool undoable)
- *
- *
- *  Generate a compensation log record to compensate actions
- *  started at "lsn" (commit a top level action).
- *  Generates a new log record only if it has to do so.
- *
- *  Special case of undoable compensation records is handled by the
- *  boolean argument. (NOT USED FOR NOW -- undoable_clrs were removed
- *  in 1997 b/c they weren't needed anymore;they were originally
- *  in place for an old implementation of extent-allocation. That's
- *  since been replaced by the dealaying of store deletion until end
- *  of xct).  The calls to the methods and infrastructure regarding
- *  undoable clrs was left in place in case it must be resurrected again.
- *  The reason it was removed is that there was some complexity involved
- *  in hanging onto the last log record *in the xct* in order to be
- *  sure that the compensation happens *in the correct log record*
- *  (because an undoable compensation means the log record holding the
- *  compensation isn't being compensated around, whereas turning any
- *  other record into a clr or inserting a stand-alone clr means the
- *  last log record inserted is skipped on undo).
- *  That complexity remains, since log records are flushed to the log
- *  immediately now (which was precluded for undoable_clrs ).
- *
- *********************************************************************/
-void
-xct_t::_compensate(const lsn_t& lsn, bool undoable)
-{
-    DBGX(    << "_compensate(" << lsn << ") -- state=" << state());
-
-    bool done = false;
-    // if ( _last_log ) {
-    //     // We still have the log record here, and
-    //     // we can compensate it.
-    //     // NOTE: we used to use this a lot but now the only
-    //     // time this is possible (due to the fact that we flush
-    //     // right at insert) is when the logging code is hand-written,
-    //     // rather than Perl-generated.
-
-    //     /*
-    //      * lsn is got from anchor(), and anchor() returns _last_lsn.
-    //      * _last_lsn is the lsn of the last log record
-    //      * inserted into the log, and, since
-    //      * this log record hasn't been inserted yet, this
-    //      * function can't make a log record compensate to itself.
-    //      */
-    //     w_assert3(lsn <= _last_lsn);
-    //     _last_log->set_clr(lsn);
-    //     INC_TSTAT(compensate_in_xct);
-    //     done = true;
-    // } else {
-        /*
-        // Log record has already been inserted into the buffer.
-        // Perhaps we can update the log record in the log buffer.
-        // However,  it's conceivable that nothing's been written
-        // since _last_lsn, and we could be trying to compensate
-        // around nothing.  This indicates an error in the calling
-        // code.
-        */
-        if( lsn >= _last_lsn) {
-            INC_TSTAT(compensate_skipped);
-        }
-        if( log && (! undoable) && (lsn < _last_lsn)) {
-            if(!log->compensate(_last_lsn, lsn).is_error()) {
-                INC_TSTAT(compensate_in_log);
-                done = true;
-            }
-        }
-    // }
-
-    if( !done && (lsn < _last_lsn) ) {
-        /*
-        // If we've actually written some log records since
-        // this anchor (lsn) was grabbed,
-        // force it to write a compensation-only record
-        // either because there's no record on which to
-        // piggy-back the compensation, or because the record
-        // that's there is an undoable/compensation and will be
-        // undone (and we *really* want to compensate around it)
-        */
-
-        Logger::log<compensate_log>(lsn);
-        INC_TSTAT(compensate_records);
-    }
 }
 
 /*********************************************************************

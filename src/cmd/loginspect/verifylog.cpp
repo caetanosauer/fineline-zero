@@ -87,7 +87,7 @@ void checkLSN(lsn_t lsn, lsn_t current, lsn_t expected)
 void VerifyHandler::checkAlloc(logrec_t& r)
 {
     auto lsn = r.lsn();
-    PageID pid = *((PageID*) (r.data_ssx()));
+    PageID pid = *((PageID*) (r.data()));
     if (r.type() == alloc_page_log) {
         if (allocatedPages.find(pid) != allocatedPages.end()) {
             std::cout << "on " << lsn

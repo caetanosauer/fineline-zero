@@ -132,7 +132,7 @@ struct LogrecHandler<btree_compress_page_log, PagePtr>
 {
     static void redo(logrec_t* lr, PagePtr page)
     {
-        char* ptr = lr->data_ssx();
+        char* ptr = lr->data();
 
         uint16_t low_len = *((uint16_t*) ptr);
         ptr += sizeof(uint16_t);
@@ -368,8 +368,7 @@ struct LogrecHandler<btree_ghost_reserve_log, PagePtr>
     {
         // REDO is to physically make the ghost record
         borrowed_btree_page_h bp(page);
-        // ghost creation is single-log system transaction. so, use data_ssx()
-        btree_ghost_reserve_t* dp = (btree_ghost_reserve_t*) lr->data_ssx();
+        btree_ghost_reserve_t* dp = (btree_ghost_reserve_t*) lr->data();
 
         w_assert1(bp.is_leaf());
         bp.reserve_ghost(dp->data, dp->klen, dp->element_length);
@@ -382,9 +381,9 @@ struct LogrecHandler<btree_split_log, PagePtr>
 {
     static void redo(logrec_t* lr, PagePtr p)
     {
-        btree_bulk_delete_t* bulk = (btree_bulk_delete_t*) lr->data_ssx();
+        btree_bulk_delete_t* bulk = (btree_bulk_delete_t*) lr->data();
         page_img_format_t* format = (page_img_format_t*)
-            (lr->data_ssx() + bulk->size());
+            (lr->data() + bulk->size());
 
         if (p->pid() == bulk->new_foster_child) {
             // redoing the foster child
@@ -412,7 +411,7 @@ struct LogrecHandler<btree_foster_adopt_log, PagePtr>
         w_assert1(lr->is_single_sys_xct());
         borrowed_btree_page_h bp(p);
         btree_foster_adopt_t *dp = reinterpret_cast<btree_foster_adopt_t*>(
-                lr->data_ssx());
+                lr->data());
 
         w_keystr_t new_child_key;
         new_child_key.construct_from_keystr(dp->_data, dp->_new_child_key_len);

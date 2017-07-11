@@ -142,8 +142,8 @@ public:
             page_writes += count;
         }
         else if (r.type() == evict_page_log) {
-            PageID pid = *(reinterpret_cast<PageID*>(r.data_ssx()));
-            bool was_dirty = *(reinterpret_cast<bool*>(r.data_ssx() + sizeof(PageID)));
+            PageID pid = *(reinterpret_cast<PageID*>(r.data()));
+            bool was_dirty = *(reinterpret_cast<bool*>(r.data() + sizeof(PageID)));
             if (!was_dirty) {
                 // chkpt.buf_tab.erase(pid);
                 if (track_rec_lsn) { page_lsns[pid].clear(); }

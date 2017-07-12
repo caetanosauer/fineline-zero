@@ -47,7 +47,14 @@ public:
 
         lsn_t lsn;
         W_COERCE(ss_m::log->insert(*logrec, &lsn));
-        _insert_undo_logrec(logrec);
+
+        char* undobuf = smthread_t::get_undo_buf();
+        if (logrec->is_undo() && undobuf) {
+            auto undo_lr = reinterpret_cast<logrec_t*>(undobuf);
+            undo_lr->init_header(LR);
+            UndoLogrecSerializer<LR>::serialize(undo_lr, args...);
+            smthread_t::update_undo_buf(undo_lr->length());
+        }
 
         W_COERCE(xd->update_last_logrec(logrec, lsn));
 
@@ -97,7 +104,13 @@ public:
 
         lsn_t lsn;
         W_COERCE(ss_m::log->insert(*logrec, &lsn));
-        _insert_undo_logrec(logrec);
+        char* undobuf = smthread_t::get_undo_buf();
+        if (logrec->is_undo() && undobuf) {
+            auto undo_lr = reinterpret_cast<logrec_t*>(undobuf);
+            undo_lr->init_header(LR);
+            UndoLogrecSerializer<LR>::serialize(undo_lr, args...);
+            smthread_t::update_undo_buf(undo_lr->length());
+        }
 
         W_COERCE(xd->update_last_logrec(logrec, lsn));
         _update_page_lsns(p, lsn, logrec->length());
@@ -138,9 +151,17 @@ public:
         }
 
 
+        // CS TODO: so far, all multi-page logrecs are SSXs
+        w_assert0(false);
         lsn_t lsn;
         W_COERCE(ss_m::log->insert(*logrec, &lsn));
-        _insert_undo_logrec(logrec);
+        char* undobuf = smthread_t::get_undo_buf();
+        if (logrec->is_undo() && undobuf) {
+            auto undo_lr = reinterpret_cast<logrec_t*>(undobuf);
+            undo_lr->init_header(LR);
+            UndoLogrecSerializer<LR>::serialize(undo_lr, args...);
+            smthread_t::update_undo_buf(undo_lr->length());
+        }
 
         W_COERCE(xd->update_last_logrec(logrec, lsn));
         _update_page_lsns(p, lsn, logrec->length());
@@ -203,11 +224,6 @@ public:
             return smthread_t::get_logbuf2();
         }
         return smthread_t::get_logbuf();
-    }
-
-    static void _insert_undo_logrec(logrec_t* lr)
-    {
-        smthread_t::insert_undo_logrec(lr);
     }
 };
 

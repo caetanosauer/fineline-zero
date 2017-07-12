@@ -459,8 +459,7 @@ void btree_page_h::_steal_records(btree_page_h* steal_src,
                 el.put(data, data_length);
                 // key: original key including prefix
                 // el: non-key portion only
-                Logger::log_p<btree_insert_nonghost_log>(this,
-                        btree_root(), keystr, el, true /*is_sys_txn*/);
+                Logger::log_p<btree_insert_nonghost_log>(this, keystr, el);
                 // Clear the key string so it is ready for the next record
                 keystr.clear();
             }
@@ -479,8 +478,7 @@ void btree_page_h::_steal_records(btree_page_h* steal_src,
                 // Log the insertion into new page (non-leaf)
                 vec_t el;
                 el.put(emlsn_ptr, sizeof(lsn_t));
-                Logger::log_p<btree_insert_nonghost_log>(this,
-                        btree_root(), keystr, el, true /*is_sys_txn*/);
+                Logger::log_p<btree_insert_nonghost_log>(this, keystr, el);
                 // Clear the key string so it is ready for the next record
                 keystr.clear();
             }
@@ -1241,8 +1239,7 @@ rc_t btree_page_h::replace_ghost(const w_keystr_t &key,
     // log FIRST. note that this might apply the deferred ghost creation too.
     // so, this cannot be done later than any of following
     if (!redo) {
-        Logger::log_p<btree_insert_log> (this, btree_root(),
-                key, elem, false /*is_sys_txn*/);
+        Logger::log_p<btree_insert_log> (this, key, elem);
     }
 
     // which slot to replace?

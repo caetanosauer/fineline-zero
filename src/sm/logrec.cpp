@@ -233,8 +233,7 @@ logrec_t::valid_header(const lsn_t & lsn) const
 template <class PagePtr>
 void logrec_t::redo(PagePtr page)
 {
-    DBG( << "Redo  log rec: " << *this
-        << " size: " << header._len << " xid_prevlsn: " << (is_single_sys_xct() ? lsn_t::null : xid_prev()) );
+    DBG( << "Redo  log rec: " << *this << " size: " << header._len);
 
     switch (header._type)  {
 	case alloc_page_log :

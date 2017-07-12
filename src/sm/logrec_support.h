@@ -79,69 +79,48 @@ struct page_img_format_t {
     }
 };
 
-struct btree_insert_t {
-    PageID     root_shpid;
+struct serialized_kv_pair_t {
     uint16_t    klen;
     uint16_t    elen;
-    bool        sys_txn;   // True if the insertion was from a page rebalance full logging operation
-    char        data[logrec_t::max_data_sz - sizeof(PageID) - 2*sizeof(int16_t) - sizeof(bool)];
+    char        data[sizeof(logrec_t) - 2*sizeof(uint16_t)];
 
-    btree_insert_t(PageID root, const w_keystr_t& key,
-                   const cvec_t& el, bool is_sys_txn)
+    serialized_kv_pair_t(const w_keystr_t& key, const cvec_t& el)
         : klen(key.get_length_as_keystr()), elen(el.size())
     {
-        root_shpid = root;
         w_assert1((size_t)(klen + elen) < sizeof(data));
         key.serialize_as_keystr(data);
-        el.copy_to(data + klen);
-        sys_txn = is_sys_txn;
+        if (elen > 0) { el.copy_to(data + klen); }
     }
-    int size()        { return sizeof(PageID) + 2*sizeof(int16_t) + klen + elen + sizeof(bool); }
-};
 
-struct btree_update_t {
-    PageID     _root_shpid;
-    uint16_t    _klen;
-    uint16_t    _old_elen;
-    uint16_t    _new_elen;
-    char        _data[logrec_t::max_data_sz - sizeof(PageID) - 3*sizeof(int16_t)];
-
-    btree_update_t(PageID root_pid, const w_keystr_t& key,
-                   const char* old_el, int old_elen, const cvec_t& new_el) {
-        _root_shpid = root_pid;
-        _klen       = key.get_length_as_keystr();
-        _old_elen   = old_elen;
-        _new_elen   = new_el.size();
-        key.serialize_as_keystr(_data);
-        ::memcpy (_data + _klen, old_el, old_elen);
-        new_el.copy_to(_data + _klen + _old_elen);
+    serialized_kv_pair_t(const w_keystr_t& key, const char* el, size_t elen)
+        : klen(key.get_length_as_keystr()), elen(elen)
+    {
+        w_assert1((size_t)(klen + elen) < sizeof(data));
+        key.serialize_as_keystr(data);
+        memcpy(data + klen, el, elen);
     }
-    int size()        { return sizeof(PageID) + 3*sizeof(int16_t) + _klen + _old_elen + _new_elen; }
-};
 
-struct btree_overwrite_t {
-    PageID     _root_shpid;
-    uint16_t    _klen;
-    uint16_t    _offset;
-    uint16_t    _elen;
-    char        _data[logrec_t::max_data_sz - sizeof(PageID) - 3*sizeof(int16_t)];
+    int size()        { return 2*sizeof(uint16_t) + klen + elen; }
 
-    btree_overwrite_t(PageID root_pid, const w_keystr_t& key,
-            const char* old_el, const char *new_el, size_t offset, size_t elen) {
-        _root_shpid = root_pid;
-        _klen       = key.get_length_as_keystr();
-        _offset     = offset;
-        _elen       = elen;
-        key.serialize_as_keystr(_data);
-        ::memcpy (_data + _klen, old_el + offset, elen);
-        ::memcpy (_data + _klen + elen, new_el, elen);
+    void deserialize(w_keystr_t& key, vec_t& el)
+    {
+        deserialize_key(key);
+        if (elen > 0) { el.put(data + klen, elen); }
     }
-    int size()        { return sizeof(PageID) + 3*sizeof(int16_t) + _klen + _elen * 2; }
+
+    void deserialize_key(w_keystr_t& key)
+    {
+        key.construct_from_keystr(data, klen);
+    }
+
+    const char* get_el()
+    {
+        return data + klen;
+    }
 };
 
 template <class PagePtr>
 struct btree_ghost_t {
-    PageID       root_shpid;
     uint16_t      sys_txn:1,      // 1 if the insertion was from a page rebalance full logging operation
                   cnt:15;
     uint16_t      prefix_offset;
@@ -155,7 +134,6 @@ struct btree_ghost_t {
 
     btree_ghost_t(const PagePtr p, const vector<slotid_t>& slots, const bool is_sys_txn)
     {
-        root_shpid = p->root();
         cnt = slots.size();
         if (true == is_sys_txn)
             sys_txn = 1;

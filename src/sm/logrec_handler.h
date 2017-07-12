@@ -159,24 +159,22 @@ struct LogrecHandler<btree_insert_log, PagePtr>
     static void redo(logrec_t* lr, PagePtr page)
     {
         borrowed_btree_page_h bp(page);
-        btree_insert_t* dp = (btree_insert_t*) lr->data();
+        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data());
 
         w_assert1(bp.is_leaf());
         w_keystr_t key;
         vec_t el;
-        key.construct_from_keystr(dp->data, dp->klen);
-        el.put(dp->data + dp->klen, dp->elen);
+        dp->deserialize(key, el);
 
         W_COERCE(bp.replace_ghost(key, el, true /* redo */));
     }
 
     static void undo(logrec_t* lr)
     {
-        btree_insert_t* dp = (btree_insert_t*) lr->data();
-        if (dp->sys_txn) { return; }
+        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data());
 
         w_keystr_t key;
-        key.construct_from_keystr(dp->data, dp->klen);
+        dp->deserialize_key(key);
         W_COERCE(smlevel_0::bt->remove_as_undo(lr->stid(), key));
     }
 };
@@ -187,13 +185,12 @@ struct LogrecHandler<btree_insert_nonghost_log, PagePtr>
     static void redo(logrec_t* lr, PagePtr page)
     {
         borrowed_btree_page_h bp(page);
-        btree_insert_t* dp = reinterpret_cast<btree_insert_t*>(lr->data());
+        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data());
 
         w_assert1(bp.is_leaf());
         w_keystr_t key;
         vec_t el;
-        key.construct_from_keystr(dp->data, dp->klen);
-        el.put(dp->data + dp->klen, dp->elen);
+        dp->deserialize(key, el);
 
         bp.insert_nonghost(key, el);
     }
@@ -210,33 +207,29 @@ struct LogrecHandler<btree_update_log, PagePtr>
     static void redo(logrec_t* lr, PagePtr page)
     {
         borrowed_btree_page_h bp(page);
-        btree_update_t* dp = (btree_update_t*) lr->data();
+        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data());
 
         w_assert1(bp.is_leaf());
         w_keystr_t key;
-        key.construct_from_keystr(dp->_data, dp->_klen);
-        vec_t old_el;
-        old_el.put(dp->_data + dp->_klen, dp->_old_elen);
-        vec_t new_el;
-        new_el.put(dp->_data + dp->_klen + dp->_old_elen, dp->_new_elen);
+        vec_t el;
+        dp->deserialize(key, el);
 
         slotid_t       slot;
         bool           found;
         bp.search(key, found, slot);
         w_assert0(found);
-        W_COERCE(bp.replace_el_nolog(slot, new_el));
+        W_COERCE(bp.replace_el_nolog(slot, el));
     }
 
     static void undo(logrec_t* lr)
     {
-        btree_update_t* dp = (btree_update_t*) lr->data();
+        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data());
 
         w_keystr_t key;
-        key.construct_from_keystr(dp->_data, dp->_klen);
-        vec_t old_el;
-        old_el.put(dp->_data + dp->_klen, dp->_old_elen);
+        vec_t el;
+        dp->deserialize(key, el);
 
-        W_COERCE(smlevel_0::bt->update_as_undo(lr->stid(), key, old_el));
+        W_COERCE(smlevel_0::bt->update_as_undo(lr->stid(), key, el));
     }
 };
 
@@ -246,43 +239,33 @@ struct LogrecHandler<btree_overwrite_log, PagePtr>
     static void redo(logrec_t* lr, PagePtr page)
     {
         borrowed_btree_page_h bp(page);
-        btree_overwrite_t* dp = (btree_overwrite_t*) lr->data();
+        uint16_t offset = *(reinterpret_cast<uint16_t*>(lr->data()));
+        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data() + sizeof(uint16_t));
 
         w_assert1(bp.is_leaf());
 
-        uint16_t elen = dp->_elen;
-        uint16_t offset = dp->_offset;
         w_keystr_t key;
-        key.construct_from_keystr(dp->_data, dp->_klen);
-        const char* new_el = dp->_data + dp->_klen + elen;
+        dp->deserialize_key(key);
+        const char* new_el = dp->get_el();
+        auto elen = dp->elen;
 
         slotid_t       slot;
         bool           found;
         bp.search(key, found, slot);
         w_assert0(found);
 
-#if W_DEBUG_LEVEL>0
-        const char* old_el = dp->_data + dp->_klen;
-        smsize_t cur_elen;
-        bool ghost;
-        const char* cur_el = bp.element(slot, cur_elen, ghost);
-        w_assert1(!ghost);
-        w_assert1(cur_elen >= offset + elen);
-        w_assert1(::memcmp(old_el, cur_el + offset, elen) == 0);
-#endif
-
         bp.overwrite_el_nolog(slot, offset, new_el, elen);
     }
 
     static void undo(logrec_t* lr)
     {
-        btree_overwrite_t* dp = (btree_overwrite_t*) lr->data();
+        uint16_t offset = *(reinterpret_cast<uint16_t*>(lr->data()));
+        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data() + sizeof(uint16_t));
 
-        uint16_t elen = dp->_elen;
-        uint16_t offset = dp->_offset;
         w_keystr_t key;
-        key.construct_from_keystr(dp->_data, dp->_klen);
-        const char* old_el = dp->_data + dp->_klen;
+        dp->deserialize_key(key);
+        const char* old_el = dp->get_el();
+        auto elen = dp->elen;
 
         W_COERCE(smlevel_0::bt->overwrite_as_undo(lr->stid(), key, old_el,
                     offset, elen));

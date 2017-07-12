@@ -245,7 +245,7 @@ class smthread_t {
         }
 
         tcb_t(tcb_t* outer) :
-            _undo_offset(UndoBufferSize),
+            _undo_offset(0),
             _abortable(true),
             xct(0),
             pin_count(0),
@@ -350,22 +350,6 @@ public:
         return &tcb()._logbuf;
     }
 
-    static void insert_undo_logrec(const logrec_t* lr)
-    {
-        if (!is_abortable() || !lr->is_undo()) { return; }
-
-        auto& offset = tcb()._undo_offset;
-        char* ptr = &tcb()._undo_buf[0];
-        if (offset < lr->length()) {
-            // W_FATAL_MSG(eINTERNAL, <<
-            //         "Transaction too large -- undo buffer full!");
-            tcb()._abortable = false;
-        }
-        char* dest = ptr + offset - lr->length();
-        memcpy(dest, lr, lr->length());
-        offset -= lr->length();
-    }
-
     static bool is_abortable()
     {
         return tcb()._abortable;
@@ -373,6 +357,15 @@ public:
 
     static char* get_undo_buf()
     {
+        if (!is_abortable()) { return nullptr; }
+        // Conservative approach: make sure we can fit maximum logrec size
+        if (get_undo_buf_free_space() < sizeof(logrec_t)) {
+            // W_FATAL_MSG(eINTERNAL, <<
+            //         "Transaction too large -- undo buffer full!");
+            tcb()._abortable = false;
+            return nullptr;
+        }
+
         return reinterpret_cast<char*>(&tcb()._undo_buf) +
             tcb()._undo_offset;
     }
@@ -380,7 +373,18 @@ public:
     static char* get_undo_buf_end()
     {
         return reinterpret_cast<char*>(&tcb()._undo_buf) +
-            sizeof(logrec_t);
+            tcb()._undo_offset;
+    }
+
+    static void update_undo_buf(size_t length)
+    {
+        auto& offset = tcb()._undo_offset;
+        offset += length;
+    }
+
+    static size_t get_undo_buf_free_space()
+    {
+        return tcb_t::UndoBufferSize - tcb()._undo_offset;
     }
 
     static logrec_t* get_logbuf2()

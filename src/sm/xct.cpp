@@ -1465,16 +1465,21 @@ xct_t::rollback(const lsn_t &save_pt)
 
     /*
      * CS FineLine txn rollback. Log records are inserted into undo
-     * buffer from "left to right", so iterating forwards gives
+     * buffer from "right to left", so we have to reverse to get
      * the correct undo order.
+     * TODO: better implementation for undo buffer
      */
     char* undo_buf = smthread_t::get_undo_buf();
     const char* undo_end = smthread_t::get_undo_buf_end();
+    std::vector<logrec_t*> undo_logrecs;
     while (undo_buf < undo_end) {
         logrec_t* lr = reinterpret_cast<logrec_t*>(undo_buf);
+        undo_logrecs.push_back(lr);
         undo_buf += lr->length();
-        lr->undo();
         w_assert0(lr->is_undo());
+    }
+    for (auto it = undo_logrecs.rbegin(); it != undo_logrecs.rend(); it++) {
+        (*it)->undo();
     }
 
     _read_watermark = lsn_t::null;

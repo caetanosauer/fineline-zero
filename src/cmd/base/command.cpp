@@ -7,7 +7,6 @@
 #include "logcat.h"
 #include "verifylog.h"
 #include "truncatelog.h"
-#include "propstats.h"
 #include "logpagestats.h"
 #include "xctlatency.h"
 #include "tracerestore.h"
@@ -47,7 +46,6 @@ void Command::init()
     REGISTER_COMMAND("agglog", AggLog);
     REGISTER_COMMAND("logpagestats", LogPageStats);
     REGISTER_COMMAND("kits", KitsCommand);
-    REGISTER_COMMAND("propstats", PropStats);
     REGISTER_COMMAND("tracerestore", RestoreTrace);
     REGISTER_COMMAND("logrecinfo", LogrecInfo);
     REGISTER_COMMAND("archstats", ArchStats);

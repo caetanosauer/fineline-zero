@@ -194,11 +194,8 @@ logrec_t::get_type_str(kind_t type)
 
 void logrec_t::init_header(kind_t type)
 {
-    header._flags = 0;
     header._type = type;
     header._pid = 0;
-    header._page_tag = 0;
-    header._stid = 0;
     // CS TODO: for most logrecs, set_size is called twice
     set_size(0);
 }

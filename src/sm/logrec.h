@@ -74,22 +74,14 @@ class xct_t;
 struct baseLogHeader
 {
     uint16_t _len;  // length of the log record
-    u_char _type; // kind_t (included from logtype_gen.h)
-    u_char _flags; // CS TODO: UNUSED
-    /* 4 */
-
-    // Was _pid; broke down to save 2 bytes:
-    // May be used ONLY in set_pid() and pid()
+    uint8_t _type; // kind_t (included from logtype_gen.h)
+    uint8_t _fill4;
     PageID             _pid; // 4 bytes
-    /* 4 + 4=8 */
-
-    uint16_t             _page_tag; // tag_t 2 bytes
-    /* 8 + 4= 12 */
-    StoreID              _stid; // 4 bytes
-    /* 12 + 4= 16*/
 
     bool is_valid() const;
 };
+
+static_assert(sizeof(baseLogHeader) == 8, "Wrong logrec header size");
 
 enum kind_t {
     comment_log = 0,
@@ -193,9 +185,7 @@ public:
     template <class PagePtr>
     void init_page_info(const PagePtr p)
     {
-        header._page_tag = p->tag();
         header._pid = p->pid();
-        header._stid = p->store();
     }
 
     void set_size(size_t l);
@@ -206,15 +196,12 @@ public:
         max_data_sz = max_sz - hdr_sz - sizeof(lsn_t)
     };
 
-       static_assert(hdr_sz == 16, "Wrong logrec header size");
-
        tid_t   tid() const;
        StoreID        stid() const;
        PageID         pid() const;
        PageID         pid2() const;
 
 public:
-    uint16_t              tag() const;
     smsize_t             length() const;
     void                 set_pid(const PageID& p);
     kind_t               type() const;
@@ -441,12 +428,6 @@ logrec_t::pid() const
     return header._pid;
 }
 
-inline StoreID
-logrec_t::stid() const
-{
-    return header._stid;
-}
-
 inline PageID logrec_t::pid2() const
 {
     if (!is_multi_page()) { return 0; }
@@ -459,12 +440,6 @@ inline void
 logrec_t::set_pid(const PageID& p)
 {
     header._pid = p;
-}
-
-inline uint16_t
-logrec_t::tag() const
-{
-    return header._page_tag;
 }
 
 inline smsize_t

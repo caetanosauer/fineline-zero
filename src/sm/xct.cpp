@@ -1434,7 +1434,8 @@ xct_t::rollback(const lsn_t &save_pt)
 {
     DBGTHRD(<< "xct_t::rollback to " << save_pt);
 
-    if (!smthread_t::is_abortable()) {
+    auto undo_buf = smthread_t::get_undo_buf();
+    if (!undo_buf->is_abortable()) {
         W_FATAL_MSG(eINTERNAL, <<
                 "Transaction too large -- cannot rollback! " <<
                 "Increase tc_t::UndoBufferSize and recompile");
@@ -1464,22 +1465,13 @@ xct_t::rollback(const lsn_t &save_pt)
     _rolling_back = true;
 
     /*
-     * CS FineLine txn rollback. Log records are inserted into undo
-     * buffer from "right to left", so we have to reverse to get
-     * the correct undo order.
-     * TODO: better implementation for undo buffer
+     * CS FineLine txn rollback.
      */
-    char* undo_buf = smthread_t::get_undo_buf();
-    const char* undo_end = smthread_t::get_undo_buf_end();
-    std::vector<logrec_t*> undo_logrecs;
-    while (undo_buf < undo_end) {
-        logrec_t* lr = reinterpret_cast<logrec_t*>(undo_buf);
-        undo_logrecs.push_back(lr);
-        undo_buf += lr->length();
-        w_assert0(lr->is_undo());
-    }
-    for (auto it = undo_logrecs.rbegin(); it != undo_logrecs.rend(); it++) {
-        (*it)->undo();
+    for (int i = undo_buf->get_count() - 1; i > 0; i--) {
+        char* data = undo_buf->get_data(i);
+        StoreID stid = undo_buf->get_store_id(i);
+        kind_t type = undo_buf->get_type(i);
+        logrec_t::undo(type, stid, data);
     }
 
     _read_watermark = lsn_t::null;

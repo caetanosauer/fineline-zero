@@ -314,24 +314,24 @@ void logrec_t::redo()
  *  undo operation.
  *
  *********************************************************************/
-void logrec_t::undo()
+void logrec_t::undo(kind_t type, StoreID stid, const char* data)
 {
     using PagePtr = fixable_page_h*;
-    switch (header._type) {
+    switch (type) {
 	case btree_insert_log :
-                LogrecHandler<btree_insert_log, PagePtr>::undo(this);
+                LogrecHandler<btree_insert_log, PagePtr>::undo(stid, data);
 		break;
 	case btree_insert_nonghost_log :
-                LogrecHandler<btree_insert_nonghost_log, PagePtr>::undo(this);
+                LogrecHandler<btree_insert_nonghost_log, PagePtr>::undo(stid, data);
 		break;
 	case btree_update_log :
-                LogrecHandler<btree_update_log, PagePtr>::undo(this);
+                LogrecHandler<btree_update_log, PagePtr>::undo(stid, data);
 		break;
 	case btree_overwrite_log :
-                LogrecHandler<btree_overwrite_log, PagePtr>::undo(this);
+                LogrecHandler<btree_overwrite_log, PagePtr>::undo(stid, data);
 		break;
 	case btree_ghost_mark_log :
-                LogrecHandler<btree_ghost_mark_log, PagePtr>::undo(this);
+                LogrecHandler<btree_ghost_mark_log, PagePtr>::undo(stid, data);
 		break;
 	default :
 		W_FATAL(eINTERNAL);

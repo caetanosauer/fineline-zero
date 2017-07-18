@@ -102,18 +102,18 @@ struct serialized_kv_pair_t {
 
     int size()        { return 2*sizeof(uint16_t) + klen + elen; }
 
-    void deserialize(w_keystr_t& key, vec_t& el)
+    void deserialize(w_keystr_t& key, vec_t& el) const
     {
         deserialize_key(key);
         if (elen > 0) { el.put(data + klen, elen); }
     }
 
-    void deserialize_key(w_keystr_t& key)
+    void deserialize_key(w_keystr_t& key) const
     {
         key.construct_from_keystr(data, klen);
     }
 
-    const char* get_el()
+    const char* get_el() const
     {
         return data + klen;
     }

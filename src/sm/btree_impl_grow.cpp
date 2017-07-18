@@ -117,7 +117,7 @@ btree_impl::_sx_grow_tree(btree_page_h& rp)
     W_DO(smlevel_0::alloc->sx_allocate_page(new_pid, rp.store()));
 
     sys_xct_section_t sxs;
-    W_DO(sxs.check_error_on_start());
+    W_COERCE(sxs.check_error_on_start());
 
     INC_TSTAT(bt_grows);
 

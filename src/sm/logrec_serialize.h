@@ -27,7 +27,7 @@ template <kind_t LR>
 struct UndoLogrecSerializer
 {
     template <typename... T>
-    static void serialize(const T&...) { return; }
+    static size_t serialize(const T&...) { return 0; }
 };
 
 template <kind_t LR>
@@ -78,19 +78,18 @@ struct LogrecSerializer<btree_insert_log>
 template <>
 struct UndoLogrecSerializer<btree_insert_log>
 {
-    static void construct(logrec_t* lr, const w_keystr_t& key,
+    static size_t construct(char* dest, const w_keystr_t& key,
             const cvec_t& /*el*/)
     {
         // Insert undo does not need element data
         cvec_t empty_vec;
-        lr->set_size( (new (lr->data()) serialized_kv_pair_t(key,
-                        empty_vec))->size());
+        return (new (dest) serialized_kv_pair_t(key, empty_vec))->size();
     }
 
     template <typename... T>
-    static void serialize(logrec_t* lr, const T&... fields)
+    static size_t serialize(char* dest, const T&... fields)
     {
-        construct(lr, fields...);
+        return construct(dest, fields...);
     }
 };
 
@@ -149,19 +148,18 @@ struct LogrecSerializer<btree_insert_nonghost_log>
 template <>
 struct UndoLogrecSerializer<btree_insert_nonghost_log>
 {
-    static void construct(logrec_t* lr, const w_keystr_t& key,
+    static size_t construct(char* dest, const w_keystr_t& key,
             const cvec_t& /*el*/)
     {
         // Insert undo does not need element data
         cvec_t empty_vec;
-        lr->set_size( (new (lr->data()) serialized_kv_pair_t(key,
-                        empty_vec))->size());
+        return (new (dest) serialized_kv_pair_t(key, empty_vec))->size();
     }
 
     template <typename... T>
-    static void serialize(logrec_t* lr, const T&... fields)
+    static size_t serialize(char* dest, const T&... fields)
     {
-        construct(lr, fields...);
+        return construct(dest, fields...);
     }
 };
 
@@ -187,20 +185,18 @@ struct LogrecSerializer<btree_update_log>
 template <>
 struct UndoLogrecSerializer<btree_update_log>
 {
-    static void construct(logrec_t* lr,
+    static size_t construct(char* dest,
         const w_keystr_t& key, const char* old_el, int old_elen,
         const cvec_t& /*new_el*/)
     {
         // Undo logrec has before-image
-        lr->set_size(
-             (new (lr->data()) serialized_kv_pair_t(
-                    key, cvec_t{old_el, old_elen}))->size());
+        return (new (dest) serialized_kv_pair_t(key, cvec_t{old_el, old_elen}))->size();
     }
 
     template <typename... T>
-    static void serialize(logrec_t* lr, const T&... fields)
+    static size_t serialize(char* dest, const T&... fields)
     {
-        construct(lr, fields...);
+        return construct(dest, fields...);
     }
 };
 
@@ -229,22 +225,21 @@ struct LogrecSerializer<btree_overwrite_log>
 template <>
 struct UndoLogrecSerializer<btree_overwrite_log>
 {
-    static void construct(logrec_t* lr, const w_keystr_t&
+    static size_t construct(char* dest, const w_keystr_t&
             key, const char* old_el, const char* /*new_el*/, uint16_t offset,
             size_t elen)
     {
-        char* ptr = lr->data();
+        char* ptr = dest;
         memcpy(ptr, &offset, sizeof(uint16_t));
         ptr += sizeof(uint16_t);
         // Undo logrec has before-image
-        lr->set_size( (new (ptr) serialized_kv_pair_t(
-                        key, old_el, elen))->size());
+        return (new (ptr) serialized_kv_pair_t(key, old_el, elen))->size();
     }
 
     template <typename... T>
-    static void serialize(logrec_t* lr, const T&... fields)
+    static size_t serialize(char* dest, const T&... fields)
     {
-        construct(lr, fields...);
+        construct(dest, fields...);
     }
 };
 

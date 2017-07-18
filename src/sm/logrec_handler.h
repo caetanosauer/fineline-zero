@@ -169,13 +169,13 @@ struct LogrecHandler<btree_insert_log, PagePtr>
         W_COERCE(bp.replace_ghost(key, el, true /* redo */));
     }
 
-    static void undo(logrec_t* lr)
+    static void undo(StoreID stid, const char* data)
     {
-        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data());
+        auto dp = reinterpret_cast<const serialized_kv_pair_t*>(data);
 
         w_keystr_t key;
         dp->deserialize_key(key);
-        W_COERCE(smlevel_0::bt->remove_as_undo(lr->stid(), key));
+        W_COERCE(smlevel_0::bt->remove_as_undo(stid, key));
     }
 };
 
@@ -195,9 +195,9 @@ struct LogrecHandler<btree_insert_nonghost_log, PagePtr>
         bp.insert_nonghost(key, el);
     }
 
-    static void undo(logrec_t* lr)
+    static void undo(StoreID stid, const char* data)
     {
-        LogrecHandler<btree_insert_log, PagePtr>::undo(lr);
+        LogrecHandler<btree_insert_log, PagePtr>::undo(stid, data);
     }
 };
 
@@ -221,15 +221,15 @@ struct LogrecHandler<btree_update_log, PagePtr>
         W_COERCE(bp.replace_el_nolog(slot, el));
     }
 
-    static void undo(logrec_t* lr)
+    static void undo(StoreID stid, const char* data)
     {
-        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data());
+        auto dp = reinterpret_cast<const serialized_kv_pair_t*>(data);
 
         w_keystr_t key;
         vec_t el;
         dp->deserialize(key, el);
 
-        W_COERCE(smlevel_0::bt->update_as_undo(lr->stid(), key, el));
+        W_COERCE(smlevel_0::bt->update_as_undo(stid, key, el));
     }
 };
 
@@ -257,18 +257,17 @@ struct LogrecHandler<btree_overwrite_log, PagePtr>
         bp.overwrite_el_nolog(slot, offset, new_el, elen);
     }
 
-    static void undo(logrec_t* lr)
+    static void undo(StoreID stid, const char* data)
     {
-        uint16_t offset = *(reinterpret_cast<uint16_t*>(lr->data()));
-        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data() + sizeof(uint16_t));
+        uint16_t offset = *(reinterpret_cast<const uint16_t*>(data));
+        auto dp = reinterpret_cast<const serialized_kv_pair_t*>(data + sizeof(uint16_t));
 
         w_keystr_t key;
         dp->deserialize_key(key);
         const char* old_el = dp->get_el();
         auto elen = dp->elen;
 
-        W_COERCE(smlevel_0::bt->overwrite_as_undo(lr->stid(), key, old_el,
-                    offset, elen));
+        W_COERCE(smlevel_0::bt->overwrite_as_undo(stid, key, old_el, offset, elen));
     }
 };
 
@@ -311,17 +310,15 @@ struct LogrecHandler<btree_ghost_mark_log, PagePtr>
         }
     }
 
-    static void undo(logrec_t* lr)
+    static void undo(StoreID stid, const char* data)
     {
-        btree_ghost_t<PagePtr>* dp = (btree_ghost_t<PagePtr>*) lr->data();
+        auto dp = reinterpret_cast<const btree_ghost_t<PagePtr>*>(data);
 
-        if (1 == dp->sys_txn) {
-            return;
-        }
+        if (dp->sys_txn) { return; }
 
         for (size_t i = 0; i < dp->cnt; ++i) {
             w_keystr_t key (dp->get_key(i));
-            W_COERCE(smlevel_0::bt->undo_ghost_mark(lr->stid(), key));
+            W_COERCE(smlevel_0::bt->undo_ghost_mark(stid, key));
         }
     }
 };

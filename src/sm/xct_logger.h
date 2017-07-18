@@ -48,12 +48,13 @@ public:
         lsn_t lsn;
         W_COERCE(ss_m::log->insert(*logrec, &lsn));
 
-        char* undobuf = smthread_t::get_undo_buf();
-        if (logrec->is_undo() && undobuf) {
-            auto undo_lr = reinterpret_cast<logrec_t*>(undobuf);
-            undo_lr->init_header(LR);
-            UndoLogrecSerializer<LR>::serialize(undo_lr, args...);
-            smthread_t::update_undo_buf(undo_lr->length());
+        auto undobuf = smthread_t::get_undo_buf();
+        char* dest = undobuf->acquire();
+        if (logrec->is_undo() && dest) {
+            auto len = UndoLogrecSerializer<LR>::serialize(dest, args...);
+            // CS: if logrec does not have a page, then its undo does not require a store ID
+            StoreID stid = 0;
+            undobuf->release(len, stid, LR);
         }
 
         W_COERCE(xd->update_last_logrec(logrec, lsn));
@@ -104,12 +105,13 @@ public:
 
         lsn_t lsn;
         W_COERCE(ss_m::log->insert(*logrec, &lsn));
-        char* undobuf = smthread_t::get_undo_buf();
-        if (logrec->is_undo() && undobuf) {
-            auto undo_lr = reinterpret_cast<logrec_t*>(undobuf);
-            undo_lr->init_header(LR);
-            UndoLogrecSerializer<LR>::serialize(undo_lr, args...);
-            smthread_t::update_undo_buf(undo_lr->length());
+
+        auto undobuf = smthread_t::get_undo_buf();
+        char* dest = undobuf->acquire();
+        if (logrec->is_undo() && dest) {
+            auto len = UndoLogrecSerializer<LR>::serialize(dest, args...);
+            StoreID stid = p->store();
+            undobuf->release(len, stid, LR);
         }
 
         W_COERCE(xd->update_last_logrec(logrec, lsn));
@@ -150,24 +152,9 @@ public:
             return lsn;
         }
 
-
         // CS TODO: so far, all multi-page logrecs are SSXs
         w_assert0(false);
-        lsn_t lsn;
-        W_COERCE(ss_m::log->insert(*logrec, &lsn));
-        char* undobuf = smthread_t::get_undo_buf();
-        if (logrec->is_undo() && undobuf) {
-            auto undo_lr = reinterpret_cast<logrec_t*>(undobuf);
-            undo_lr->init_header(LR);
-            UndoLogrecSerializer<LR>::serialize(undo_lr, args...);
-            smthread_t::update_undo_buf(undo_lr->length());
-        }
-
-        W_COERCE(xd->update_last_logrec(logrec, lsn));
-        _update_page_lsns(p, lsn, logrec->length());
-        _update_page_lsns(p2, lsn, logrec->length());
-
-        return lsn;
+        return lsn_t::null;
     }
 
     /*

@@ -202,11 +202,8 @@ class smthread_t {
     struct tcb_t {
         // CS: moved out of xct_t
         logrec_t _logbuf;
-        static constexpr size_t UndoBufferSize = 64 * 1024;
-        std::array<char, UndoBufferSize> _undo_buf;
         logrec_t _logbuf2; // for "piggy-backed" SSX
-        uint32_t _undo_offset;
-        bool _abortable;
+        UndoBuffer _undo_buf;
 
         xct_t*   xct;
         int      pin_count;      // number of rsrc_m pins
@@ -245,8 +242,6 @@ class smthread_t {
         }
 
         tcb_t(tcb_t* outer) :
-            _undo_offset(0),
-            _abortable(true),
             xct(0),
             pin_count(0),
             prev_pin_count(0),
@@ -350,46 +345,14 @@ public:
         return &tcb()._logbuf;
     }
 
-    static bool is_abortable()
-    {
-        return tcb()._abortable;
-    }
-
-    static char* get_undo_buf()
-    {
-        if (!is_abortable()) { return nullptr; }
-        // Conservative approach: make sure we can fit maximum logrec size
-        if (get_undo_buf_free_space() < sizeof(logrec_t)) {
-            // W_FATAL_MSG(eINTERNAL, <<
-            //         "Transaction too large -- undo buffer full!");
-            tcb()._abortable = false;
-            return nullptr;
-        }
-
-        return reinterpret_cast<char*>(&tcb()._undo_buf) +
-            tcb()._undo_offset;
-    }
-
-    static char* get_undo_buf_end()
-    {
-        return reinterpret_cast<char*>(&tcb()._undo_buf) +
-            tcb()._undo_offset;
-    }
-
-    static void update_undo_buf(size_t length)
-    {
-        auto& offset = tcb()._undo_offset;
-        offset += length;
-    }
-
-    static size_t get_undo_buf_free_space()
-    {
-        return tcb_t::UndoBufferSize - tcb()._undo_offset;
-    }
-
     static logrec_t* get_logbuf2()
     {
         return &tcb()._logbuf2;
+    }
+
+    static UndoBuffer* get_undo_buf()
+    {
+        return &tcb()._undo_buf;
     }
 
     /// return xct this thread is running

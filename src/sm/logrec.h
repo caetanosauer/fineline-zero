@@ -186,7 +186,7 @@ public:
 
     void redo();
 
-    void undo();
+    static void undo(kind_t type, StoreID stid, const char* data);
 
     void init_header(kind_t);
 
@@ -312,6 +312,86 @@ public:
     // new is overloaded
     void* operator new(size_t, void* p) { return p; }
 };
+
+struct UndoEntry
+{
+    uint16_t offset;
+    StoreID store;
+    kind_t type;
+};
+
+class UndoBuffer
+{
+    static constexpr size_t UndoBufferSize = 64 * 1024;
+    static constexpr size_t MaxUndoRecords = UndoBufferSize / 128;
+    std::array<char, UndoBufferSize> _buffer;
+    std::array<UndoEntry, MaxUndoRecords+1> _entries;
+    size_t _count;
+    bool _abortable;
+
+public:
+    UndoBuffer()
+        : _count{0}, _abortable{true}
+    {
+        _entries[0].offset = 0;
+    }
+
+    size_t get_count() { return _count; }
+
+    bool is_abortable() { return _abortable; }
+
+    char* get_buffer_end()
+    {
+        return &_buffer[_entries[_count].offset];
+    }
+
+    size_t get_free_space()
+    {
+        return UndoBufferSize - (get_buffer_end() - &_buffer[0]);
+    }
+
+    char* acquire()
+    {
+        if (!is_abortable()) { return nullptr; }
+        // Conservative approach: make sure we can fit maximum logrec size
+        if (get_free_space() < sizeof(logrec_t) || _count >= MaxUndoRecords) {
+            // W_FATAL_MSG(eINTERNAL, <<
+            //         "Transaction too large -- undo buffer full!");
+            _abortable = false;
+            return nullptr;
+        }
+
+        return get_buffer_end();
+    }
+
+    void release(size_t length, StoreID store, kind_t type)
+    {
+        _entries[_count].store = store;
+        _entries[_count].type = type;
+        auto offset = _entries[_count].offset;
+        _count++;
+        _entries[_count].offset = offset + length;
+    }
+
+    char* get_data(size_t i)
+    {
+        if (i < _count) { return &_buffer[_entries[i].offset]; }
+        return nullptr;
+    }
+
+    StoreID get_store_id(size_t i)
+    {
+        if (i < _count) { return _entries[i].store; }
+        return StoreID{0};
+    }
+
+    kind_t get_type(size_t i)
+    {
+        if (i < _count) { return _entries[i].type; }
+        return t_max_logrec;
+    }
+};
+
 
 inline bool baseLogHeader::is_valid() const
 {

@@ -544,19 +544,6 @@ ss_m::abort_xct()
 }
 
 /*--------------------------------------------------------------*
- *  ss_m::save_work()                                *
- *--------------------------------------------------------------*/
-rc_t
-ss_m::save_work(sm_save_point_t& sp)
-{
-    // For now, consider this a read/write operation since you
-    // wouldn't be doing this unless you intended to write and
-    // possibly roll back.
-    W_DO( _save_work(sp) );
-    return RCOK;
-}
-
-/*--------------------------------------------------------------*
  *  ss_m::rollback_work()                            *
  *--------------------------------------------------------------*/
 rc_t
@@ -920,31 +907,14 @@ ss_m::_abort_xct(sm_stats_t*&             _stats)
 }
 
 /*--------------------------------------------------------------*
- *  ss_m::save_work()                                *
- *--------------------------------------------------------------*/
-rc_t
-ss_m::_save_work(sm_save_point_t& sp)
-{
-    w_assert3(xct() != 0);
-    xct_t* x = xct();
-
-    W_DO(x->save_point(sp));
-    sp._tid = x->tid();
-    return RCOK;
-}
-
-/*--------------------------------------------------------------*
  *  ss_m::rollback_work()                            *
  *--------------------------------------------------------------*/
 rc_t
-ss_m::_rollback_work(const sm_save_point_t& sp)
+ss_m::_rollback_work(const sm_save_point_t& )
 {
     w_assert3(xct() != 0);
     xct_t* x = xct();
-    if (sp._tid != x->tid())  {
-        return RC(eBADSAVEPOINT);
-    }
-    W_DO( x->rollback(sp) );
+    W_DO( x->rollback() );
     return RCOK;
 }
 

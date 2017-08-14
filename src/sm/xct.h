@@ -245,7 +245,9 @@ public:
     rc_t                      group_commit(const xct_t *list[], int number);
 
     rc_t                      commit_free_locks(bool read_lock_only = false, lsn_t commit_lsn = lsn_t::null);
-    rc_t                      early_lock_release();
+    rc_t                      early_lock_release(lsn_t last_lsn);
+
+    unsigned logrec_count();
 
     // CS: Using these instead of the old new_xct and destroy_xct methods
     void* operator new(size_t s);
@@ -298,8 +300,7 @@ public:
     const sm_stats_t&      const_stats_ref() { return *__stats; }
     rc_t                        commit(bool lazy = false, lsn_t* plastlsn=NULL);
     rc_t                        commit_as_group_member();
-    rc_t                        rollback(const lsn_t &save_pt);
-    rc_t                        save_point(lsn_t& lsn);
+    rc_t                        rollback();
     rc_t                        chain(bool lazy = false);
     rc_t                        abort(bool save_stats = false);
 
@@ -308,16 +309,9 @@ protected:
     sm_stats_t&            stats_ref() { return *__stats; }
     rc_t                        dispose();
     void                        change_state(state_t new_state);
-    void                        set_first_lsn(const lsn_t &) ;
-    void                        set_last_lsn(const lsn_t &) ;
 /**\endcond skip */
 
 public:
-
-    // used by checkpoint, restart:
-    const lsn_t&                last_lsn() const;
-    const lsn_t&                first_lsn() const;
-    const logrec_t*             last_log() const;
 
     // used by restart, chkpt among others
     static xct_t*               look_up(const tid_t& tid);
@@ -332,13 +326,6 @@ public:
 
     static size_t get_loser_count();
 
-    // used for compensating (top-level actions)
-    const lsn_t&                anchor(bool grabit = true);
-    void                        release_anchor(bool compensate
-                                   ADD_LOG_COMMENT_SIG
-                                   );
-
-
     // For handling log-space warnings
     // If you've warned wrt a tx once, and the server doesn't
     // choose to abort that victim, you don't want every
@@ -349,9 +336,6 @@ public:
     bool                         log_warn_is_on() const;
 
 public:
-    //        logging functions
-    rc_t                        update_last_logrec(logrec_t* l, lsn_t lsn);
-
     //
     //        Used by I/O layer
     //
@@ -594,9 +578,6 @@ public:
     };
 
 protected: // all data members protected
-    lsn_t                        _first_lsn;
-    lsn_t                        _last_lsn;
-
     /**
      * Whenever a transaction acquires some lock,
      * this value is updated as _read_watermark=max(_read_watermark, lock_bucket.tag)
@@ -635,7 +616,6 @@ protected: // all data members protected
 private:
     lintel::Atomic<int> _in_compensated_op; // in the midst of a compensated operation
                                             // use an int because they can be nested.
-    lsn_t                       _anchor; // the anchor for the outermost compensated op
 
 public:
     bool                        rolling_back() const { return _rolling_back; }
@@ -689,105 +669,6 @@ public:
     }
 
 };
-
-/**\cond skip */
-
-// Release anchor on destruction
-class auto_release_anchor_t {
-    bool _compensate;
-    xct_t* _xct;
-public:
-    auto_release_anchor_t (bool and_compensate) :
-        _compensate(and_compensate), _xct(xct())
-    {}
-    ~auto_release_anchor_t ()
-    {
-        _xct->release_anchor(_compensate X_LOG_COMMENT_USE("auto_release_anchor_t"));
-    }
-};
-// Cause a rollback to the savepoint on destruction
-// unless ok() is called, in which case, do not.
-class auto_rollback_t {
-private:
-    xct_t* _xd;
-    lsn_t  _save_pt;
-    bool   _roll;
-    static int _count;
-    int    _test;
-    int    _line; // debugging
-    const char *_file; // debugging
-public:
-    // for testing
-    // every so often we need to fake an eOUTOFLOGSPACE error.
-    w_rc_t test(int x) { _test=x;
-        if(_test && (_count % _test==0))
-             return RC(eOUTOFLOGSPACE); // will ignore ok()
-        return RCOK;
-    }
-
-#define AUTO_ROLLBACK_work auto_rollback_t work(__LINE__, __FILE__);
-    auto_rollback_t(int line, const char *file)
-        : _xd(xct()), _roll(true), _test(0),
-        _line(line), _file(file)
-    {
-        // we don't care if this faking of error is thread-safe
-        _count++;
-        if(_xd) {
-            // there's no possible error from save_point
-            W_COERCE(_xd->save_point(_save_pt));
-        }
-    }
-    void ok() { _roll = false; }
-
-    ~auto_rollback_t() {
-
-        if(_test && (_count % _test==0)) _roll = true; // ignore ok()
-        if(_roll && _xd) {
-            _xd->set_error_encountered();
-            W_COERCE(_xd->rollback(_save_pt));
-            INC_TSTAT(internal_rollback_cnt);
-#if 0 && W_DEBUG_LEVEL > 0
-            cerr << "Internal rollback to "  << _save_pt
-                << " from " << _line
-                << " " << _file
-                << endl;
-#endif
-        }
-    }
-};
-
-/**\endcond skip */
-
-/*
- * Use X_DO inside compensated operations
- */
-#if X_LOG_COMMENT_ON
-#define X_DO1(x,anchor,line)             \
-{                           \
-    w_rc_t __e = (x);       \
-    if (__e.is_error()) {        \
-        w_assert3(xct());        \
-        W_COERCE(xct()->rollback(anchor));        \
-        xct()->release_anchor(true X_LOG_COMMENT_USE("X_DO1"));    \
-        return RC_AUGMENT(__e); \
-    } \
-}
-#define X_to_string(x) # x
-#define X_DO(x,anchor) X_DO1(x,anchor, X_to_string(x))
-
-#else
-
-#define X_DO(x,anchor)             \
-{                           \
-    w_rc_t __e = (x);       \
-    if (__e.is_error()) {        \
-        w_assert3(xct());        \
-        W_COERCE(xct()->rollback(anchor));        \
-        xct()->release_anchor(true X_LOG_COMMENT_USE("X_DO"));        \
-        return RC_AUGMENT(__e); \
-    } \
-}
-#endif
 
 /* XXXX This is somewhat hacky becuase I am working on cleaning
    up the xct_i xct iterator to provide various levels of consistency.
@@ -931,34 +812,6 @@ bool
 operator>(const xct_t& x1, const xct_t& x2)
 {
     return (x1.tid() > x2.tid());
-}
-
-inline
-const lsn_t&
-xct_t::last_lsn() const
-{
-    return _last_lsn;
-}
-
-inline
-void
-xct_t::set_last_lsn( const lsn_t&l)
-{
-    _last_lsn = l;
-}
-
-inline
-const lsn_t&
-xct_t::first_lsn() const
-{
-    return _first_lsn;
-}
-
-inline
-void
-xct_t::set_first_lsn(const lsn_t &l)
-{
-    _first_lsn = l;
 }
 
 

@@ -57,8 +57,6 @@ public:
             undobuf->release(len, stid, LR);
         }
 
-        W_COERCE(xd->update_last_logrec(logrec, lsn));
-
         return lsn;
     }
 
@@ -114,7 +112,6 @@ public:
             undobuf->release(len, stid, LR);
         }
 
-        W_COERCE(xd->update_last_logrec(logrec, lsn));
         _update_page_lsns(p, lsn, logrec->length());
 
         return lsn;

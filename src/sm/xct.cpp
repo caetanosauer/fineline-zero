@@ -75,8 +75,6 @@ debugflags(const char *a)
 }
 #endif /* W_TRACE */
 
-int auto_rollback_t::_count = 0;
-
 /*********************************************************************
  *
  *  The xct list is sorted for easy access to the oldest and
@@ -273,8 +271,6 @@ xct_t::xct_t(sm_stats_t* stats, int timeout, bool sys_xct,
     _inquery_verify(false),
     _inquery_verify_keyorder(false),
     _inquery_verify_space(false),
-    // _first_lsn, _last_lsn, _undo_nxt,
-    _last_lsn(last_lsn),
     _read_watermark(lsn_t::null),
     _elr_mode (elr_none),
     // _last_log(0),
@@ -660,14 +656,8 @@ ostream&
 operator<<(ostream& o, const xct_t& x)
 {
     o << "tid="<< x.tid();
-
     o << "\n" << " state=" << x.state() << "\n" << "   ";
-
-    // o << " defaultTimeout=";
-    // print_timeout(o, x.timeout_c());
-    o << " first_lsn=" << x._first_lsn << " last_lsn=" << x._last_lsn << "\n" << "   ";
-
-    o << " in_compensated_op=" << x._in_compensated_op << " anchor=" << x._anchor;
+    o << " in_compensated_op=" << x._in_compensated_op;
 
     if(x.raw_lock_xct()) {
          x.raw_lock_xct()->dump_lockinfo(o);
@@ -772,6 +762,11 @@ xct_t::log_warn_is_on() const
     return _core->_warn_on;
 }
 
+unsigned xct_t::logrec_count()
+{
+    return smthread_t::get_undo_buf()->get_count();
+}
+
 rc_t
 xct_t::_pre_commit(uint32_t flags)
 {
@@ -789,7 +784,7 @@ xct_t::_pre_commit(uint32_t flags)
 
     change_state(flags & xct_t::t_chain ? xct_chaining : xct_committing);
 
-    if (_last_lsn.valid() || !smlevel_0::log)  {
+    if (logrec_count() > 0 || !smlevel_0::log)  {
         /*
          *  If xct generated some log, write a synchronous
          *  Xct End Record.
@@ -840,12 +835,13 @@ xct_t::_pre_commit(uint32_t flags)
 
         // We should always be able to insert this log
         // record, what with log reservations.
+        lsn_t commit_lsn;
         if(individual && !is_single_log_sys_xct()) { // is commit record fused?
-            Logger::log<xct_end_log>();
+            commit_lsn = Logger::log<xct_end_log>();
         }
         // now we have xct_end record though it might not be flushed yet. so,
         // let's do ELR
-        W_DO(early_lock_release());
+        W_DO(early_lock_release(commit_lsn));
     }
 
     return RCOK;
@@ -876,16 +872,13 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
 
     W_DO(_pre_commit(flags));
 
-    if (_last_lsn.valid() || !smlevel_0::log)  {
+    if (logrec_count() > 0 || !smlevel_0::log)  {
         if (!(flags & xct_t::t_lazy))  {
             _sync_logbuf();
         }
         else { // IP: If lazy, wake up the flusher but do not block
             _sync_logbuf(false, !is_sys_xct()); // if system transaction, don't even wake up flusher
         }
-
-        // IP: Before destroying anything copy last_lsn
-        if (plastlsn != NULL) *plastlsn = _last_lsn;
 
         change_state(xct_ended);
 
@@ -897,7 +890,9 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
 
         if(flags & xct_t::t_chain)  {
             // in this case the dependency is the previous xct itself, so take the commit LSN.
-            inherited_read_watermark = _last_lsn;
+            // CS TODO: what is this watermark used for?
+            // inherited_read_watermark = _last_lsn;
+            inherited_read_watermark = lsn_t::null;
         }
     }  else  {
         W_DO(_commit_read_only(flags, inherited_read_watermark));
@@ -921,7 +916,6 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
          *  Start a new xct in place
          */
         _teardown(true);
-        _first_lsn = _last_lsn = lsn_t::null;
         if (inherited_read_watermark.valid()) {
             _read_watermark = inherited_read_watermark;
         }
@@ -1021,7 +1015,9 @@ xct_t::_commit_read_only(uint32_t flags, lsn_t& inherited_read_watermark)
             inherited_read_watermark = _read_watermark;
         }
         // even if chaining or grouped xct, we can do ELR
-        W_DO(early_lock_release());
+        // CS removed _last_lsn from xct_t
+        // W_DO(early_lock_release());
+        W_DO(early_lock_release(lsn_t::null));
     }
 
     return RCOK;
@@ -1037,7 +1033,7 @@ xct_t::commit_free_locks(bool read_lock_only, lsn_t commit_lsn)
     return RCOK;
 }
 
-rc_t xct_t::early_lock_release() {
+rc_t xct_t::early_lock_release(lsn_t last_lsn) {
     if (!_sys_xct) { // system transaction anyway doesn't have locks
         switch (_elr_mode) {
             case elr_none: break;
@@ -1050,7 +1046,7 @@ rc_t xct_t::early_lock_release() {
                 // simply release all locks
                 // update tag for safe SX-ELR with _last_lsn which should be the commit lsn
                 // (we should have called log_xct_end right before this)
-                W_DO(commit_free_locks(false, _last_lsn));
+                W_DO(commit_free_locks(false, last_lsn));
                 break;
                 // TODO Controlled Lock Violation is tentatively replaced with SX-ELR.
                 // In RAW-style lock manager, reading the permitted LSN needs another barrier.
@@ -1136,7 +1132,7 @@ xct_t::_abort()
      */
     //ClearAllLoadStores();
 
-    W_DO( rollback(lsn_t::null) );
+    W_DO( rollback() );
 
     // if this is not part of chain or both-SX-ELR mode,
     // we can safely release all locks at this point.
@@ -1150,7 +1146,7 @@ xct_t::_abort()
         W_COERCE( commit_free_locks(true));
     }
 
-    if (_last_lsn.valid()) {
+    if (logrec_count() > 0) {
         /*
          *  If xct generated some log, write a Xct End Record.
          *  We flush because if this was a prepared
@@ -1213,20 +1209,6 @@ xct_t::_abort()
     return RCOK;
 }
 
-/*********************************************************************
- *
- *  xct_t::save_point(lsn)
- *
- *  Generate and return a save point in "lsn".
- *
- *********************************************************************/
-rc_t
-xct_t::save_point(lsn_t& lsn)
-{
-    lsn = _last_lsn;
-    return RCOK;
-}
-
 
 /*********************************************************************
  *
@@ -1266,7 +1248,9 @@ xct_t::_sync_logbuf(bool block, bool signal)
 {
     if(log) {
         INC_TSTAT(xct_log_flush);
-        return log->flush(_last_lsn,block,signal);
+        // CS TODO Fineline -- code above is non-durable
+        // return log->flush(_last_lsn,block,signal);
+        return log->flush(lsn_t::null,block,signal);
     }
     return RCOK;
 }
@@ -1291,136 +1275,6 @@ xct_t::_sync_logbuf(bool block, bool signal)
 //     return RCOK;
 // }
 
-rc_t xct_t::update_last_logrec(logrec_t* l, lsn_t lsn)
-{
-    // _last_log = 0;
-    _last_lsn = lsn;
-
-    // log insert effectively set_lsn to the lsn of the *next* byte of
-    // the log.
-    if ( ! _first_lsn.valid())  _first_lsn = _last_lsn;
-
-    return RCOK;
-}
-
-/*********************************************************************
- *
- *  xct_t::release_anchor(and_compensate)
- *
- *  stop critical sections vis-a-vis compensated operations
- *  If and_compensate==true, it makes the _last_log a clr
- *
- *********************************************************************/
-void
-xct_t::release_anchor( bool and_compensate ADD_LOG_COMMENT_SIG )
-{
-
-#if X_LOG_COMMENT_ON
-    if(and_compensate) {
-        // w_ostrstream s;
-        // s << "release_anchor at "
-        //     << debugmsg;
-        // Logger::log<comment_log>(s.c_str());
-    }
-#endif
-    DBGX(
-            << " RELEASE ANCHOR "
-            << " in compensated op==" << _in_compensated_op
-    );
-
-    w_assert3(_in_compensated_op>0);
-
-    if(_in_compensated_op == 1) { // will soon be 0
-
-        // CS: FineLine does not require compensation!
-        //
-        // NB: this whole section could be made a bit
-        // more efficient in the -UDEBUG case, but for
-        // now, let's keep in all the checks
-
-        // don't flush unless we have popped back
-        // to the last compensate() of the bunch
-
-        // Now see if this last item was supposed to be
-        // // compensated:
-        // if(and_compensate && (_anchor != lsn_t::null)) {
-        //    // if(_last_log) {
-        //    //     if ( _last_log->is_cpsn()) {
-        //    //          DBGX(<<"already compensated");
-        //    //          w_assert3(_anchor == _last_log->undo_nxt());
-        //    //     } else {
-        //    //         DBGX(<<"SETTING anchor:" << _anchor);
-        //    //         w_assert3(_anchor <= _last_lsn);
-        //    //         _last_log->set_clr(_anchor);
-        //    //     }
-        //    // } else {
-        //        DBGX(<<"no _last_log:" << _anchor);
-        //        /* Can we update the log record in the log buffer ? */
-        //        if( log &&
-        //            !log->compensate(_last_lsn, _anchor).is_error()) {
-        //            // Yup.
-        //             INC_TSTAT(compensate_in_log);
-        //        } else {
-        //            // Nope, write a compensation log record.
-        //            // Really, we should return an rc from this
-        //            // method so we can W_DO here, and we should
-        //            // check for eBADCOMPENSATION here and
-        //            // return all other errors  from the
-        //            // above log->compensate(...)
-
-        //            Logger::log<compensate_log>(_anchor);
-        //            INC_TSTAT(compensate_records);
-        //        }
-        //     // }
-        // }
-
-        _anchor = lsn_t::null;
-
-    }
-    // UN-PROTECT
-    _in_compensated_op -- ;
-
-    DBGX(
-        << " out compensated op=" << _in_compensated_op
-    );
-}
-
-/*********************************************************************
- *
- *  xct_t::anchor( bool grabit )
- *
- *  Return a log anchor (begin a top level action).
- *
- *  If argument==true (most of the time), it stores
- *  the anchor for use with compensations.
- *
- *  When the  argument==false, this is used (by I/O monitor) not
- *  for compensations, but only for concurrency control.
- *
- *********************************************************************/
-const lsn_t&
-xct_t::anchor(bool grabit)
-{
-    // PROTECT
-    _in_compensated_op ++;
-
-    INC_TSTAT(anchors);
-    DBGX(
-            << " GRAB ANCHOR "
-            << " in compensated op==" << _in_compensated_op
-    );
-
-
-    if(_in_compensated_op == 1 && grabit) {
-        // _anchor is set to null when _in_compensated_op goes to 0
-        w_assert3(_anchor == lsn_t::null);
-        _anchor = _last_lsn;
-        DBGX(    << " anchor =" << _anchor);
-    }
-    DBGX(    << " anchor returns " << _last_lsn );
-
-    return _last_lsn;
-}
 
 /*********************************************************************
  *
@@ -1430,10 +1284,8 @@ xct_t::anchor(bool grabit)
  *
  *********************************************************************/
 rc_t
-xct_t::rollback(const lsn_t &save_pt)
+xct_t::rollback()
 {
-    DBGTHRD(<< "xct_t::rollback to " << save_pt);
-
     auto undo_buf = smthread_t::get_undo_buf();
     if (!undo_buf->is_abortable()) {
         W_FATAL_MSG(eINTERNAL, <<
@@ -1450,14 +1302,7 @@ xct_t::rollback(const lsn_t &save_pt)
 
     w_rc_t            rc;
 
-    if(_in_compensated_op > 0) {
-        w_assert3(save_pt >= _anchor);
-    } else {
-        w_assert3(_anchor == lsn_t::null);
-    }
-
-    DBGX( << " in compensated op depth " <<  _in_compensated_op
-            << " save_pt " << save_pt << " anchor " << _anchor);
+    DBGX( << " in compensated op depth " <<  _in_compensated_op);
     _in_compensated_op++;
 
     // rollback is only one type of compensated op, and it doesn't nest
@@ -1478,14 +1323,6 @@ xct_t::rollback(const lsn_t &save_pt)
     _xct_chain_len = 0;
     _in_compensated_op --;
     _rolling_back = false;
-    w_assert3(_anchor == lsn_t::null ||
-                _anchor == save_pt);
-
-    if(save_pt != lsn_t::null) {
-        INC_TSTAT(rollback_savept_cnt);
-    }
-
-    DBGTHRD(<< "xct_t::rollback done to " << save_pt);
     return rc;
 }
 

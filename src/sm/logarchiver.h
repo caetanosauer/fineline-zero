@@ -61,8 +61,6 @@ class ArchiverHeap {
         run_number_t topRun() { return w_heap.First().run; }
         size_t size() { return w_heap.NumElements(); }
     private:
-        run_number_t currentRun;
-        bool filledFirst;
         fixed_lists_mem_t* workspace;
 
         fixed_lists_mem_t::slot_t allocate(size_t length);
@@ -216,7 +214,7 @@ public:
     void shutdown();
     bool requestFlushAsync(lsn_t);
     void requestFlushSync(lsn_t);
-    void archiveUntilLSN(lsn_t);
+    void archiveUntil(run_number_t);
 
     std::shared_ptr<ArchiveIndex> getIndex() { return index; }
     lsn_t getNextConsumedLSN() { return consumer->getNextLSN(); }

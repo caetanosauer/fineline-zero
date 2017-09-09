@@ -293,9 +293,9 @@ public:
     bool is_warmup_done() const { return _warmup_done; }
 
     // Used for decoupled cleaning
-    void notify_archived_lsn(lsn_t);
+    void notify_archived_run(run_number_t);
 
-    lsn_t get_archived_lsn() const { return _archived_lsn; }
+    run_number_t get_archived_run() const { return _archived_run; }
 
     /**
      * Tries to unswizzle the given child page from the parent page.  If, for
@@ -463,7 +463,7 @@ private:
 
     bool _log_fetches;
 
-    std::atomic<lsn_t> _archived_lsn;
+    std::atomic<run_number_t> _archived_run;
 
     static thread_local unsigned _fix_cnt;
     static thread_local unsigned _hit_cnt;

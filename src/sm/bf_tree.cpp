@@ -222,7 +222,7 @@ bf_tree_m::bf_tree_m(const sm_options& options)
     _async_eviction = options.get_bool_option("sm_async_eviction", false);
     if (_async_eviction) { _evictioner->fork(); }
 
-    _archived_lsn = smlevel_0::logArchiver->getIndex()->getLastLSN();
+    _archived_run = smlevel_0::logArchiver->getIndex()->getLastRun();
 }
 
 void bf_tree_m::shutdown()
@@ -411,9 +411,9 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
     }
 }
 
-void bf_tree_m::notify_archived_lsn(lsn_t archived_lsn)
+void bf_tree_m::notify_archived_run(run_number_t archived_run)
 {
-    _archived_lsn = archived_lsn;
+    _archived_run = archived_run;
 }
 
 ///////////////////////////////////   Page fix/unfix BEGIN         ///////////////////////////////////

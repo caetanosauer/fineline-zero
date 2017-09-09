@@ -365,11 +365,11 @@ void log_storage::wakeup_recycler()
 
 unsigned log_storage::delete_old_partitions(partition_number_t older_than)
 {
-    if (!smlevel_0::log || !_delete_old_partitions) { return 0; }
+    if (!smlevel_0::log || !smlevel_0::bf || !_delete_old_partitions) { return 0; }
 
     if (older_than == 0) {
-        lsn_t min_lsn = smlevel_0::bf->get_archived_lsn();
-        older_than = min_lsn.is_null() ? smlevel_0::log->durable_lsn().hi() : min_lsn.hi();
+        auto archived_run = smlevel_0::bf->get_archived_run();
+        older_than = (archived_run == 0) ? smlevel_0::log->durable_lsn().hi() : archived_run;
     }
 
     list<shared_ptr<partition_t>> to_be_deleted;
@@ -471,7 +471,7 @@ void log_storage::try_delete(partition_number_t pnum)
      * is to have a reservation scheme, where enough log space is always reserved
      * for a full page cleaner round (e.g., one logrec for each frame)
      */
-    lsn_t min_rec_lsn = smlevel_0::bf->get_archived_lsn();
+    lsn_t min_rec_lsn = lsn_t(smlevel_0::bf->get_archived_run() + 1, 0);
     if (min_rec_lsn.hi() == pnum - _max_partitions) {
         throw runtime_error("Log wedged! Cannot recycle partitions due to \
                 old dirty pages");

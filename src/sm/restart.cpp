@@ -13,7 +13,7 @@ SprIterator::~SprIterator()
 
 void SprIterator::open(PageID pid)
 {
-    archive_scan.open(pid, pid+1, lsn_t::null);
+    archive_scan.open(pid, pid+1);
 }
 
 bool SprIterator::next(logrec_t*& lr)

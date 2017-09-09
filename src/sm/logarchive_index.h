@@ -17,13 +17,13 @@ namespace fs = boost::filesystem;
 class RunRecycler;
 
 struct RunId {
-    lsn_t beginLSN;
-    lsn_t endLSN;
+    run_number_t begin;
+    run_number_t end;
     unsigned level;
 
     bool operator==(const RunId& other) const
     {
-        return beginLSN == other.beginLSN && endLSN == other.endLSN
+        return begin == other.begin && end == other.end
             && level == other.level;
     }
 };
@@ -54,8 +54,8 @@ namespace std
         using result_type = std::size_t;
         result_type operator()(argument_type const& a) const
         {
-            result_type const h1 ( std::hash<lsn_t>()(a.beginLSN) );
-            result_type const h2 ( std::hash<lsn_t>()(a.endLSN) );
+            result_type const h1 ( std::hash<lsn_t>()(a.begin) );
+            result_type const h2 ( std::hash<lsn_t>()(a.end) );
             result_type const h3 ( std::hash<unsigned>()(a.level) );
             return ((h1 ^ (h2 << 1)) >> 1) ^ (h3 << 1);
         }
@@ -99,14 +99,8 @@ public:
     };
 
     struct RunInfo {
-        lsn_t firstLSN;
-        // lastLSN must be equal to firstLSN of the following run.  We keep
-        // it redundantly so that index probes don't have to look beyond
-        // the last finished run. We used to keep a global lastLSN field in
-        // the index, but there can be a race between the writer thread
-        // inserting new runs and probes on the last finished, so it was
-        // removed.
-        lsn_t lastLSN;
+        run_number_t begin;
+        run_number_t end;
 
         // Used as a filter to avoid unneccessary probes on older runs
         PageID maxPID;
@@ -115,21 +109,21 @@ public:
 
         bool operator<(const RunInfo& other) const
         {
-            return firstLSN < other.firstLSN;
+            return begin < other.begin;
         }
     };
 
     size_t getBlockSize() const { return blockSize; }
     std::string getArchDir() const { return archdir; }
 
-    lsn_t getLastLSN();
-    lsn_t getLastLSN(unsigned level);
-    lsn_t getFirstLSN(unsigned level);
+    run_number_t getLastRun();
+    run_number_t getLastRun(unsigned level);
+    run_number_t getFirstRun(unsigned level);
 
     // run generation methods
     rc_t openNewRun(unsigned level);
     rc_t append(char* data, size_t length, unsigned level);
-    rc_t closeCurrentRun(lsn_t runEndLSN, unsigned level, PageID maxPID = 0);
+    rc_t closeCurrentRun(run_number_t currentRun, unsigned level, PageID maxPID = 0);
 
     // run scanning methods
     RunFile* openForScan(const RunId& runid);
@@ -147,12 +141,12 @@ public:
 
     void newBlock(const vector<pair<PageID, size_t> >& buckets, unsigned level);
 
-    rc_t finishRun(lsn_t first, lsn_t last, PageID maxPID,
+    rc_t finishRun(run_number_t first, run_number_t last, PageID maxPID,
             int fd, off_t offset, unsigned level);
 
     template <class Input>
-    void probe(std::vector<Input>&, PageID, PageID, lsn_t startLSN,
-            lsn_t endLSN = lsn_t::null);
+    void probe(std::vector<Input>&, PageID, PageID, run_number_t runBegin,
+            run_number_t runEnd = 0);
 
     void getBlockCounts(RunFile*, size_t* indexBlocks, size_t* dataBlocks);
     void loadRunInfo(RunFile*, const RunId&);
@@ -172,17 +166,17 @@ public:
     void listRunsNonOverlapping(OutputIter out)
     {
         auto level = maxLevel;
-        auto startLSN = lsn_t::null;
+        run_number_t nextRun = 1;
 
         // Start collecting runs on the max level, which has the largest runs
         // and therefore requires the least random reads
         while (level > 0) {
-            auto index = findRun(startLSN, level);
+            auto index = findRun(nextRun, level);
 
             while ((int) index <= lastFinished[level]) {
                 auto& run = runs[level][index];
-                out = RunId{run.firstLSN, run.lastLSN, level};
-                startLSN = run.lastLSN;
+                out = RunId{run.begin, run.end, level};
+                nextRun = run.end + 1;
                 index++;
             }
 
@@ -193,13 +187,11 @@ public:
 private:
 
     void appendNewRun(unsigned level);
-    size_t findRun(lsn_t lsn, unsigned level);
+    size_t findRun(run_number_t run, unsigned level);
     // binary search
     size_t findEntry(RunInfo* run, PageID pid,
             int from = -1, int to = -1);
     rc_t serializeRunInfo(RunInfo&, int fd, off_t);
-
-    lsn_t roundToEndLSN(lsn_t lsn, unsigned level);
 
 private:
     std::string archdir;
@@ -240,7 +232,7 @@ private:
 
     bool directIO;
 
-    fs::path make_run_path(lsn_t begin, lsn_t end, unsigned level = 1) const;
+    fs::path make_run_path(run_number_t begin, run_number_t end, unsigned level = 1) const;
     fs::path make_current_run_path(unsigned level) const;
 
 public:
@@ -252,7 +244,7 @@ public:
 
 template <class Input>
 void ArchiveIndex::probe(std::vector<Input>& inputs,
-        PageID startPID, PageID endPID, lsn_t startLSN, lsn_t endLSN)
+        PageID startPID, PageID endPID, run_number_t runBegin, run_number_t runEnd)
 {
     spinlock_read_critical_section cs(&_mutex);
 
@@ -260,16 +252,17 @@ void ArchiveIndex::probe(std::vector<Input>& inputs,
     input.endPID = endPID;
     unsigned level = maxLevel;
     inputs.clear();
+    run_number_t nextRun = runBegin;
 
     while (level > 0) {
-        size_t index = findRun(startLSN, level);
+        size_t index = findRun(nextRun, level);
 
         while ((int) index <= lastFinished[level]) {
             auto& run = runs[level][index];
             index++;
-            startLSN = run.lastLSN;
+            nextRun = run.end;
 
-            if (!endLSN.is_null() && startLSN >= endLSN) { return; }
+            if (runEnd > 0 && nextRun > runEnd) { return; }
 
             if (startPID > run.maxPID) {
                 // INC_TSTAT(la_avoided_probes);
@@ -291,7 +284,7 @@ void ArchiveIndex::probe(std::vector<Input>& inputs,
 
                 input.pos = run.entries[entryBegin].offset;
                 input.runFile =
-                    openForScan(RunId{run.firstLSN, run.lastLSN, level});
+                    openForScan(RunId{run.begin, run.end, level});
                 w_assert1(input.pos < input.runFile->length);
                 inputs.push_back(input);
             }

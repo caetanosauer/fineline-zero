@@ -177,7 +177,8 @@ bf_idx page_evictioner_base::pick_victim()
         }
 
         // FINELINE: no-steal mode
-        lsn_t evict_lsn = std::min(_bufferpool->get_archived_lsn(),
+        auto archived_lsn = lsn_t(_bufferpool->get_archived_run() + 1, 0);
+        lsn_t evict_lsn = std::min(archived_lsn,
                 smlevel_0::log->get_oldest_active_lsn());
         if (cb.get_page_lsn().is_null() || cb.get_page_lsn() >= evict_lsn)
         {

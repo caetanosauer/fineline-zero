@@ -125,18 +125,11 @@ public:
             bool virgin_pages, bool on_demand = true, bool start_locked = false)
         : _segment_size{segSize}, _bitmap{new RestoreBitmap {segCount}},
         _restoreFunctor{f}, _virgin_pages{virgin_pages}, _on_demand(on_demand),
-        _start_locked(start_locked),
-        _begin_lsn(lsn_t::null), _end_lsn(lsn_t::null)
+        _start_locked(start_locked)
     {
         if (_start_locked) {
             _mutex.lock();
         }
-    }
-
-    void set_lsns(lsn_t begin, lsn_t end)
-    {
-        _begin_lsn = begin;
-        _end_lsn = end;
     }
 
     void fetch(PageID pid)
@@ -242,8 +235,6 @@ private:
     const bool _on_demand;
     // This is used to make threads wait for log archiver reach a certain LSN
     const bool _start_locked;
-    lsn_t _begin_lsn;
-    lsn_t _end_lsn;
 
     // Not customizable for now (should be at most IOV_MAX, which is 1024)
     static constexpr size_t MaxRestorePages = 1024;
@@ -264,7 +255,7 @@ private:
     void doRestore(unsigned segment_begin, unsigned segment_end, Ticket ticket)
     {
         _restoreFunctor(segment_begin, segment_end, _segment_size,
-                _virgin_pages, _begin_lsn, _end_lsn);
+                _virgin_pages);
 
         for (auto s = segment_begin; s < segment_end; s++) {
             _bitmap->mark_restored(s);
@@ -290,7 +281,7 @@ struct LogReplayer
 struct SegmentRestorer
 {
     static void bf_restore(unsigned segment_begin, unsigned segment_end,
-            size_t segment_size, bool virgin_pages, lsn_t begin_lsn, lsn_t end_lsn);
+            size_t segment_size, bool virgin_pages);
 };
 
 /** Thread that restores untouched segments in the background with low priority */

@@ -230,6 +230,7 @@ ss_m::_construct_once()
      *  Level 1
      */
     log = new log_core(_options);
+
     ERROUT(<< "[" << timer.time_ms() << "] Initializing log manager (part 2)");
     W_COERCE(log->init());
 
@@ -241,7 +242,7 @@ ss_m::_construct_once()
     logArchiver->fork();
     lsn_t durable_lsn = log->durable_lsn();
     if (durable_lsn > lsn_t(1,0)) {
-        logArchiver->archiveUntilLSN(durable_lsn);
+        logArchiver->archiveUntil(durable_lsn.hi());
         ERROUT(<< "[" << timer.time_ms() << "] Log archiver reached durable_lsn: "
                 << durable_lsn);
     }
@@ -413,7 +414,7 @@ rc_t ss_m::_truncate_log()
     if(logArchiver) {
         unsigned replFactor =
             _options.get_int_option("sm_archiver_replication_factor", 1);
-        logArchiver->archiveUntilLSN(log->durable_lsn());
+        logArchiver->archiveUntil(log->durable_lsn().hi());
         logArchiver->getIndex()->deleteRuns(replFactor);
     }
 

@@ -27,8 +27,8 @@ void ArchStats::printRunInfo(const RunId& runid)
     size_t indexBlockCount = 0, dataBlockCount = 0;
     archIndex->getBlockCounts(runFile, &indexBlockCount, &dataBlockCount);
     std::cout << "level " << runid.level
-        << " begin " << runid.beginLSN
-        << " end " << runid.endLSN
+        << " begin " << runid.begin
+        << " end " << runid.end
         << " data " << dataBlockCount
         << " index " << indexBlockCount
         << " index_percent " << (double) indexBlockCount / dataBlockCount

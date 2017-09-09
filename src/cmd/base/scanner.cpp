@@ -184,7 +184,7 @@ BlockScanner::~BlockScanner()
 
 
 LogArchiveScanner::LogArchiveScanner(const po::variables_map& options)
-    : BaseScanner(options), runBegin(lsn_t::null), runEnd(lsn_t::null)
+    : BaseScanner(options), runBegin(0), runEnd(0)
 {
     archdir = options["logdir"].as<string>();
     level = options["level"].as<int>();
@@ -195,10 +195,10 @@ bool runCompare (string a, string b)
 {
     RunId fstats;
     parseRunFileName(a, fstats);
-    lsn_t lsn_a = fstats.beginLSN;
+    auto begin_a = fstats.begin;
     parseRunFileName(b, fstats);
-    lsn_t lsn_b = fstats.beginLSN;
-    return lsn_a < lsn_b;
+    auto begin_b = fstats.begin;
+    return begin_a < begin_b;
 }
 
 void LogArchiveScanner::run()
@@ -225,18 +225,18 @@ void LogArchiveScanner::run()
 
     RunId fstats;
     parseRunFileName(runFiles[0], fstats);
-    runBegin = fstats.beginLSN;
-    runEnd = fstats.endLSN;
+    runBegin = fstats.begin;
+    runEnd = fstats.end;
     std::vector<std::string>::const_iterator it;
     for(size_t i = 0; i < runFiles.size(); i++) {
         if (i > 0) {
             // begin of run i must be equal to end of run i-1
             parseRunFileName(runFiles[i], fstats);
-            runBegin = fstats.beginLSN;
-            if (runBegin != runEnd) {
+            runBegin = fstats.begin;
+            if (runBegin != runEnd + 1) {
                 throw runtime_error("Hole found in run boundaries!");
             }
-            runEnd = fstats.endLSN;
+            runEnd = fstats.end;
         }
 
         if (openFileCallback) {
@@ -259,8 +259,8 @@ void LogArchiveScanner::run()
         logrec_t* lr;
         while (scan.next(lr)) {
             w_assert0(lr->pid() >= prevPid);
-            w_assert0(lr->lsn_ck() >= runBegin);
-            w_assert0(lr->lsn_ck() < runEnd);
+            // w_assert0(lr->lsn_ck() >= runBegin);
+            // w_assert0(lr->lsn_ck() < runEnd);
 
             handle(lr);
 
@@ -291,7 +291,7 @@ void MergeScanner::run()
 
     auto directory = std::make_shared<ArchiveIndex>(opt);
     ArchiveScan scan {directory};
-    scan.open(scan_pid, 0, lsn_t::null);
+    scan.open(scan_pid, 0, 0);
 
     logrec_t* lr;
 

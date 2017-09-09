@@ -70,8 +70,8 @@ public:
     virtual void run();
 private:
     string archdir;
-    lsn_t runBegin;
-    lsn_t runEnd;
+    run_number_t runBegin;
+    run_number_t runEnd;
     int level;
     PageID scan_pid;
 

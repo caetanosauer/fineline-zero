@@ -15,7 +15,7 @@
 #include "stopwatch.h"
 
 void SegmentRestorer::bf_restore(unsigned segment_begin, unsigned segment_end,
-        size_t segment_size, bool virgin_pages, lsn_t begin_lsn, lsn_t end_lsn)
+        size_t segment_size, bool virgin_pages)
 {
     PageID first_pid = segment_begin * segment_size;
     PageID total_pages = (segment_end - segment_begin) * segment_size;
@@ -29,7 +29,7 @@ void SegmentRestorer::bf_restore(unsigned segment_begin, unsigned segment_end,
         // CS TODO there seems to be a weird memory leak in ArchiveScan
         static thread_local ArchiveScan archive_scan{smlevel_0::logArchiver->getIndex()};
         // ArchiveScan archive_scan{smlevel_0::logArchiver->getIndex()};
-        archive_scan.open(first_pid, 0, begin_lsn, end_lsn);
+        archive_scan.open(first_pid, 0);
         auto logiter = &archive_scan;
 
         if (logiter) {

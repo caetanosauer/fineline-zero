@@ -837,7 +837,7 @@ xct_t::_pre_commit(uint32_t flags)
         // record, what with log reservations.
         lsn_t commit_lsn;
         if(individual && !is_single_log_sys_xct()) { // is commit record fused?
-            commit_lsn = Logger::log<xct_end_log>();
+            commit_lsn = Logger::log_sys<xct_end_log>();
         }
         // now we have xct_end record though it might not be flushed yet. so,
         // let's do ELR

@@ -53,9 +53,6 @@ logrec_t::cat_str() const
 {
     auto c = cat();
     switch (c)  {
-    case t_logical:
-        return "l---";
-
     case t_system:
         return "s---";
 
@@ -67,15 +64,6 @@ logrec_t::cat_str() const
 
     case t_undo | t_redo:
         return "-ru-";
-
-    case t_undo | t_redo | t_logical:
-        return "lru-";
-
-    case t_redo | t_logical : // used in I/O layer
-        return "lr__";
-
-    case t_undo | t_logical :
-        return "l-u-";
 
     case t_redo | t_single_sys_xct:
         return "ssx-";

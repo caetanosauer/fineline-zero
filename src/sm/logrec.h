@@ -165,7 +165,6 @@ public:
     bool             is_undo() const;
     bool             is_cpsn() const;
     bool             is_multi_page() const;
-    bool             is_logical() const;
     bool             is_system() const;
     bool             is_single_sys_xct() const;
     bool             valid_header(const lsn_t & lsn_ck = lsn_t::null) const;
@@ -259,11 +258,6 @@ protected:
         t_redo      = 0x04,
         /** log for multi pages? */
         t_multi     = 0x08,
-        /**
-         * is the UNDO logical? If so, do not fix the page for undo.
-         * Irrelevant if not an undoable log record.
-         */
-        t_logical   = 0x10,
 
         /** log by system transaction which is fused with begin/commit record. */
         t_single_sys_xct    = 0x80
@@ -499,12 +493,6 @@ logrec_t::is_page_update() const
 }
 
 inline bool
-logrec_t::is_logical() const
-{
-    return (cat() & t_logical) != 0;
-}
-
-inline bool
 logrec_t::is_single_sys_xct() const
 {
     return (cat() & t_single_sys_xct) != 0;
@@ -542,8 +530,7 @@ constexpr u_char logrec_t::get_logrec_cat(kind_t type)
 	case add_backup_log : return t_system;
 	case evict_page_log : return t_system;
 	case fetch_page_log : return t_system;
-
-	case xct_end_log : return t_logical;
+	case xct_end_log : return t_system;
 
 	case alloc_page_log : return t_redo|t_single_sys_xct;
 	case stnode_format_log : return t_redo|t_single_sys_xct;
@@ -553,11 +540,11 @@ constexpr u_char logrec_t::get_logrec_cat(kind_t type)
 	case append_extent_log : return t_redo|t_single_sys_xct;
 	case page_img_format_log : return t_redo;
 	case update_emlsn_log : return t_redo|t_single_sys_xct;
-	case btree_insert_log : return t_redo|t_undo|t_logical;
-	case btree_insert_nonghost_log : return t_redo|t_undo|t_logical;
-	case btree_update_log : return t_redo|t_undo|t_logical;
-	case btree_overwrite_log : return t_redo|t_undo|t_logical;
-	case btree_ghost_mark_log : return t_redo|t_undo|t_logical;
+	case btree_insert_log : return t_redo|t_undo;
+	case btree_insert_nonghost_log : return t_redo|t_undo;
+	case btree_update_log : return t_redo|t_undo;
+	case btree_overwrite_log : return t_redo|t_undo;
+	case btree_ghost_mark_log : return t_redo|t_undo;
 	case btree_ghost_reclaim_log : return t_redo|t_single_sys_xct;
 	case btree_ghost_reserve_log : return t_redo|t_single_sys_xct;
 	case btree_foster_adopt_log : return t_redo|t_multi|t_single_sys_xct;

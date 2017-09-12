@@ -123,15 +123,6 @@ void fixable_page_h::fix_nonbufferpool_page(generic_page* s)
     _mode               = LATCH_EX;
 }
 
-bool fixable_page_h::is_dirty() const {
-
-    if (_bufferpool_managed) {
-        return smlevel_0::bf->is_dirty(_pp);
-    } else {
-        return false;
-    }
-}
-
 lsn_t fixable_page_h::get_page_lsn() const
 {
     w_assert1(_pp);

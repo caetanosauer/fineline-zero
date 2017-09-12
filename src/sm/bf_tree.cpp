@@ -894,9 +894,6 @@ void bf_tree_m::debug_dump(std::ostream &o) const
         bf_tree_cb_t &cb = get_cb(idx);
         if (cb._used) {
             o << "page-" << cb._pid;
-            if (cb.is_dirty()) {
-                o << " (dirty)";
-            }
             o << ", _swizzled=" << cb._swizzled;
             o << ", _pin_cnt=" << cb._pin_cnt;
             o << ", _ref_count=" << cb._ref_count;
@@ -1127,19 +1124,6 @@ void bf_tree_m::unfix(const generic_page* p, bool evict)
     }
     DBG(<< "Unfixed " << idx << " pin count " << cb._pin_cnt);
     cb.latch().latch_release();
-}
-
-bool bf_tree_m::is_dirty(const generic_page* p) const {
-    uint32_t idx = p - _buffer;
-    w_assert1 (_is_active_idx(idx));
-    return get_cb(idx).is_dirty();
-}
-
-bool bf_tree_m::is_dirty(const bf_idx idx) const {
-    // Caller has latch on page
-    // Used by REDO phase in Recovery
-    w_assert1 (_is_active_idx(idx));
-    return get_cb(idx).is_dirty();
 }
 
 bool bf_tree_m::is_used (bf_idx idx) const {

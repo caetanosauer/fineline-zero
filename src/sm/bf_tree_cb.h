@@ -83,10 +83,6 @@ struct bf_tree_cb_t {
         _ref_count = 0;
         _ref_count_ex = 0;
         _page_lsn = page_lsn;
-        _rec_lsn = lsn_t::null;
-        _persisted_lsn = page_lsn;
-        _next_rec_lsn = lsn_t::null;
-        _next_persisted_lsn = lsn_t::null;
 
         // Update _used last. Since it's an std::atomic, a thread seeing it set
         // to true (e.g., cleaner or fuzzy checkpoints) can rely on the fact that
@@ -135,93 +131,18 @@ struct bf_tree_cb_t {
     /// Whether this page is swizzled from the parent
     std::atomic<bool> _swizzled;      // +1 -> 16
 
-    lsn_t _page_lsn; // +8 -> 24
+    uint64_t _fill24; // +8 -> 24
+    uint64_t _fill32; // +8 -> 32
+    uint64_t _fill40; // +8 -> 40
+    uint64_t _fill48; // +8 -> 48
+
+    lsn_t _page_lsn; // +8 -> 56
     lsn_t get_page_lsn() const { return _page_lsn; }
     void set_page_lsn(lsn_t lsn)
     {
         // caller must hold EX latch, since it has just performed an update on
         // the page
         _page_lsn = lsn;
-        if (_rec_lsn <= _persisted_lsn) { _rec_lsn = lsn; }
-        if (_next_rec_lsn <= _next_persisted_lsn) { _next_rec_lsn = lsn; }
-    }
-
-    // CS: page_lsn value when it was last picked for cleaning
-    // Replaces the old dirty flag, because dirty is defined as
-    // page_lsn > clean_lsn
-    lsn_t _persisted_lsn; // +8 -> 32
-    lsn_t get_persisted_lsn() const { return _persisted_lsn; }
-
-    bool is_dirty()
-    {
-        // Unconditional latch may cause deadlocks!
-        auto rc = latch().latch_acquire(LATCH_SH, timeout_t::WAIT_IMMEDIATE);
-        if (rc.is_error()) {
-            // If could not acquire latch, assume dirty: false positives are
-            // fine, whereas false negative cause lost updates on recovery
-            return true;
-        }
-        bool res = _page_lsn > _persisted_lsn;
-        latch().latch_release();
-        return res;
-    }
-
-    // Recovery LSN, a.k.a. DirtyPageLSN, is used by traditional checkpoints
-    // that determine the dirty page table by scanning the buffer pool -- unlike
-    // our decoupled checkpoints (see chkpt_t::scan_log) that scan the log.
-    // Its value is the LSN of the first update since the page was last cleaned,
-    // and it is set in set_page_lsn() above. During log analysis, the minimum
-    // of all recovery LSNs determines the starting point for the log-based redo
-    // recovery of traditional ARIES. This is not used in instant restart.
-    lsn_t _rec_lsn; // +8 -> 40
-    lsn_t get_rec_lsn() const  { return _rec_lsn; }
-
-    lsn_t _next_persisted_lsn; // +8 -> 48
-    lsn_t get_next_persisted_lsn() const { return _next_persisted_lsn; }
-
-    void mark_persisted_lsn()
-    {
-        // called by cleaner while it holds SH latch
-        _next_rec_lsn = lsn_t::null;
-        _next_persisted_lsn = _page_lsn;
-    }
-
-    lsn_t _next_rec_lsn; // +8 -> 56
-    lsn_t get_next_rec_lsn() const  { return _next_rec_lsn; }
-
-    // Called when cleaner writes and fsync's the page to disk. This updates
-    // rec_lsn and persisted_lsn to their "next" counterparts that were recorded
-    // when the cleaner first copied the page into its own write buffer. Note
-    // that this does not necessarily mark the frame as "clean", since updates
-    // might have happened since the copy was taken. That's why we don't have
-    // a dirty flag and rely on LSN comparisons instead.
-    void notify_write()
-    {
-        // SH latch is enough because we are only worried about races with
-        // set_page_lsn, which always holds an EX latch
-        // Unconditional latch may cause deadlocks!
-        auto rc = latch().latch_acquire(LATCH_SH, timeout_t::WAIT_IMMEDIATE);
-        if (rc.is_error()) {
-            // We have to leave the page as dirty for now, as long as we
-            // can't be sure that these LSN updates can be done latch-free
-            // (which I don't think so).
-            return;
-        }
-        _persisted_lsn = _next_persisted_lsn;
-        _rec_lsn = _next_rec_lsn;
-        latch().latch_release();
-    }
-
-    /// This is used by the decoupled (a.k.a log-based) cleaner
-    // CS TODO: I never tested restart with decoupled cleaner!
-    void notify_write_logbased(lsn_t archived_lsn)
-    {
-        auto rc = latch().latch_acquire(LATCH_SH, timeout_t::WAIT_IMMEDIATE);
-        if (rc.is_error()) { return; }
-
-        _rec_lsn = archived_lsn;
-        _persisted_lsn = archived_lsn;
-        latch().latch_release();
     }
 
     /// Log volume generated on this page (for page_img logrec compression, see xct_logger.h)

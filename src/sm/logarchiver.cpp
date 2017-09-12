@@ -201,7 +201,7 @@ slot_t ArchiverHeap::allocate(size_t length)
 
 bool ArchiverHeap::push(logrec_t* lr, lsn_t lsn, bool duplicate)
 {
-    w_assert1(lr->valid_header(lsn));
+    w_assert1(lr->valid_header());
     slot_t dest = allocate(lr->length());
     if (!dest.address) {
         DBGTHRD(<< "heap full for logrec: " << lr->type_str()
@@ -225,7 +225,9 @@ bool ArchiverHeap::push(logrec_t* lr, lsn_t lsn, bool duplicate)
         // contents were already saved with the memcpy operation above.
         lr->remove_info_for_pid(lr->pid());
         lr->set_pid(lr->pid2());
-        w_assert1(lr->valid_header(lsn));
+        lr->set_lsn(lr->lsn2());
+        w_assert1(lr->valid_header());
+        // w_assert1(lr->valid_header(lsn));
         if (!push(lr, lsn, false)) {
             // If duplicated did not fit, then insertion of the original must
             // also fail. We have to (1) restore the original contents of
@@ -233,7 +235,8 @@ bool ArchiverHeap::push(logrec_t* lr, lsn_t lsn, bool duplicate)
             // from the workspace. Since nothing was added to the heap yet, it
             // stays untouched.
             memcpy(lr, dest.address, lr->length());
-            w_assert1(lr->valid_header(lsn));
+            // w_assert1(lr->valid_header(lsn));
+            w_assert1(lr->valid_header());
             W_COERCE(workspace->free(dest));
             return false;
         }
@@ -352,7 +355,7 @@ void LogArchiver::replacement()
             continue;
         }
 
-        w_assert1(lr->valid_header(lsn));
+        w_assert1(lr->valid_header());
         w_assert1(lsn.hi() > 0);
         pushIntoHeap(lr, lsn, lr->is_multi_page());
     }

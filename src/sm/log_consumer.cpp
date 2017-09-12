@@ -328,7 +328,6 @@ bool LogConsumer::next(logrec_t*& lr, lsn_t* lsn)
 
     if (scanned && lsn) {
         *lsn = nextLSN - lr->length();
-        w_assert1(lr->valid_header(*lsn));
     }
 
     bool stopReading = nextLSN == endLSN;
@@ -362,7 +361,8 @@ bool LogConsumer::next(logrec_t*& lr, lsn_t* lsn)
     }
 
     w_assert1(nextLSN <= endLSN);
-    w_assert1(!scanned || lr->lsn_ck() + lr->length() == nextLSN);
+    // FINELINE
+    // w_assert1(!scanned || lr->lsn_ck() + lr->length() == nextLSN);
 
     if (!scanned || (lrLength > 0 && lr->type() == skip_log)) {
         /*
@@ -385,7 +385,7 @@ bool LogConsumer::next(logrec_t*& lr, lsn_t* lsn)
         return next(lr, lsn);
     }
 
-    w_assert1(!lsn || lr->valid_header(*lsn));
+    w_assert1(!lsn || lr->valid_header());
     return true;
 }
 
@@ -456,17 +456,8 @@ tryagain:
         return false;
     }
 
-    // assertions to check consistency of logrec
-#if W_DEBUG_LEVEL >=1
-    // TODO add assert macros with DBG message
-    if (nextLSN != NULL && !lr->valid_header(*nextLSN)) {
-        DBGTHRD(<< "Unexpected LSN in scanner at pos " << pos
-                << " : " << lr->lsn_ck()
-                << " expected " << *nextLSN);
-    }
-#endif
-
-    w_assert1(lr->valid_header(nextLSN == NULL ? lsn_t::null : *nextLSN));
+    // w_assert1(lr->valid_header(nextLSN == NULL ? lsn_t::null : *nextLSN));
+    w_assert1(lr->valid_header());
 
     if (nextLSN) {
         *nextLSN += lr->length();

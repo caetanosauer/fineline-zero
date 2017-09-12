@@ -908,6 +908,25 @@ rc_t log_core::_leave_carray(CArraySlot* info, int32_t size)
     return RCOK;
 }
 
+rc_t log_core::insert_raw(const char* src, size_t length, lsn_t* rlsn)
+{
+    CArraySlot* info = NULL;
+    long pos = 0;
+    W_DO(_join_carray(info, pos, length));
+    w_assert1(info);
+
+    // insert my value
+    if(!info->error) {
+        if (rlsn) { *rlsn = info->lsn + pos; }
+        _copy_raw(info, pos, src, length);
+    }
+
+    W_DO(_leave_carray(info, length));
+
+    ADD_TSTAT(log_bytes_generated,length);
+    return RCOK;
+}
+
 rc_t log_core::insert(logrec_t &rec, lsn_t* rlsn)
 {
     w_assert1(rec.length() <= sizeof(logrec_t));

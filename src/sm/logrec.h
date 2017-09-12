@@ -227,6 +227,12 @@ public:
                                 lsn_t& where = *_lsn_ck();
                                 where = lsn_ck;
                             }
+    void set_lsn(const lsn_t &lsn_ck) { set_lsn_ck(lsn_ck); }
+
+    // FINELINE
+    void set_lsn2(lsn_t lsn);
+    lsn_t lsn2() const;
+
     void                 corrupt();
 
     void remove_info_for_pid(PageID pid);
@@ -396,6 +402,9 @@ inline bool baseLogHeader::is_valid() const
  */
 struct multi_page_log_t {
 
+    /** Used for FINELINE; version counter of second page */
+    lsn_t _lsn2;
+
     /** Page ID of another page touched by the operation. */
     PageID     _page2_pid; // +4
 
@@ -428,6 +437,22 @@ inline PageID logrec_t::pid2() const
 
     const multi_page_log_t* multi_log = reinterpret_cast<const multi_page_log_t*> (data());
     return multi_log->_page2_pid;
+}
+
+// FINELINE
+inline void logrec_t::set_lsn2(lsn_t lsn)
+{
+    if (!is_multi_page()) { return; }
+
+    auto multi_log = reinterpret_cast<multi_page_log_t*> (data());
+    multi_log->_lsn2 = lsn;
+}
+
+inline lsn_t logrec_t::lsn2() const
+{
+    if (!is_multi_page()) { return lsn_t::null; }
+    auto multi_log = reinterpret_cast<const multi_page_log_t*> (data());
+    return multi_log->_lsn2;
 }
 
 inline void

@@ -393,6 +393,7 @@ operator<<(ostream& o, logrec_t& l)
     o << " p(" << l.pid() << ")";
     if (l.is_multi_page()) {
         o << " src-" << l.pid2();
+        o << " LSN2=" << l.lsn2();
     }
 
     switch(l.type()) {

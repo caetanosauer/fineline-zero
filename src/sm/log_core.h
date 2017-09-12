@@ -94,6 +94,7 @@ public:
     static const std::string IMPL_NAME;
 
     rc_t            insert(logrec_t &r, lsn_t* l = NULL);
+    rc_t insert_raw(const char* src, size_t length, lsn_t* rlsn = nullptr);
     rc_t            flush(const lsn_t &lsn, bool block=true, bool signal=true, bool *ret_flushed=NULL);
     rc_t    flush_all(bool block=true) {
                           return flush(curr_lsn().advance(-1), block); }

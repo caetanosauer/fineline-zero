@@ -272,7 +272,9 @@ public:
                                     bool second = (f != 0);
                                     w_assert2(first == second);
 #endif
-                                   return (_data > mask());
+                                   // return (_data > mask());
+                                   // FINELINE
+                                   return _data > 0;
                             }
 
     uint32_t hi()   const  { return file(); }

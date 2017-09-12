@@ -84,7 +84,7 @@ private:
     pthread_cond_t notEmpty;
     pthread_cond_t notFull;
 
-    bool wait(pthread_cond_t*);
+    bool wait(pthread_cond_t*, bool isProducer);
 
     void increment(int& p, bool& parity) {
         p = (p + 1) % blockCount;
@@ -95,7 +95,7 @@ private:
 };
 
 
-inline bool AsyncRingBuffer::wait(pthread_cond_t* cond)
+inline bool AsyncRingBuffer::wait(pthread_cond_t* cond, bool isProducer)
 {
     struct timespec timeout;
     smthread_t::timeout_to_timespec(100, timeout); // 100ms
@@ -103,7 +103,7 @@ inline bool AsyncRingBuffer::wait(pthread_cond_t* cond)
     int code = pthread_cond_timedwait(cond, &mutex, &timeout);
     if (code == ETIMEDOUT) {
         //DBGTHRD(<< "Wait timed out -- try again");
-        if (finished && isEmpty()) {
+        if (finished && (isEmpty() || isProducer)) {
             DBGTHRD(<< "Wait aborted: finished flag is set");
             return false;
         }
@@ -117,7 +117,8 @@ inline char* AsyncRingBuffer::producerRequest()
     CRITICAL_SECTION(cs, mutex);
     while (isFull()) {
         DBGTHRD(<< "Waiting for condition notFull ...");
-        if (!wait(&notFull)) {
+        constexpr bool isProducer = true;
+        if (!wait(&notFull, isProducer)) {
             DBGTHRD(<< "Produce request failed!");
             return NULL;
         }
@@ -144,7 +145,8 @@ inline char* AsyncRingBuffer::consumerRequest()
     CRITICAL_SECTION(cs, mutex);
     while (isEmpty()) {
         DBGTHRD(<< "Waiting for condition notEmpty ...");
-        if (!wait(&notEmpty)) {
+        constexpr bool isProducer = false;
+        if (!wait(&notEmpty, isProducer)) {
             DBGTHRD(<< "Consume request failed!");
             return NULL;
         }

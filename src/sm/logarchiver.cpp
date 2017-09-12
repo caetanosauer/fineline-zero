@@ -199,9 +199,9 @@ slot_t ArchiverHeap::allocate(size_t length)
     return dest;
 }
 
-bool ArchiverHeap::push(logrec_t* lr, bool duplicate)
+bool ArchiverHeap::push(logrec_t* lr, lsn_t lsn, bool duplicate)
 {
-    w_assert1(lr->valid_header(lsn_t::null));
+    w_assert1(lr->valid_header(lsn));
     slot_t dest = allocate(lr->length());
     if (!dest.address) {
         DBGTHRD(<< "heap full for logrec: " << lr->type_str()
@@ -211,7 +211,6 @@ bool ArchiverHeap::push(logrec_t* lr, bool duplicate)
 
     w_assert1(dest.length >= lr->length());
     PageID pid = lr->pid();
-    lsn_t lsn = lr->lsn();
     memcpy(dest.address, lr, lr->length());
 
     // CS: Multi-page log records are replicated so that each page can be
@@ -227,7 +226,7 @@ bool ArchiverHeap::push(logrec_t* lr, bool duplicate)
         lr->remove_info_for_pid(lr->pid());
         lr->set_pid(lr->pid2());
         w_assert1(lr->valid_header(lsn));
-        if (!push(lr, false)) {
+        if (!push(lr, lsn, false)) {
             // If duplicated did not fit, then insertion of the original must
             // also fail. We have to (1) restore the original contents of
             // the log record for the next attempt; and (2) free its memory
@@ -335,7 +334,8 @@ void LogArchiver::replacement()
 {
     while(true) {
         logrec_t* lr;
-        if (!consumer->next(lr)) {
+        lsn_t lsn {lsn_t::null};
+        if (!consumer->next(lr, &lsn)) {
             w_assert0(readWholeBlocks ||
                     control.endLSN <= consumer->getNextLSN());
             if (control.endLSN < consumer->getNextLSN()) {
@@ -352,13 +352,15 @@ void LogArchiver::replacement()
             continue;
         }
 
-        pushIntoHeap(lr, lr->is_multi_page());
+        w_assert1(lr->valid_header(lsn));
+        w_assert1(lsn.hi() > 0);
+        pushIntoHeap(lr, lsn, lr->is_multi_page());
     }
 }
 
-void LogArchiver::pushIntoHeap(logrec_t* lr, bool duplicate)
+void LogArchiver::pushIntoHeap(logrec_t* lr, lsn_t lsn, bool duplicate)
 {
-    while (!heap->push(lr, duplicate)) {
+    while (!heap->push(lr, lsn, duplicate)) {
         if (heap->size() == 0) {
             W_FATAL_MSG(fcINTERNAL,
                     << "Heap empty but push not possible!");

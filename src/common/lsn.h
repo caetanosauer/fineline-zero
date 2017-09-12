@@ -292,6 +292,9 @@ public:
 
     lsn_t &operator+=(long delta) { return advance(delta); }
     lsn_t operator+(long delta) const { return lsn_t(*this).advance(delta); }
+    lsn_t &operator-=(long delta) { return advance(-delta); }
+    lsn_t operator-(long delta) const { return lsn_t(*this).advance(-delta); }
+
 
     bool operator>(const lsn_t& l) const { return l < *this; }
     bool operator<(const lsn_t& l) const { return _data < l._data; }

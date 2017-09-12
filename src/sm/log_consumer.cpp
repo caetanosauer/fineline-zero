@@ -314,7 +314,7 @@ bool LogConsumer::nextBlock()
     return true;
 }
 
-bool LogConsumer::next(logrec_t*& lr)
+bool LogConsumer::next(logrec_t*& lr, lsn_t* lsn)
 {
     w_assert1(nextLSN <= endLSN);
 
@@ -325,6 +325,11 @@ bool LogConsumer::next(logrec_t*& lr)
     int lrLength = 0;
     bool scanned = logScanner->nextLogrec(currentBlock, pos, lr, &nextLSN,
             &endLSN, &lrLength);
+
+    if (scanned && lsn) {
+        *lsn = nextLSN - lr->length();
+        w_assert1(lr->valid_header(*lsn));
+    }
 
     bool stopReading = nextLSN == endLSN;
     if (!scanned && readWholeBlocks && !stopReading) {
@@ -377,9 +382,10 @@ bool LogConsumer::next(logrec_t*& lr)
             DBGTHRD(<< "LogConsumer next-block request failed");
             return false;
         }
-        return next(lr);
+        return next(lr, lsn);
     }
 
+    w_assert1(!lsn || lr->valid_header(*lsn));
     return true;
 }
 

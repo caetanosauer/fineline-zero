@@ -831,10 +831,8 @@ int ShoreEnv::start_sm()
 
         // create catalog index (must be on stid 1)
         StoreID cat_stid;
-        W_COERCE(_pssm->begin_xct());
         W_COERCE(_pssm->create_index(cat_stid));
         w_assert0(cat_stid == 1);
-        W_COERCE(_pssm->commit_xct());
 
         // set that the database is not loaded
         _loaded = false;

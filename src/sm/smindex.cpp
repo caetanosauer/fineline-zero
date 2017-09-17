@@ -20,9 +20,18 @@ rc_t ss_m::create_index(StoreID &stid)
 
     // CS TODO: page allocation should transfer ownership to stnode
     PageID root_pid;
+    // CS TODO: make it a single SX
+    sys_xct_section_t ssx(true);
     W_DO(alloc->sx_allocate_page(root_pid));
+    W_COERCE(ssx.end_sys_xct(RCOK));
+
+    sys_xct_section_t ssx2(true);
     W_DO(stnode->sx_create_store(root_pid, stid));
+    W_COERCE(ssx2.end_sys_xct(RCOK));
+
+    sys_xct_section_t ssx3(true);
     W_DO(bt->create(stid, root_pid));
+    W_COERCE(ssx3.end_sys_xct(RCOK));
 
     W_DO(lm->intent_store_lock(stid, okvl_mode::X)); // take X on this new index
 

@@ -204,6 +204,7 @@ class smthread_t {
         logrec_t _logbuf;
         logrec_t _logbuf2; // for "piggy-backed" SSX
         UndoBuffer _undo_buf;
+        RedoBuffer _redo_buf;
 
         xct_t*   xct;
         int      pin_count;      // number of rsrc_m pins
@@ -353,6 +354,11 @@ public:
     static UndoBuffer* get_undo_buf()
     {
         return &tcb()._undo_buf;
+    }
+
+    static RedoBuffer* get_redo_buf()
+    {
+        return &tcb()._redo_buf;
     }
 
     /// return xct this thread is running

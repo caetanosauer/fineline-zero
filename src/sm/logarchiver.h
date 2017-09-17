@@ -54,7 +54,7 @@ class ArchiverHeap {
         ArchiverHeap(size_t workspaceSize);
         virtual ~ArchiverHeap();
 
-        bool push(logrec_t* lr, lsn_t lsn, bool duplicate);
+        bool push(logrec_t* lr, run_number_t run, bool duplicate);
         logrec_t* top();
         void pop();
 
@@ -252,7 +252,7 @@ private:
 
     void replacement();
     bool selection();
-    void pushIntoHeap(logrec_t*, lsn_t, bool duplicate);
+    void pushIntoHeap(logrec_t*, run_number_t run, bool duplicate);
     bool waitForActivation();
     bool processFlushRequest();
     bool isLogTooSlow();

@@ -836,8 +836,14 @@ xct_t::_pre_commit(uint32_t flags)
         // We should always be able to insert this log
         // record, what with log reservations.
         lsn_t commit_lsn;
+        // FINELINE TODO: SSX should also commit through this, with redobuf and
+        // multiple logrecs
         if(individual && !is_single_log_sys_xct()) { // is commit record fused?
-            commit_lsn = Logger::log_sys<xct_end_log>();
+            Logger::log<xct_end_log>();
+            // FINELINE log insert of whole redo buffer
+            auto redobuf = smthread_t::get_redo_buf();
+            smlevel_0::log->insert_raw(redobuf->get_buffer_begin(),
+                    redobuf->get_size(), &commit_lsn);
         }
         // now we have xct_end record though it might not be flushed yet. so,
         // let's do ELR

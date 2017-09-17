@@ -199,7 +199,7 @@ slot_t ArchiverHeap::allocate(size_t length)
     return dest;
 }
 
-bool ArchiverHeap::push(logrec_t* lr, lsn_t lsn, bool duplicate)
+bool ArchiverHeap::push(logrec_t* lr, run_number_t run, bool duplicate)
 {
     w_assert1(lr->valid_header());
     slot_t dest = allocate(lr->length());
@@ -211,6 +211,7 @@ bool ArchiverHeap::push(logrec_t* lr, lsn_t lsn, bool duplicate)
 
     w_assert1(dest.length >= lr->length());
     PageID pid = lr->pid();
+    lsn_t lsn = lr->lsn();
     memcpy(dest.address, lr, lr->length());
 
     // CS: Multi-page log records are replicated so that each page can be
@@ -223,18 +224,21 @@ bool ArchiverHeap::push(logrec_t* lr, lsn_t lsn, bool duplicate)
         // If we have to duplciate the log record, make sure there is room by
         // calling recursively without duplication. Note that the original
         // contents were already saved with the memcpy operation above.
+        auto pid2 = lr->pid2();
+        auto lsn2 = lr->lsn2();
+        auto orig_len = lr->length();
         lr->remove_info_for_pid(lr->pid());
-        lr->set_pid(lr->pid2());
-        lr->set_lsn(lr->lsn2());
+        lr->set_pid(pid2);
+        lr->set_lsn(lsn2);
         w_assert1(lr->valid_header());
         // w_assert1(lr->valid_header(lsn));
-        if (!push(lr, lsn, false)) {
+        if (!push(lr, run, false)) {
             // If duplicated did not fit, then insertion of the original must
             // also fail. We have to (1) restore the original contents of
             // the log record for the next attempt; and (2) free its memory
             // from the workspace. Since nothing was added to the heap yet, it
             // stays untouched.
-            memcpy(lr, dest.address, lr->length());
+            memcpy(lr, dest.address, orig_len);
             // w_assert1(lr->valid_header(lsn));
             w_assert1(lr->valid_header());
             W_COERCE(workspace->free(dest));
@@ -245,29 +249,14 @@ bool ArchiverHeap::push(logrec_t* lr, lsn_t lsn, bool duplicate)
         logrec_t* lr_comp = reinterpret_cast<logrec_t*>(dest.address);
         lr_comp->remove_info_for_pid(lr_comp->pid2());
     }
-    else {
-        // If all records of the current run are gone, start new run. But only
-        // if we are not duplicating a log record -- otherwise two new runs
-        // would be created.
-        // FINELINE: this logic is not used anymore; instead, log file numbers
-        // also determine the run file number
-        // if (filledFirst &&
-        //         (size() == 0 || w_heap.First().run == currentRun)) {
-        //     currentRun++;
-        //     DBGTHRD(<< "Replacement starting new run " << (int) currentRun
-        //             << " on LSN " << lsn);
-        // }
-    }
 
     //DBGTHRD(<< "Processing logrec " << lr->lsn_ck() << ", type " <<
     //        lr->type() << "(" << lr->type_str() << ") length " <<
     //        lr->length() << " into run " << (int) currentRun);
 
     // insert key and pointer into w_heap
-    // CS TODO FINELINE: use page version rather than lsn
-    // HeapEntry k(currentRun, pid, lsn, dest);
     // FINELINE: currentRun replaced with lsn.hi() (see comment above)
-    HeapEntry k(lsn.hi(), pid, lsn, dest);
+    HeapEntry k(run, pid, lsn, dest);
 
     // CS: caution: AddElementDontHeapify does NOT work!!!
     w_heap.AddElement(k);
@@ -357,13 +346,14 @@ void LogArchiver::replacement()
 
         w_assert1(lr->valid_header());
         w_assert1(lsn.hi() > 0);
-        pushIntoHeap(lr, lsn, lr->is_multi_page());
+        const run_number_t run = lsn.hi();
+        pushIntoHeap(lr, run, lr->is_multi_page());
     }
 }
 
-void LogArchiver::pushIntoHeap(logrec_t* lr, lsn_t lsn, bool duplicate)
+void LogArchiver::pushIntoHeap(logrec_t* lr, run_number_t run, bool duplicate)
 {
-    while (!heap->push(lr, lsn, duplicate)) {
+    while (!heap->push(lr, run, duplicate)) {
         if (heap->size() == 0) {
             W_FATAL_MSG(fcINTERNAL,
                     << "Heap empty but push not possible!");

@@ -379,6 +379,53 @@ public:
     }
 };
 
+class RedoBuffer
+{
+    static constexpr size_t BufferSize = 1024 * 1024;
+    std::array<char, BufferSize> _buffer;
+    size_t _size;
+
+public:
+    RedoBuffer()
+        : _size(0)
+    {
+    }
+
+    char* get_buffer_end()
+    {
+        return &_buffer[_size];
+    }
+
+    char* get_buffer_begin()
+    {
+        return &_buffer[0];
+    }
+
+    size_t get_free_space()
+    {
+        return BufferSize - _size;
+    }
+
+    size_t get_size()
+    {
+        return _size;
+    }
+
+    char* acquire()
+    {
+        // Conservative approach: make sure we can fit maximum logrec size
+        if (get_free_space() < sizeof(logrec_t)) {
+            return nullptr;
+        }
+
+        return get_buffer_end();
+    }
+
+    void release(size_t length)
+    {
+        _size += length;
+    }
+};
 
 inline bool baseLogHeader::is_valid() const
 {

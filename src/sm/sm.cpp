@@ -242,7 +242,8 @@ ss_m::_construct_once()
     logArchiver->fork();
     lsn_t durable_lsn = log->durable_lsn();
     if (durable_lsn > lsn_t(1,0)) {
-        logArchiver->archiveUntil(durable_lsn.hi());
+        constexpr bool startNewRun = true;
+        logArchiver->archiveUntil(durable_lsn.hi(), startNewRun);
         ERROUT(<< "[" << timer.time_ms() << "] Log archiver reached durable_lsn: "
                 << durable_lsn);
     }
@@ -414,7 +415,9 @@ rc_t ss_m::_truncate_log()
     if(logArchiver) {
         unsigned replFactor =
             _options.get_int_option("sm_archiver_replication_factor", 1);
-        logArchiver->archiveUntil(log->durable_lsn().hi());
+        run_number_t lastRun = log->durable_lsn().hi();
+        constexpr bool startNewRun = false;
+        logArchiver->archiveUntil(lastRun, startNewRun);
         logArchiver->getIndex()->deleteRuns(replFactor);
     }
 

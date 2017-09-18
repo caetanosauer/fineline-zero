@@ -90,14 +90,17 @@ LogArchiver::LogArchiver(const sm_options& options)
  */
 void LogArchiver::shutdown()
 {
+    // FINELINE
     // CS TODO BUG: we need some sort of pin mechanism (e.g., shared_ptr) for shutdown,
     // because threads may still be accessing the log archive here.
     // this flag indicates that reader and writer threads delivering null
     // blocks is not an error, but a termination condition
-    shutdownFlag = true;
+    constexpr bool startNewRun = false;
+    archiveUntil(smlevel_0::log->durable_lsn().hi(), startNewRun);
     DBGOUT(<< "CONSUMER SHUTDOWN STARTING");
     consumer->shutdown();
     DBGOUT(<< "LOG ARCHIVER SHUTDOWN STARTING");
+    shutdownFlag = true;
     join();
     DBGOUT(<< "BLKASSEMB SHUTDOWN STARTING");
     // CS FINELINE TODO: this shutdown does not close the current run anymore, so
@@ -460,7 +463,7 @@ bool LogArchiver::processFlushRequest()
             // Forcibly close current run to guarantee that LSN is persisted
             PageID maxPID = blkAssemb->getCurrentMaxPID();
             W_COERCE(index->closeCurrentRun(flushReqLSN.hi(), 1 /* level */, maxPID));
-            blkAssemb->resetWriter();
+            // blkAssemb->resetWriter();
 
             // CS FINELINE TODO: must guarantee that flushReqLSN.hi() will not
             // be appended to anymore!
@@ -669,28 +672,29 @@ void LogArchiver::requestFlushSync(lsn_t reqLSN)
     }
 }
 
-void LogArchiver::archiveUntil(run_number_t run)
+void LogArchiver::archiveUntil(run_number_t run, bool startNewRun)
 {
-    lsn_t durable = smlevel_0::log->durable_lsn();
-
     // FINELINE
-    if (durable.hi() == run) {
-        smlevel_0::log->truncate();
-    }
     smlevel_0::log->flush_all();
+    lsn_t until = smlevel_0::log->durable_lsn();
+    if (startNewRun) {
+        smlevel_0::log->truncate();
+        Logger::log_sys<comment_log>("init");
+        smlevel_0::log->flush_all();
+        until = lsn_t(run+1, 0);
+    }
 
     // if lsn.lo() == 0, archiver will not activate and it will get stuck
     // w_assert1(lsn.is_null() || lsn.lo() > 0);
 
     // wait for log record to be consumed
-    auto until = lsn_t(run+1, 0);
     while (getNextConsumedLSN() < until) {
         activate(until, true);
         ::usleep(10000); // 10ms
     }
 
     if (index->getLastRun() < run) {
-        requestFlushSync(durable);
+        requestFlushSync(until);
     }
 }
 

@@ -214,7 +214,7 @@ public:
     void shutdown();
     bool requestFlushAsync(lsn_t);
     void requestFlushSync(lsn_t);
-    void archiveUntil(run_number_t);
+    void archiveUntil(run_number_t, bool);
 
     std::shared_ptr<ArchiveIndex> getIndex() { return index; }
     lsn_t getNextConsumedLSN() { return consumer->getNextLSN(); }

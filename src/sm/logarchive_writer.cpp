@@ -192,15 +192,17 @@ void WriterThread::run()
              * that all pending blocks are written out before shutdown.
              */
             DBGTHRD(<< "Finished flag set on writer thread");
-            // W_COERCE(index->closeCurrentRun(currentRun, level, maxPIDInRun));
+            W_COERCE(index->closeCurrentRun(currentRun, level, maxPIDInRun));
             return; // finished is set on buf
         }
 
-        DBGTHRD(<< "Picked block for write " << (void*) src);
-
         run_number_t run = BlockAssembly::getRunFromBlock(src);
+
+        DBGTHRD(<< "Picked block for write " << (void*) src << " in run " << run);
+
         if (currentRun == 0) {
             // Initialize currentRun lazily (0 == invalid value)
+            DBGTHRD(<< "Lazy initialization of run " << run);
             currentRun = run;
         }
         if (currentRun != run) {

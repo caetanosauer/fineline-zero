@@ -950,8 +950,7 @@ PageID bf_tree_m::debug_get_original_pageid (PageID pid) const {
 
 w_rc_t bf_tree_m::_sx_update_child_emlsn(btree_page_h &parent, general_recordid_t child_slotid,
                                          lsn_t child_emlsn) {
-    sys_xct_section_t sxs (true); // this transaction will output only one log!
-    W_DO(sxs.check_error_on_start());
+    sys_xct_section_t sxs;
     w_assert1(parent.is_latched());
     Logger::log_p<update_emlsn_log>(&parent, child_slotid, child_emlsn);
     parent.set_emlsn_general(child_slotid, child_emlsn);

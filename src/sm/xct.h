@@ -857,21 +857,13 @@ class sys_xct_section_t {
 public:
     /**
      * starts a nested system transaction.
-     * @param[in] singular_sys_xct whether this transaction will have at most one xlog entry
      */
-    sys_xct_section_t(bool single_log_sys_xct = false);
+    sys_xct_section_t();
     /** This destructor makes sure the system transaction ended. */
     ~sys_xct_section_t();
 
-    /** Tells if any error happened to begin a system transaction in constructor.*/
-    rc_t check_error_on_start () const {
-        return _error_on_start;
-    }
     /** Commits or aborts the system transaction, depending on the given result code.*/
     rc_t end_sys_xct (rc_t result);
-private:
-    rc_t   _error_on_start;
-    size_t _original_xct_depth;
 };
 
 /** Used to tentatively set t_cc_none to _query_concurrency. */

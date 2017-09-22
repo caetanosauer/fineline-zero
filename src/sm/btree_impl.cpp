@@ -274,8 +274,7 @@ rc_t btree_impl::_ux_insert_core_tail(StoreID store,
 
 rc_t btree_impl::_sx_reserve_ghost(btree_page_h &leaf, const w_keystr_t &key, int elem_len)
 {
-    sys_xct_section_t sxs (true); // this transaction will output only one log!
-    W_DO(sxs.check_error_on_start());
+    sys_xct_section_t sxs;
     rc_t ret = _ux_reserve_ghost_core(leaf, key, elem_len);
     W_DO (sxs.end_sys_xct (ret));
     return ret;

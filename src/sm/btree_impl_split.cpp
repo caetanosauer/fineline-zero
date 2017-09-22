@@ -26,8 +26,7 @@
 rc_t btree_impl::_sx_split_foster(btree_page_h& page, PageID& new_page_id,
         const w_keystr_t& triggering_key)
 {
-    sys_xct_section_t sxs(true);
-    W_DO(sxs.check_error_on_start());
+    sys_xct_section_t sxs;
 
     w_assert1 (page.latch_mode() == LATCH_EX);
 
@@ -184,8 +183,7 @@ rc_t btree_impl::_sx_adopt_foster (btree_page_h &parent, btree_page_h &child) {
     W_DO(_sx_split_if_needed(parent, new_child_key));
 
     // Now, another SSX to move the pointer
-    sys_xct_section_t sxs(true);
-    W_DO(sxs.check_error_on_start());
+    sys_xct_section_t sxs;
     rc_t ret = _ux_adopt_foster_core(parent, child, new_child_key);
     W_DO (sxs.end_sys_xct (ret));
 

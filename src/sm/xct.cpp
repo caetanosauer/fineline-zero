@@ -1339,17 +1339,13 @@ xct_t::dump_locks(ostream &out) const
     return out;
 }
 
-sys_xct_section_t::sys_xct_section_t(bool single_log_sys_xct)
+sys_xct_section_t::sys_xct_section_t()
 {
-    _original_xct_depth = smthread_t::get_tcb_depth();
-    _error_on_start = ss_m::begin_sys_xct(single_log_sys_xct);
+    constexpr bool single_log = true;
+    W_COERCE(ss_m::begin_sys_xct(single_log));
 }
 sys_xct_section_t::~sys_xct_section_t()
 {
-    size_t xct_depth = smthread_t::get_tcb_depth();
-    if (xct_depth > _original_xct_depth) {
-        W_COERCE(ss_m::abort_xct());
-    }
 }
 rc_t sys_xct_section_t::end_sys_xct (rc_t result)
 {

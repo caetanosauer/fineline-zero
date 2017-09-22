@@ -1840,7 +1840,7 @@ rc_t btree_page_h::compress(const w_keystr_t& low, const w_keystr_t& high,
         return RC(eCANTCOMPRESS);
     }
 
-    sys_xct_section_t ssx(true);
+    sys_xct_section_t ssx;
 
     DBG(<< "BEFORE COMPRESSION " << *this);
 

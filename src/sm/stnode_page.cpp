@@ -15,7 +15,7 @@ stnode_cache_t::stnode_cache_t(bool create)
     W_COERCE(p.fix_direct(stnode_page::stpid, LATCH_EX, false, create));
 
     if (create) {
-        sys_xct_section_t ssx(true);
+        sys_xct_section_t ssx;
         auto spage = reinterpret_cast<stnode_page*>(p.get_generic_page());
         spage->format_empty();
         Logger::log_p<stnode_format_log>(&p);
@@ -96,7 +96,7 @@ rc_t stnode_cache_t::sx_create_store(PageID root_pid, StoreID& snum) const
 
 rc_t stnode_cache_t::sx_append_extent(StoreID snum, extent_id_t ext) const
 {
-    sys_xct_section_t ssx(true);
+    sys_xct_section_t ssx;
 
     fixable_page_h p;
     W_COERCE(p.fix_direct(stnode_page::stpid, LATCH_EX));

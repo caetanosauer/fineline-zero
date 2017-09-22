@@ -50,7 +50,6 @@ btree_impl::_sx_shrink_tree(btree_page_h& rp)
     }
 
     sys_xct_section_t sxs;
-    W_DO(sxs.check_error_on_start());
     rc_t ret = _ux_shrink_tree_core(rp);
     W_DO (sxs.end_sys_xct (ret));
     return ret;
@@ -116,8 +115,7 @@ btree_impl::_sx_grow_tree(btree_page_h& rp)
     // allocate a page as separate system transaction
     W_DO(smlevel_0::alloc->sx_allocate_page(new_pid, rp.store()));
 
-    sys_xct_section_t sxs(true);
-    W_COERCE(sxs.check_error_on_start());
+    sys_xct_section_t sxs;
 
     INC_TSTAT(bt_grows);
 

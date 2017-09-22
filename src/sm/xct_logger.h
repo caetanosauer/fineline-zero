@@ -46,7 +46,7 @@ public:
 
         if (_should_apply_img_compression(LR, p)) {
             // log this page image as an SX to keep it out of the xct undo chain
-            sys_xct_section_t sx {false};
+            sys_xct_section_t sx;
             log_p<page_img_format_log>(p);
             sx.end_sys_xct(RCOK);
 

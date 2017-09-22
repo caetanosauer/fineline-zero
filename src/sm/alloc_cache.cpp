@@ -86,7 +86,7 @@ bool alloc_cache_t::is_allocated(PageID pid)
 rc_t alloc_cache_t::sx_allocate_page(PageID& pid, StoreID stid)
 {
     if (!_cluster_stores) { stid = 0; }
-    sys_xct_section_t ssx(true);
+    sys_xct_section_t ssx;
 
     // get pid and update last_alloc_page in critical section
     {
@@ -147,7 +147,7 @@ rc_t alloc_cache_t::sx_format_alloc_page(PageID alloc_pid)
 {
     w_assert1(alloc_pid % extent_size == 0);
 
-    sys_xct_section_t ssx(true);
+    sys_xct_section_t ssx;
 
     fixable_page_h p;
     constexpr bool conditional = false, virgin = true;

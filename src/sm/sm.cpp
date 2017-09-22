@@ -265,9 +265,11 @@ ss_m::_construct_once()
 
     ERROUT(<< "[" << timer.time_ms() << "] Building volume manager caches");
 
+    begin_xct();
     bool cluster_stores = _options.get_bool_option("sm_vol_cluster_stores", true);
     stnode = new stnode_cache_t(format);
     alloc = new alloc_cache_t(*stnode, format, cluster_stores);
+    commit_xct();
     stnode->dump(cerr);
 
     smlevel_0::statistics_enabled = _options.get_bool_option("sm_statistics", true);
@@ -893,7 +895,11 @@ ss_m::_abort_xct(sm_stats_t*&             _stats)
 
     // if this is "piggy-backed" ssx, just end the status
     if (x.is_piggy_backed_single_log_sys_xct()) {
-        x.set_piggy_backed_single_log_sys_xct(false);
+        if (x.ssx_chain_len() > 0) {
+            --x.ssx_chain_len(); // multiple SSXs on piggyback
+        } else {
+            x.set_piggy_backed_single_log_sys_xct(false);
+        }
         return RCOK;
     }
 

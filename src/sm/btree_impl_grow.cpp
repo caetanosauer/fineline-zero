@@ -115,8 +115,6 @@ btree_impl::_sx_grow_tree(btree_page_h& rp)
     // allocate a page as separate system transaction
     W_DO(smlevel_0::alloc->sx_allocate_page(new_pid, rp.store()));
 
-    sys_xct_section_t sxs;
-
     INC_TSTAT(bt_grows);
 
     w_assert1(rp.latch_mode() == LATCH_EX);
@@ -127,6 +125,8 @@ btree_impl::_sx_grow_tree(btree_page_h& rp)
         W_DO(smlevel_0::alloc->sx_deallocate_page(new_pid));
         return RCOK;
     }
+
+    sys_xct_section_t sxs;
 
     // create a new page that will take over all entries currently in the root.
     // this page will be the left-most child (pid0) of the root

@@ -864,6 +864,9 @@ public:
 
     /** Commits or aborts the system transaction, depending on the given result code.*/
     rc_t end_sys_xct (rc_t result);
+
+    int _depth;
+    bool _piggy;
 };
 
 /** Used to tentatively set t_cc_none to _query_concurrency. */

@@ -48,7 +48,7 @@ public:
             // log this page image as an SX to keep it out of the xct undo chain
             sys_xct_section_t sx;
             log_p<page_img_format_log>(p);
-            sx.end_sys_xct(RCOK);
+            W_COERCE(sx.end_sys_xct(RCOK));
 
             // Keep track of additional space created by page images on log
             auto extra_space = p->get_log_volume();
@@ -68,7 +68,9 @@ public:
 
         _update_page_version(p, logrec);
 
+        w_assert1(!xd->is_sys_xct() || xd->is_single_log_sys_xct());
         if (xd->is_single_log_sys_xct()) {
+            w_assert1(logrec->is_single_sys_xct());
             // w_assert1(logrec->is_single_sys_xct());
             // SSX goes directly into log
             // CS FINELINE TODO: log insertion should be performed
@@ -112,7 +114,7 @@ public:
         multi_page_log_t *multi = logrec->data_multi();
         w_assert1(multi->_page2_pid != 0);
 
-
+        w_assert1(!xd->is_sys_xct() || xd->is_single_log_sys_xct());
         if (xd->is_single_log_sys_xct()) {
             w_assert1(logrec->is_single_sys_xct());
             _update_page_version(p, logrec);

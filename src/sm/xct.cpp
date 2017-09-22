@@ -1341,6 +1341,8 @@ xct_t::dump_locks(ostream &out) const
 
 sys_xct_section_t::sys_xct_section_t()
 {
+    _depth = xct()->ssx_chain_len();
+    _piggy = xct()->is_piggy_backed_single_log_sys_xct();
     constexpr bool single_log = true;
     W_COERCE(ss_m::begin_sys_xct(single_log));
 }
@@ -1350,9 +1352,11 @@ sys_xct_section_t::~sys_xct_section_t()
 rc_t sys_xct_section_t::end_sys_xct (rc_t result)
 {
     if (result.is_error()) {
-        W_DO (ss_m::abort_xct());
+        W_COERCE (ss_m::abort_xct());
     } else {
-        W_DO (ss_m::commit_sys_xct());
+        W_COERCE (ss_m::commit_sys_xct());
     }
+    w_assert0 (_piggy == xct()->is_piggy_backed_single_log_sys_xct());
+    w_assert0(_depth == xct()->ssx_chain_len());
     return RCOK;
 }

@@ -164,6 +164,7 @@ rc_t alloc_cache_t::sx_format_alloc_page(PageID alloc_pid)
 rc_t alloc_cache_t::sx_deallocate_page(PageID pid)
 {
     w_assert1(pid % extent_size > 0);
+    sys_xct_section_t ssx;
 
     // Just unset the corresponding bit in the alloc page
     fixable_page_h p;
@@ -174,5 +175,6 @@ rc_t alloc_cache_t::sx_deallocate_page(PageID pid)
     page->unset_bit(pid - alloc_pid);
     Logger::log_p<dealloc_page_log>(&p, pid);
 
+    W_DO(ssx.end_sys_xct(RCOK));
     return RCOK;
 }

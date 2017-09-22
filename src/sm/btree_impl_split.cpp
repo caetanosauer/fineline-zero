@@ -26,8 +26,6 @@
 rc_t btree_impl::_sx_split_foster(btree_page_h& page, PageID& new_page_id,
         const w_keystr_t& triggering_key)
 {
-    sys_xct_section_t sxs;
-
     w_assert1 (page.latch_mode() == LATCH_EX);
 
     // DBG(<< "SPLITTING " << page);
@@ -48,6 +46,8 @@ rc_t btree_impl::_sx_split_foster(btree_page_h& page, PageID& new_page_id,
         W_DO(smlevel_0::alloc->sx_deallocate_page(new_page_id));
         return rc;
     }
+
+    sys_xct_section_t sxs;
 
     // assure foster-child page has an entry same as fence-low for locking correctness.
     // See jira ticket:84 "Key Range Locking" (originally trac ticket:86).

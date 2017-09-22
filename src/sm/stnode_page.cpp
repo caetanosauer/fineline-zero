@@ -87,10 +87,13 @@ rc_t stnode_cache_t::sx_create_store(PageID root_pid, StoreID& snum) const
         return RC(eSTCACHEFULL);
     }
 
+    sys_xct_section_t ssx;
     spage->set_root(snum, root_pid);
     spage->set_last_extent(snum, 0);
 
     Logger::log_p<create_store_log>(&p, snum, root_pid);
+
+    W_COERCE(ssx.end_sys_xct(RCOK));
     return RCOK;
 }
 

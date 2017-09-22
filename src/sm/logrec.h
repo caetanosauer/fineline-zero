@@ -610,7 +610,7 @@ constexpr u_char logrec_t::get_logrec_cat(kind_t type)
 	case dealloc_page_log : return t_redo|t_single_sys_xct;
 	case create_store_log : return t_redo|t_single_sys_xct;
 	case append_extent_log : return t_redo|t_single_sys_xct;
-	case page_img_format_log : return t_redo;
+	case page_img_format_log : return t_redo|t_single_sys_xct;
 	case update_emlsn_log : return t_redo|t_single_sys_xct;
 	case btree_insert_log : return t_redo|t_undo;
 	case btree_insert_nonghost_log : return t_redo|t_undo;

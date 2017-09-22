@@ -368,8 +368,7 @@ unsigned log_storage::delete_old_partitions(partition_number_t older_than)
     if (!smlevel_0::log || !smlevel_0::bf || !_delete_old_partitions) { return 0; }
 
     if (older_than == 0) {
-        auto archived_run = smlevel_0::bf->get_archived_run();
-        older_than = (archived_run == 0) ? smlevel_0::log->durable_lsn().hi() : archived_run;
+        older_than = smlevel_0::bf->get_archived_run();
     }
 
     list<shared_ptr<partition_t>> to_be_deleted;

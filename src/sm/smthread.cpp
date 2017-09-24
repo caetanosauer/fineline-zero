@@ -390,65 +390,23 @@ void smthread_t::timeout_to_timespec(int timeout, struct timespec &when)
 void
 smthread_t::attach_xct(xct_t* x)
 {
-    w_assert0(get_tcb_depth() == 1 || x->is_sys_xct()); // only system transactions can be nested
-    // add the given transaction as top (outmost) transaction
-    tcb_t *new_outmost = new tcb_t(tcb_ptr());
-    w_assert0(new_outmost != NULL);
-    tcb_ptr() = new_outmost;
-    new_outmost->xct = x;
-
-    w_assert0(xct() != NULL);
-    w_assert0(xct() == x);
+    tcb_t*& tcb = tcb_ptr();
+    w_assert0(tcb->xct == nullptr);
+    tcb->xct = x;
+    tcb->_redo_buf.reset();
+    tcb->_undo_buf.reset();
 }
 
 
 void
 smthread_t::detach_xct(xct_t* x)
 {
-    // removes the top (outmost) transaction from this thread
-    if (x != tcb().xct) {
-        // are you removing something else??
-        W_FATAL(eNOTRANS);
-    }
-
+    tcb_t*& tcb = tcb_ptr();
+    w_assert0(tcb->xct == x);
     no_xct(x);
-    // pop the outmost tcb_t after the above which cleans up some property of tcb_t
-    tcb_t *outmost = tcb_ptr();
-    tcb_ptr() = outmost->_outer;
-    delete outmost;
-    w_assert0(get_tcb_depth() >= 1);
+    tcb->xct = nullptr;
 }
 
-/**\brief Called to effect a detach_xct().
- *
- * \details
- * N Threads point to 1 xct_t; xct_ts do not point to threads because
- * of the 1:N relationship.
- *
- * A thread holds some cached info on behalf of a transaction.
- * This is in 3 structures.  If a thread were attached to a transaction
- * for the transaction's duration, we wouldn't go to this trouble, but
- * because threads attach/detach, reattach/detach and perhaps several
- * threads act for an xct at once, we try to avoid the excess heap
- * activity and cache-repopulation that would result.
- *
- * When a thread/xct relationship is broken, the thread tries to stash
- * its caches in the xct_t structure.  If the xct subsequently goes
- * away, the xct deletes these caches and returns them to the global heap.
- * If another thread attaches to the xct, it will grab these structures
- * from the xct at attach-time.
- *
- * This smthread can only stash these caches in the xct_t if the xct_t
- * doesn't already have some stashed. In other words, if 3 threads
- * detach from the same xct in succession, the first thread's caches will
- * be stashed in the xct and the other 2 will be returned to the heap.
- * If these 3 sthreads subsequently reattach to the same xct, the first
- * one to attach will steal back the caches and the next two will
- * allocate from the heap.
- *
- * In addition to these 3 caches, the thread holds statistics for
- * an instrumented transaction.
- */
 void
 smthread_t::no_xct(xct_t *x)
 {

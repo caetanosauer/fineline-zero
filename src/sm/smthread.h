@@ -213,9 +213,6 @@ class smthread_t {
         bool    _in_sm;      // thread is in sm ss_m:: function
         bool    _is_update_thread;// thread is in update function
 
-        int16_t  _depth; // how many "outer" this has
-        tcb_t*   _outer; // this forms a singly linked list
-
         sm_stats_t  _TL_stats; // thread-local stats
 
         // for lock_head_t::my_lock::get_me
@@ -242,15 +239,13 @@ class smthread_t {
             return smthread_t::TL_stats()[enum_to_base(stat)];
         }
 
-        tcb_t(tcb_t* outer) :
-            xct(0),
+        tcb_t() :
+            xct(nullptr),
             pin_count(0),
             prev_pin_count(0),
             lock_timeout(timeout_t::WAIT_FOREVER), // default for a thread
             _in_sm(false),
-            _is_update_thread(false),
-            _depth(outer == NULL ? 1 : outer->_depth + 1),
-            _outer(outer)
+            _is_update_thread(false)
         {
             QUEUE_EXT_QNODE_INITIALIZE(_me1);
             QUEUE_EXT_QNODE_INITIALIZE(_me2);
@@ -471,7 +466,7 @@ private:
     static tcb_t*& tcb_ptr()
     {
         // static local var -- initialized only on first call
-        static thread_local tcb_t* tcb = new tcb_t(nullptr);
+        static thread_local tcb_t* tcb = new tcb_t();
         return tcb;
     }
 
@@ -481,10 +476,6 @@ private:
         w_assert3(ret);
         return *ret;
     }
-
-public:
-    /** Tells how many transactions are nested. */
-    static inline size_t get_tcb_depth() { return tcb()._depth; }
 
 private:
 

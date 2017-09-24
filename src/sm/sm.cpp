@@ -265,11 +265,12 @@ ss_m::_construct_once()
 
     ERROUT(<< "[" << timer.time_ms() << "] Building volume manager caches");
 
-    begin_xct();
+    // Initialization of metadata catalogs must be a user txn
+    W_COERCE(begin_xct());
     bool cluster_stores = _options.get_bool_option("sm_vol_cluster_stores", true);
     stnode = new stnode_cache_t(format);
     alloc = new alloc_cache_t(*stnode, format, cluster_stores);
-    commit_xct();
+    W_COERCE(commit_xct());
     stnode->dump(cerr);
 
     smlevel_0::statistics_enabled = _options.get_bool_option("sm_statistics", true);
@@ -474,11 +475,10 @@ ss_m::begin_xct(tid_t& tid, int timeout)
     return RCOK;
 }
 
-rc_t ss_m::begin_sys_xct(bool single_log_sys_xct,
-    sm_stats_t *stats, int timeout)
+rc_t ss_m::begin_sys_xct(sm_stats_t *stats, int timeout)
 {
     tid_t tid;
-    W_DO (_begin_xct(stats, tid, timeout, true, single_log_sys_xct));
+    W_DO (_begin_xct(stats, tid, timeout, true));
     return RCOK;
 }
 
@@ -767,36 +767,16 @@ rc_t ss_m::lock(const lockid_t& n, const okvl_mode& m,
  *                    commit_xct, abort_xct, prepare_xct, or chain_xct.
  *--------------------------------------------------------------*/
 rc_t
-ss_m::_begin_xct(sm_stats_t *_stats, tid_t& tid, int timeout, bool sys_xct,
-    bool single_log_sys_xct)
+ss_m::_begin_xct(sm_stats_t *_stats, tid_t& tid, int timeout, bool sys_xct)
 {
-    w_assert1(!single_log_sys_xct || sys_xct); // SSX is always system-transaction
-
-    // system transaction can be a nested transaction, so
-    // xct() could be non-NULL
-    if (!sys_xct && xct() != NULL) {
-        return RC (eINTRANS);
-    }
-
-    xct_t* x;
+    xct_t* x = xct();
     if (sys_xct) {
-        x = xct();
-        if (single_log_sys_xct && x) {
-            // in this case, we don't need an independent transaction object.
-            // we just piggy back on the outer transaction
-            if (x->is_piggy_backed_single_log_sys_xct()) {
-                // SSX can't nest SSX, but we can chain consecutive SSXs.
-                ++(x->ssx_chain_len());
-            } else {
-                x->set_piggy_backed_single_log_sys_xct(true);
-            }
-            tid = x->tid();
-            return RCOK;
-        }
-        x = _new_xct(_stats, timeout, sys_xct, single_log_sys_xct);
+        w_assert1(x);
+        x->push_ssx();
     } else {
+        w_assert1(!x);
         spinlock_read_critical_section cs(&_begin_xct_mutex);
-        x = _new_xct(_stats, timeout, sys_xct);
+        x = _new_xct(_stats, timeout);
         if(log) {
             // This transaction will make no events related to LSN
             // smaller than this. Used to control garbage collection, etc.
@@ -804,11 +784,10 @@ ss_m::_begin_xct(sm_stats_t *_stats, tid_t& tid, int timeout, bool sys_xct,
         }
     }
 
-    if (!x)
-        return RC(eOUTOFMEMORY);
-
+    w_assert1(x);
     w_assert3(xct() == x);
-    w_assert3(x->state() == xct_t::xct_active);
+    w_assert3(x->state() == xct_t::xct_active ||
+            (x->state() == xct_t::xct_aborting && x->is_sys_xct()));
     tid = x->tid();
 
     return RCOK;
@@ -816,11 +795,9 @@ ss_m::_begin_xct(sm_stats_t *_stats, tid_t& tid, int timeout, bool sys_xct,
 
 xct_t* ss_m::_new_xct(
         sm_stats_t* stats,
-        int timeout,
-        bool sys_xct,
-        bool single_log_sys_xct)
+        int timeout)
 {
-    return new xct_t(stats, timeout, sys_xct, single_log_sys_xct, false);
+    return new xct_t(stats, timeout, false);
 }
 
 /*--------------------------------------------------------------*
@@ -834,30 +811,21 @@ ss_m::_commit_xct(sm_stats_t*& _stats, bool lazy,
     xct_t* xp = xct();
     xct_t& x = *xp;
     DBGOUT5(<<"commit " << ((char *)lazy?" LAZY":"") << x );
-
-    if (x.is_piggy_backed_single_log_sys_xct()) {
-        // then, commit() does nothing
-        // It just "resolves" the SSX on piggyback
-        if (x.ssx_chain_len() > 0) {
-            --x.ssx_chain_len(); // multiple SSXs on piggyback
-        } else {
-            x.set_piggy_backed_single_log_sys_xct(false);
-        }
-        return RCOK;
-    }
-
-    w_assert3(x.state()==xct_active);
-    w_assert1(x.ssx_chain_len() == 0);
+    w_assert3(x.state() == xct_t::xct_active ||
+            (x.state() == xct_t::xct_aborting && x.is_sys_xct()));
 
     W_DO( x.commit(lazy,plastlsn) );
-
-    if(x.is_instrumented()) {
-        _stats = x.steal_stats();
+    if (x.is_sys_xct()) {
+        x.pop_ssx();
     }
-    bool was_sys_xct = x.is_sys_xct();
-    delete xp;
-    w_assert3(was_sys_xct || xct() == 0);
+    else {
+        if(x.is_instrumented()) {
+            _stats = x.steal_stats();
+        }
 
+        delete xp;
+        w_assert1(!xct());
+    }
     return RCOK;
 }
 
@@ -894,24 +862,17 @@ ss_m::_abort_xct(sm_stats_t*&             _stats)
     xct_t& x = *xp;
 
     // if this is "piggy-backed" ssx, just end the status
-    if (x.is_piggy_backed_single_log_sys_xct()) {
-        if (x.ssx_chain_len() > 0) {
-            --x.ssx_chain_len(); // multiple SSXs on piggyback
-        } else {
-            x.set_piggy_backed_single_log_sys_xct(false);
+    if (x.is_sys_xct()) {
+        x.pop_ssx();
+    }
+    else {
+        W_DO( x.abort(true /* save _stats structure */) );
+        if(x.is_instrumented()) {
+            _stats = x.steal_stats();
         }
-        return RCOK;
+        delete xp;
+        w_assert3(xct() == 0);
     }
-
-    bool was_sys_xct W_IFDEBUG3(= x.is_sys_xct());
-
-    W_DO( x.abort(true /* save _stats structure */) );
-    if(x.is_instrumented()) {
-        _stats = x.steal_stats();
-    }
-
-    delete xp;
-    w_assert3(was_sys_xct || xct() == 0);
 
     return RCOK;
 }

@@ -216,7 +216,7 @@ struct btree_norec_alloc_t : public multi_page_log_t {
         PageID new_page_id, const w_keystr_t& fence, const w_keystr_t& chain_fence_high)
         : multi_page_log_t(new_page_id)
     {
-        w_assert1 (smthread_t::xct()->is_single_log_sys_xct());
+        w_assert1 (smthread_t::xct()->is_sys_xct());
         w_assert1 (new_page_id != p->btree_root());
         w_assert1 (p->latch_mode() != LATCH_NL);
 

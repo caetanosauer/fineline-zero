@@ -318,8 +318,14 @@ class UndoBuffer
 
 public:
     UndoBuffer()
-        : _count{0}, _abortable{true}
     {
+        reset();
+    }
+
+    void reset()
+    {
+        _count = 0;
+        _abortable = true;
         _entries[0].offset = 0;
     }
 
@@ -411,6 +417,11 @@ public:
         return _size;
     }
 
+    void drop_suffix(size_t len)
+    {
+        _size -= len;
+    }
+
     char* acquire()
     {
         // Conservative approach: make sure we can fit maximum logrec size
@@ -424,6 +435,11 @@ public:
     void release(size_t length)
     {
         _size += length;
+    }
+
+    void reset()
+    {
+        _size = 0;
     }
 };
 

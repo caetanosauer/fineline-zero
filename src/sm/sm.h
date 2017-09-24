@@ -623,9 +623,7 @@ private:
     // Used for cosntructing xct object depending on chosen implementation
     static xct_t* _new_xct(
             sm_stats_t* stats,
-            int timeout,
-            bool sys_xct,
-            bool single_log_sys_xct = false);
+            int timeout);
 
 public:
     /**\addtogroup SSMXCT
@@ -707,12 +705,10 @@ public:
      * page split, key push-ups and page deletion. This method starts a new
      * system transaction, if the current thread already has a transaction,
      * inside the current transaction.
-     * @param[in] single_log_sys_xct whether this transaction will have at most one xlog entry
      * @param[in] stats   Pointer to an allocated statistics-holding structure.
      * @param[in] timeout   Optional, controls blocking behavior.
      */
     static rc_t           begin_sys_xct(
-        bool single_log_sys_xct = false,
         sm_stats_t*         stats = NULL,
         int            timeout = timeout_t::WAIT_SPECIFIED_BY_THREAD);
 
@@ -1389,8 +1385,7 @@ private:
         sm_stats_t*      stats,  // allocated by caller
         tid_t&                tid,
         int         timeout,
-        bool sys_xct = false,
-        bool single_log_sys_xct = false);
+        bool sys_xct = false);
 
     static rc_t            _commit_xct(
         sm_stats_t*&     stats,

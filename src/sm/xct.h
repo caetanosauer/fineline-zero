@@ -247,7 +247,7 @@ public:
     rc_t                      commit_free_locks(bool read_lock_only = false, lsn_t commit_lsn = lsn_t::null);
     rc_t                      early_lock_release(lsn_t last_lsn);
 
-    unsigned logrec_count();
+    bool has_logs();
 
     // CS: Using these instead of the old new_xct and destroy_xct methods
     void* operator new(size_t s);
@@ -257,8 +257,6 @@ public:
     NORET                       xct_t(
             sm_stats_t*    stats = NULL,
             int       timeout = timeout_t::WAIT_SPECIFIED_BY_THREAD,
-            bool                sys_xct = false,
-            bool                single_log_sys_xct = false,
             const tid_t&        tid = 0,
             const lsn_t&        last_lsn = lsn_t::null,
             bool                loser_xct = false
@@ -425,22 +423,14 @@ private:
      */
     uint32_t                     _ssx_chain_len;
 
+    static constexpr size_t MaxDepth = 8;
+    std::array<size_t, MaxDepth> _ssx_positions;
+
     /** concurrency mode of this transaction. */
     concurrency_t                _query_concurrency;
     /** whether to take X lock for lookup/cursor. */
     bool                         _query_exlock_for_select;
 // hey, these could be one integer with OR-ed flags
-
-    /**
-     * true if this transaction is now conveying a single-log system transaction.
-     */
-    bool                         _piggy_backed_single_log_sys_xct;
-
-    /** whether this transaction is a system transaction. */
-    bool                         _sys_xct;
-
-     /** whether this transaction will have at most one xlog entry*/
-    bool                         _single_log_sys_xct;
 
     /**
      * whether to defer the logging and applying of the change made
@@ -471,6 +461,7 @@ private:
     latch_t                      _latch;
 
 protected:
+    void flush_redo_buffer(bool sys_xct = false);
     rc_t                _abort();
     rc_t                _commit(uint32_t flags,
                                                  lsn_t* plastlsn=NULL);
@@ -483,11 +474,10 @@ private:
     bool                        one_thread_attached() const;   // assertion
 
 public:
-    bool                        is_piggy_backed_single_log_sys_xct() const { return _piggy_backed_single_log_sys_xct;}
-    void                        set_piggy_backed_single_log_sys_xct(bool enabled) { _piggy_backed_single_log_sys_xct = enabled;}
 
-    bool                        is_sys_xct () const { return _sys_xct || _piggy_backed_single_log_sys_xct; }
-    bool                        is_single_log_sys_xct() const{ return _single_log_sys_xct || _piggy_backed_single_log_sys_xct;}
+    bool                        is_sys_xct () const { return _ssx_chain_len > 0; }
+    void push_ssx();
+    void pop_ssx();
 
     void                        set_inquery_verify(bool enabled) { _inquery_verify = enabled; }
     bool                        is_inquery_verify() const { return _inquery_verify; }
@@ -866,7 +856,6 @@ public:
     rc_t end_sys_xct (rc_t result);
 
     int _depth;
-    bool _piggy;
 };
 
 /** Used to tentatively set t_cc_none to _query_concurrency. */

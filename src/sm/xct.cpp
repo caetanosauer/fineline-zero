@@ -250,8 +250,8 @@ xct_t::xct_core::xct_core(tid_t const &t, state_t s, int timeout)
  *  and the xct record is inserted into _xlist.
  *
  *********************************************************************/
-xct_t::xct_t(sm_stats_t* stats, int timeout, bool sys_xct,
-           bool single_log_sys_xct, const tid_t& given_tid, const lsn_t& last_lsn,
+xct_t::xct_t(sm_stats_t* stats, int timeout,
+           const tid_t& given_tid, const lsn_t& last_lsn,
            bool loser_xct
             )
     :
@@ -265,9 +265,6 @@ xct_t::xct_t(sm_stats_t* stats, int timeout, bool sys_xct,
     _ssx_chain_len(0),
     _query_concurrency (smlevel_0::t_cc_none),
     _query_exlock_for_select(false),
-    _piggy_backed_single_log_sys_xct(false),
-    _sys_xct (sys_xct),
-    _single_log_sys_xct (single_log_sys_xct),
     _inquery_verify(false),
     _inquery_verify_keyorder(false),
     _inquery_verify_space(false),
@@ -301,6 +298,8 @@ xct_t::xct_t(sm_stats_t* stats, int timeout, bool sys_xct,
     else
         _loser_xct = loser_false; // Not a loser transaction
 
+    _ssx_positions[0] = 0;
+
     // _log_buf = new logrec_t; // deleted when xct goes away
     // _log_buf_for_piggybacked_ssx = new logrec_t;
 
@@ -320,7 +319,7 @@ xct_t::xct_t(sm_stats_t* stats, int timeout, bool sys_xct,
     w_assert9(timeout_c() >= 0 || timeout_c() == timeout_t::WAIT_FOREVER);
 
     // CS: acquires xlist mutex and adds thix xct to the list
-    // CS TODO: no need to keep a list of txns with no-steal
+    // CS FINELINE TODO: no need to keep a list of txns with no-steal
     put_in_order();
 
     w_assert3(state() == xct_active);
@@ -363,7 +362,7 @@ xct_t::~xct_t()
 {
     w_assert9(__stats == 0);
 
-    if (!_sys_xct && smlevel_0::log) {
+    if (!is_sys_xct() && smlevel_0::log) {
         smlevel_0::log->get_oldest_lsn_tracker()->leave(
                 reinterpret_cast<uintptr_t>(this));
     }
@@ -403,6 +402,8 @@ xct_t::~xct_t()
     //             latch().latch_release();
     //     }
     // }
+
+        w_assert1(state() == xct_ended);
 }
 
 /*
@@ -463,8 +464,16 @@ void xct_t::cleanup(bool allow_abort)
     release_xlist_mutex();
 }
 
+void xct_t::push_ssx()
+{
+    _ssx_chain_len++;
+    _ssx_positions[_ssx_chain_len] = smthread_t::get_redo_buf()->get_size();
+}
 
-
+void xct_t::pop_ssx()
+{
+    _ssx_chain_len--;
+}
 
 /*********************************************************************
  *
@@ -762,9 +771,11 @@ xct_t::log_warn_is_on() const
     return _core->_warn_on;
 }
 
-unsigned xct_t::logrec_count()
+bool xct_t::has_logs()
 {
-    return smthread_t::get_undo_buf()->get_count();
+    auto begin = _ssx_positions[_ssx_chain_len];
+    auto end = smthread_t::get_redo_buf()->get_size();
+    return end > begin;
 }
 
 rc_t
@@ -784,7 +795,7 @@ xct_t::_pre_commit(uint32_t flags)
 
     change_state(flags & xct_t::t_chain ? xct_chaining : xct_committing);
 
-    if (logrec_count() > 0 || !smlevel_0::log)  {
+    if (has_logs() || !smlevel_0::log)  {
         /*
          *  If xct generated some log, write a synchronous
          *  Xct End Record.
@@ -833,24 +844,33 @@ xct_t::_pre_commit(uint32_t flags)
             // return rc;
         // }
 
+        // CS FINELINE TODO: early lock release won't work like this, because commit_lsn is
+        // not known until log is actually flushed. I just replaced it with the current
+        // durable_lsn, but I'm not entirely sure if that is correct.
         // We should always be able to insert this log
         // record, what with log reservations.
-        lsn_t commit_lsn;
-        // FINELINE TODO: SSX should also commit through this, with redobuf and
-        // multiple logrecs
-        if(individual && !is_single_log_sys_xct()) { // is commit record fused?
-            Logger::log<xct_end_log>();
-            // FINELINE log insert of whole redo buffer
-            auto redobuf = smthread_t::get_redo_buf();
-            smlevel_0::log->insert_raw(redobuf->get_buffer_begin(),
-                    redobuf->get_size(), &commit_lsn);
-        }
+        lsn_t commit_lsn = smlevel_0::log->durable_lsn();
         // now we have xct_end record though it might not be flushed yet. so,
         // let's do ELR
         W_DO(early_lock_release(commit_lsn));
     }
 
     return RCOK;
+}
+
+void xct_t::flush_redo_buffer(bool sys_xct)
+{
+    // CS FINELINE TODO: simplify this, by unifying all tcb, redobuf, xct,
+    // and ss_m code
+    if (!sys_xct) { Logger::log<xct_end_log>(); }
+    // FINELINE log insert of whole redo buffer
+    auto redobuf = smthread_t::get_redo_buf();
+    auto offset = _ssx_positions[_ssx_chain_len];
+    char* begin = redobuf->get_buffer_begin() + offset;
+    auto commit_size = redobuf->get_size() - offset;
+    w_assert1(commit_size > 0);
+    smlevel_0::log->insert_raw(begin, commit_size);
+    redobuf->drop_suffix(commit_size);
 }
 
 /*********************************************************************
@@ -876,14 +896,18 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
     static thread_local unsigned long _accum_latency = 0;
     static thread_local unsigned int _latency_count = 0;
 
-    W_DO(_pre_commit(flags));
+    bool sys_xct = is_sys_xct();
+    if (!sys_xct) {
+        W_DO(_pre_commit(flags));
+    }
 
-    if (logrec_count() > 0 || !smlevel_0::log)  {
-        if (!(flags & xct_t::t_lazy))  {
-            _sync_logbuf();
-        }
-        else { // IP: If lazy, wake up the flusher but do not block
-            _sync_logbuf(false, !is_sys_xct()); // if system transaction, don't even wake up flusher
+    if (has_logs())  {
+
+        flush_redo_buffer(sys_xct);
+
+        if (sys_xct) {
+            // If system txn, we're done here
+            return RCOK;
         }
 
         change_state(xct_ended);
@@ -900,9 +924,11 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
             // inherited_read_watermark = _last_lsn;
             inherited_read_watermark = lsn_t::null;
         }
-    }  else  {
+    }  else if (!sys_xct) {
         W_DO(_commit_read_only(flags, inherited_read_watermark));
     }
+
+    if (sys_xct) { return RCOK; }
 
     INC_TSTAT(commit_xct_cnt);
 
@@ -912,6 +938,7 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
      *  Xct is now committed
      */
 
+    // CS FINELINE TODO: get rid of this chaining
     if (flags & xct_t::t_chain)  {
         w_assert0(!is_sys_xct()); // system transaction cannot chain (and never has to)
 
@@ -1040,7 +1067,7 @@ xct_t::commit_free_locks(bool read_lock_only, lsn_t commit_lsn)
 }
 
 rc_t xct_t::early_lock_release(lsn_t last_lsn) {
-    if (!_sys_xct) { // system transaction anyway doesn't have locks
+    if (!is_sys_xct()) { // system transaction anyway doesn't have locks
         switch (_elr_mode) {
             case elr_none: break;
             case elr_s:
@@ -1152,7 +1179,7 @@ xct_t::_abort()
         W_COERCE( commit_free_locks(true));
     }
 
-    if (logrec_count() > 0) {
+    if (has_logs()) {
         /*
          *  If xct generated some log, write a Xct End Record.
          *  We flush because if this was a prepared
@@ -1341,10 +1368,8 @@ xct_t::dump_locks(ostream &out) const
 
 sys_xct_section_t::sys_xct_section_t()
 {
-    _depth = xct()->ssx_chain_len();
-    _piggy = xct()->is_piggy_backed_single_log_sys_xct();
-    constexpr bool single_log = true;
-    W_COERCE(ss_m::begin_sys_xct(single_log));
+    W_IFDEBUG1(_depth = xct()->ssx_chain_len());
+    W_COERCE(ss_m::begin_sys_xct());
 }
 sys_xct_section_t::~sys_xct_section_t()
 {
@@ -1356,7 +1381,6 @@ rc_t sys_xct_section_t::end_sys_xct (rc_t result)
     } else {
         W_COERCE (ss_m::commit_sys_xct());
     }
-    w_assert0 (_piggy == xct()->is_piggy_backed_single_log_sys_xct());
-    w_assert0(_depth == xct()->ssx_chain_len());
+    w_assert1(_depth == xct()->ssx_chain_len());
     return RCOK;
 }

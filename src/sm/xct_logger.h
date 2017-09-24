@@ -31,7 +31,7 @@ public:
         w_assert1(!logrec->is_redo());
         // This method is only used for xct_end right now
         w_assert1(logrec->type() == xct_end_log);
-        w_assert1(!xd->is_piggy_backed_single_log_sys_xct());
+        w_assert1(!xd->is_sys_xct());
         w_assert1(!logrec->is_undo());
 
         redobuf->release(logrec->length());
@@ -65,30 +65,18 @@ public:
         logrec->init_page_info(p);
         LogrecSerializer<LR>::serialize(p, logrec, args...);
         w_assert1(logrec->valid_header());
-
         _update_page_version(p, logrec);
-
-        w_assert1(!xd->is_sys_xct() || xd->is_single_log_sys_xct());
-        if (xd->is_single_log_sys_xct()) {
-            w_assert1(logrec->is_single_sys_xct());
-            // w_assert1(logrec->is_single_sys_xct());
-            // SSX goes directly into log
-            // CS FINELINE TODO: log insertion should be performed
-            // by commit protocol, using redobuf like in user txns
-            W_COERCE(ss_m::log->insert_raw(dest, logrec->length()));
-            // argument 0 deletes log record
-            redobuf->release(0);
-            return;
-        }
 
         redobuf->release(logrec->length());
 
-        auto undobuf = smthread_t::get_undo_buf();
-        dest = undobuf->acquire();
-        if (logrec->is_undo() && dest) {
-            auto len = UndoLogrecSerializer<LR>::serialize(dest, args...);
-            StoreID stid = p->store();
-            undobuf->release(len, stid, LR);
+        if (logrec->is_undo()) {
+            auto undobuf = smthread_t::get_undo_buf();
+            dest = undobuf->acquire();
+            if (logrec->is_undo() && dest) {
+                auto len = UndoLogrecSerializer<LR>::serialize(dest, args...);
+                StoreID stid = p->store();
+                undobuf->release(len, stid, LR);
+            }
         }
     }
 
@@ -108,27 +96,17 @@ public:
         LogrecSerializer<LR>::serialize(p, p2, logrec, args...);
         w_assert1(logrec->valid_header());
 
-        // For multi-page log, also set LSN chain with a branch.
         w_assert1(logrec->is_multi_page());
         w_assert1(logrec->is_single_sys_xct());
         multi_page_log_t *multi = logrec->data_multi();
         w_assert1(multi->_page2_pid != 0);
 
-        w_assert1(!xd->is_sys_xct() || xd->is_single_log_sys_xct());
-        if (xd->is_single_log_sys_xct()) {
-            w_assert1(logrec->is_single_sys_xct());
-            _update_page_version(p, logrec);
-            _update_page_version(p2, logrec);
-            // SSX goes directly into log
-            // CS FINELINE TODO: log insertion should be performed
-            // by commit protocol, using redobuf like in user txns
-            W_COERCE(ss_m::log->insert_raw(dest, logrec->length()));
-            redobuf->release(0);
-            return;
-        }
+        _update_page_version(p, logrec);
+        _update_page_version(p2, logrec);
+        redobuf->release(logrec->length());
 
-        // CS TODO: so far, all multi-page logrecs are SSXs
-        w_assert0(false);
+        // CS TODO: so far, all multi-page logrecs are redo-only system txns
+        w_assert1(!logrec->is_undo());
         return;
     }
 
@@ -190,7 +168,7 @@ public:
 
     static logrec_t* _get_logbuf(xct_t* xd)
     {
-        if (xd->is_piggy_backed_single_log_sys_xct()) {
+        if (xd->is_sys_xct()) {
             return smthread_t::get_logbuf2();
         }
         return smthread_t::get_logbuf();

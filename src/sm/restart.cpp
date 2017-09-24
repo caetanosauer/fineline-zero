@@ -14,6 +14,7 @@ SprIterator::~SprIterator()
 void SprIterator::open(PageID pid)
 {
     archive_scan.open(pid, pid+1);
+    replayed_count = 0;
 }
 
 bool SprIterator::next(logrec_t*& lr)
@@ -34,12 +35,14 @@ void SprIterator::apply(fixable_page_h &p)
 
     while (next(lr)) {
         w_assert1(lr->valid_header(lsn_t::null));
+        w_assert1(lr->lsn() != lsn_t::null);
 
         if (lr->is_redo() && p.lsn() < lr->lsn()) {
             DBGOUT1(<< "SPR page(" << p.pid()
                     << ") LSN=" << p.lsn() << ", log=" << *lr);
 
             w_assert1(pid == lr->pid() || pid == lr->pid2());
+            w_assert1(lr->lsn() > prev_lsn);
             lr->redo(&p);
         }
 

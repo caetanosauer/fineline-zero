@@ -82,17 +82,22 @@ bool ArchiveScan::next(logrec_t*& lr)
 {
     if (finished()) { return false; }
 
-    if (singlePage) {
-        if (!heapBegin->finished()) {
-            lr = heapBegin->logrec();
-            heapBegin->next();
-        }
-        else {
-            heapBegin++;
-            return next(lr);
-        }
-    }
-    else {
+    // CS: This optimization does not work with FineLine, because the mapping
+    // of individual page updates to the run they end up in the log archive
+    // is not a monotonic function (e.g., update 1 might be on run 2, update 2
+    // on run 1, and update 3 on run 1 again).
+    // if (singlePage) {
+    //     if (!heapBegin->finished()) {
+    //         lr = heapBegin->logrec();
+    //         heapBegin->next();
+    //     }
+    //     else {
+    //         heapBegin++;
+    //         return next(lr);
+    //     }
+    // }
+    // else
+    {
         std::pop_heap(heapBegin, heapEnd, mergeInputCmpGt);
         auto top = std::prev(heapEnd);
         if (!top->finished()) {

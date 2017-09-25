@@ -983,17 +983,10 @@ xct_t::rollback()
                 "Increase UndoBufferSize and recompile");
     }
 
-    if(!log) {
-        cerr
-        << "Cannot roll back with logging turned off. "
-        << endl;
-        return RC(eNOABORT);
-    }
-
     /*
      * CS FineLine txn rollback.
      */
-    for (int i = undo_buf->get_count() - 1; i > 0; i--) {
+    for (int i = undo_buf->get_count() - 1; i >= 0; i--) {
         char* data = undo_buf->get_data(i);
         StoreID stid = undo_buf->get_store_id(i);
         kind_t type = undo_buf->get_type(i);

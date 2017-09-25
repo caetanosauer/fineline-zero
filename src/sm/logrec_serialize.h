@@ -233,13 +233,14 @@ struct UndoLogrecSerializer<btree_overwrite_log>
         memcpy(ptr, &offset, sizeof(uint16_t));
         ptr += sizeof(uint16_t);
         // Undo logrec has before-image
-        return (new (ptr) serialized_kv_pair_t(key, old_el, elen))->size();
+        auto kvp = new (ptr) serialized_kv_pair_t(key, old_el, elen);
+        return sizeof(uint16_t) + kvp->size();
     }
 
     template <typename... T>
     static size_t serialize(char* dest, const T&... fields)
     {
-        construct(dest, fields...);
+        return construct(dest, fields...);
     }
 };
 

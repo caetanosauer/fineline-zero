@@ -72,7 +72,7 @@ public:
         if (logrec->is_undo()) {
             auto undobuf = smthread_t::get_undo_buf();
             dest = undobuf->acquire();
-            if (logrec->is_undo() && dest) {
+            if (dest) {
                 auto len = UndoLogrecSerializer<LR>::serialize(dest, args...);
                 StoreID stid = p->store();
                 undobuf->release(len, stid, LR);

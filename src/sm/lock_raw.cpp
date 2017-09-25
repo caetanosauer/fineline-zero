@@ -654,116 +654,118 @@ bool RawLockQueue::trigger_UNDO(Compatibility& compatibility)
                 bool has_loser = false;  // true if we found at least one loser transaction in transaction table
                 while (xd)
                 {
-                    if (true == xd->is_loser_xct())
-                        has_loser = true;
+                    // FINELINE -- no loser txns!
+                    // if (true == xd->is_loser_xct())
+                    //     has_loser = true;
 
                     if ((xct_t::xct_active == xd->state()) &&           // Active txn
                         (compatibility.blocker == xd->raw_lock_xct()))  // it is the blocker txn
                     {
+                        // FINELINE -- no loser tnxs!
                         // Found the blocker transaction
-                        if (true == xd->is_loser_xct())
-                        {
-                            w_assert1(false == xd->is_sys_xct());
-                            DBGOUT3( << "RawLockQueue::trigger_UNDO: blocker transaction is a loser transaction, txn: "
-                                     << xd->tid());
+                        // if (true == xd->is_loser_xct())
+                        // {
+                        //     w_assert1(false == xd->is_sys_xct());
+                        //     DBGOUT3( << "RawLockQueue::trigger_UNDO: blocker transaction is a loser transaction, txn: "
+                        //              << xd->tid());
 
-                            // Acquire latch before checking the loser status
-                            try
-                            {
-                                w_rc_t latch_rc = xd->latch().latch_acquire(LATCH_EX, timeout_t::WAIT_SPECIFIED_BY_XCT);
-                                if (latch_rc.is_error())
-                                {
-                                    // Failed to acquire latch on the transaction
-                                    // this is the loser transaction we are looking for but we
-                                    // are not able to latch the txn, to be safe we skip this time
-                                    // and wait for next opportunity for the on_demand UNDO
+                        //     // Acquire latch before checking the loser status
+                        //     try
+                        //     {
+                        //         w_rc_t latch_rc = xd->latch().latch_acquire(LATCH_EX, timeout_t::WAIT_SPECIFIED_BY_XCT);
+                        //         if (latch_rc.is_error())
+                        //         {
+                        //             // Failed to acquire latch on the transaction
+                        //             // this is the loser transaction we are looking for but we
+                        //             // are not able to latch the txn, to be safe we skip this time
+                        //             // and wait for next opportunity for the on_demand UNDO
 
-                                    if (stTIMEOUT == latch_rc.err_num())
-                                    {
-                                        // There is a small possibility that another concurrent
-                                        // transaction is checking for loser status on the same
-                                        // transaction at this moment
-                                        // Eat the error and skip UNDO this time, caller must retry
-                                        DBGOUT0( << "RawLockQueue::trigger_UNDO: failed to latch the loser txn object to check rollback status,"
-                                                << " this is due to latch time out, skip the on_demand UNDO");
-                                        return false;
-                                    }
-                                    else
-                                    {
-                                        W_FATAL_MSG(fcINTERNAL,
-                                                    << "RawLockQueue::trigger_UNDO: failed to latch the loser txn object due to unknown reason,"
-                                                    << " this is un-expected error, error out");
-                                    }
-                                }
-                            }
-                            catch (...)
-                            {
-                                // Race condition while the transaction is being destroyed?
-                                // Skip UNDO
-                                return false;
-                            }
+                        //             if (stTIMEOUT == latch_rc.err_num())
+                        //             {
+                        //                 // There is a small possibility that another concurrent
+                        //                 // transaction is checking for loser status on the same
+                        //                 // transaction at this moment
+                        //                 // Eat the error and skip UNDO this time, caller must retry
+                        //                 DBGOUT0( << "RawLockQueue::trigger_UNDO: failed to latch the loser txn object to check rollback status,"
+                        //                         << " this is due to latch time out, skip the on_demand UNDO");
+                        //                 return false;
+                        //             }
+                        //             else
+                        //             {
+                        //                 W_FATAL_MSG(fcINTERNAL,
+                        //                             << "RawLockQueue::trigger_UNDO: failed to latch the loser txn object due to unknown reason,"
+                        //                             << " this is un-expected error, error out");
+                        //             }
+                        //         }
+                        //     }
+                        //     catch (...)
+                        //     {
+                        //         // Race condition while the transaction is being destroyed?
+                        //         // Skip UNDO
+                        //         return false;
+                        //     }
 
-                            if (false == xd->is_loser_xct_in_undo())
-                            {
-                                // Loser transaction has not been rollback at this point,
-                                // we are the first user transaction to trigger the UNDO
-                                // set the loser transaction state first to indicate the current
-                                // thread is handling the loser transaction UNDO which is a
-                                // blocking operation
+                        //     if (false == xd->is_loser_xct_in_undo())
+                        //     {
+                        //         // Loser transaction has not been rollback at this point,
+                        //         // we are the first user transaction to trigger the UNDO
+                        //         // set the loser transaction state first to indicate the current
+                        //         // thread is handling the loser transaction UNDO which is a
+                        //         // blocking operation
 
-                                xd->set_loser_xct_in_undo();
-                                if (xd->latch().held_by_me())
-                                    xd->latch().latch_release();
+                        //         xd->set_loser_xct_in_undo();
+                        //         if (xd->latch().held_by_me())
+                        //             xd->latch().latch_release();
 
-                                // Only one transaction may be attached to a thread at any time
-                                // The current running thread has the user transaction so
-                                // it cannot attach to the loser transaction without detach from the
-                                // user transaction first
-                                xct_t* user_xd = smthread_t::xct();
-                                if (user_xd) {
-                                    smthread_t::detach_xct(user_xd);
-                                }
+                        //         // Only one transaction may be attached to a thread at any time
+                        //         // The current running thread has the user transaction so
+                        //         // it cannot attach to the loser transaction without detach from the
+                        //         // user transaction first
+                        //         xct_t* user_xd = smthread_t::xct();
+                        //         if (user_xd) {
+                        //             smthread_t::detach_xct(user_xd);
+                        //         }
 
-                                // The blocker txn is a loser transaction and it is not in the middle of rolling back
-                                DBGOUT3( << "RawLockQueue::trigger_UNDO: blocker loser transaction needs UNDO,"
-                                         << " user txn: " << user_xd->tid() << ", loser txn: " << xd->tid()
-                                         << ", detached from user transaction, start UNDO of loser transaction");
+                        //         // The blocker txn is a loser transaction and it is not in the middle of rolling back
+                        //         DBGOUT3( << "RawLockQueue::trigger_UNDO: blocker loser transaction needs UNDO,"
+                        //                  << " user txn: " << user_xd->tid() << ", loser txn: " << xd->tid()
+                        //                  << ", detached from user transaction, start UNDO of loser transaction");
 
-                                // Attach to the loser transaction
-                                smthread_t::attach_xct(xd);
-                                W_COERCE(xd->abort());
+                        //         // Attach to the loser transaction
+                        //         smthread_t::attach_xct(xd);
+                        //         W_COERCE(xd->abort());
 
-                                // Done with rollback of loser transaction, destroy it
-                                delete xd;
+                        //         // Done with rollback of loser transaction, destroy it
+                        //         delete xd;
 
-                                DBGOUT3( << "RawLockQueue::trigger_UNDO: blocker loser transaction successfully aborted,"
-                                         << "re-attach to the original user transaction");
+                        //         DBGOUT3( << "RawLockQueue::trigger_UNDO: blocker loser transaction successfully aborted,"
+                        //                  << "re-attach to the original user transaction");
 
-                                // Re-attach to the original user transaction
-                                if (user_xd) {
-                                    smthread_t::attach_xct(user_xd);
-                                }
+                        //         // Re-attach to the original user transaction
+                        //         if (user_xd) {
+                        //             smthread_t::attach_xct(user_xd);
+                        //         }
 
-                                // Notify caller an on_demand UNDO has been performed
-                                return true;
-                            }
-                            else
-                            {
-                                if (xd->latch().held_by_me())
-                                    xd->latch().latch_release();
+                        //         // Notify caller an on_demand UNDO has been performed
+                        //         return true;
+                        //     }
+                        //     else
+                        //     {
+                        //         if (xd->latch().held_by_me())
+                        //             xd->latch().latch_release();
 
-                                // The blocker txn is a loser transaction but it is in the middle of rolling back already
-                                DBGOUT3( << "RawLockQueue::trigger_UNDO: blocker loser transaction already in the middle of UNDO");
-                                return false;
-                            }
-                        }
-                        else
-                        {
-                            DBGOUT3( << "RawLockQueue::trigger_UNDO: blocker transaction is not a loser transaction");
-                            // Do not exist, continue looping through the remaining items in transaction table
-                            // because if we do not find any loser transactions in the transaction table
-                            // set the static loser count so we can safely skip this function in the future
-                        }
+                        //         // The blocker txn is a loser transaction but it is in the middle of rolling back already
+                        //         DBGOUT3( << "RawLockQueue::trigger_UNDO: blocker loser transaction already in the middle of UNDO");
+                        //         return false;
+                        //     }
+                        // }
+                        // else
+                        // {
+                        //     DBGOUT3( << "RawLockQueue::trigger_UNDO: blocker transaction is not a loser transaction");
+                        //     // Do not exist, continue looping through the remaining items in transaction table
+                        //     // because if we do not find any loser transactions in the transaction table
+                        //     // set the static loser count so we can safely skip this function in the future
+                        // }
                     }
                     else
                     {

@@ -179,7 +179,6 @@ class xct_t : public smlevel_0 {
 /**\cond skip */
     friend class xct_i;
     friend class smthread_t;
-    friend class restart_thread_t;
     friend class lock_m;
     friend class lock_core_m;
     friend class lock_request_t;
@@ -206,7 +205,6 @@ public:
         //-- from xct.h ----------------------------------------------------
         tid_t                  _tid;
         int          _timeout; // default timeout value for lock reqs
-        bool                   _warn_on;
         xct_lock_info_t*       _lock_info;
         lil_private_table*     _lil_lock_info;
 
@@ -214,11 +212,6 @@ public:
         RawXct*                _raw_lock_xct;
 
         state_t                   _state;
-        bool                      _read_only;
-
-        lintel::Atomic<int> _xct_ended; // used for self-checking (assertions) only
-        bool              _xct_aborting; // distinguish abort()ing xct from
-        // commit()ing xct when they are in state xct_freeing_space
 
         // CS: Using these instead of the old new_xct and destroy_xct methods
         void* operator new(size_t s);
@@ -229,20 +222,13 @@ protected:
     xct_core* _core;
 
 protected:
-    enum commit_t { t_normal = 0, t_lazy = 1, t_chain = 2, t_group = 4 };
-
-    enum loser_xct_state_t {
-                 loser_false = 0x0,      // Not a loser transaction
-                 loser_true = 0x1,       // A loser transaction
-                 loser_undoing = 0x2};   // Loser transaction is being rolled back currently
+    enum commit_t { t_normal = 0, t_lazy = 1 };
 
 
 /**\endcond skip */
 
 /**\cond skip */
 public:
-    static
-    rc_t                      group_commit(const xct_t *list[], int number);
 
     rc_t                      commit_free_locks(bool read_lock_only = false, lsn_t commit_lsn = lsn_t::null);
     rc_t                      early_lock_release(lsn_t last_lsn);
@@ -297,9 +283,7 @@ public:
                                 }
     const sm_stats_t&      const_stats_ref() { return *__stats; }
     rc_t                        commit(bool lazy = false, lsn_t* plastlsn=NULL);
-    rc_t                        commit_as_group_member();
     rc_t                        rollback();
-    rc_t                        chain(bool lazy = false);
     rc_t                        abort(bool save_stats = false);
 
     // used by restart.cpp, some logrecs
@@ -322,33 +306,6 @@ public:
     // used by sm.cpp:
     static uint32_t    num_active_xcts();
 
-    static size_t get_loser_count();
-
-    // For handling log-space warnings
-    // If you've warned wrt a tx once, and the server doesn't
-    // choose to abort that victim, you don't want every
-    // ssm prologue to warn thereafter. This allows the
-    // callback function to turn off the warnings for the (non-)victim.
-    void                         log_warn_disable();
-    void                         log_warn_resume();
-    bool                         log_warn_is_on() const;
-
-public:
-    //
-    //        Used by I/O layer
-    //
-    void                        AddStoreToFree(const StoreID& stid);
-    void                        AddLoadStore(const StoreID& stid);
-    //        Used by vol.cpp
-    void                        set_alloced() { }
-
-protected:
-    /////////////////////////////////////////////////////////////////
-    // the following is put here because smthread
-    // doesn't know about the structures
-    // and we have changed these to be a per-thread structures.
-    static lockid_t*            new_lock_hierarchy();
-
 public: // not quite public thing.. but convenient for experiments
     xct_lock_info_t*             lock_info() const;
     lil_private_table*           lil_lock_info() const;
@@ -364,21 +321,6 @@ public:
     static void                  assert_xlist_mutex_is_mine();
     static bool                  xlist_mutex_is_mine();
 
-
-    /* "poisons" the transaction so cannot block on locks (or remain
-       blocked if already so), instead aborting the offending lock
-       request with eDEADLOCK. We use eDEADLOCK instead of
-       eLOCKTIMEOUT because all transactions must expect the former
-       and must abort in response; transactions which specified
-       WAIT_FOREVER won't be expecting timeouts, and the SM uses
-       timeouts (WAIT_IMMEDIATE) as internal signals which do not
-       usually trigger a transaction abort.
-
-       chkpt::take uses this to ensure timely and deadlock-free
-       completion/termination of transactions which would prevent a
-       checkpoint from freeing up needed log space.
-     */
-    void                         force_nonblocking();
 
 
 /////////////////////////////////////////////////////////////////
@@ -400,15 +342,7 @@ private:
     sm_stats_t*             __stats; // allocated by user
     lockid_t*                    __saved_lockid_t;
 
-    // NB: must replicate because _xlist keys off it...
-    // NB: can't be const because we might chain...
     tid_t                        _tid;
-
-    /**
-     * number of previously committed xcts on this thread as a chain.
-     * If 0, there is no chained previous xct.
-     */
-    uint32_t                     _xct_chain_len;
 
     /**
      * \brief The count of consecutive SSXs conveyed by this transaction object.
@@ -448,15 +382,6 @@ private:
     /** result and context of in-query verification. */
     inquery_verify_context_t     _inquery_verify_context;
 
-    // For a loser transaction identified during Log Analysis phase in Recovery,
-    // the transaction state is 'xct_active' so the standard roll back logic can be
-    // used.  In order to distingish a loser transaction and normal active
-    // transaction, check the '_loser_xct' flag, this is especially important
-    // for transaction driven UNDO logic.
-    // For on_demand UNDO, this flag also indicate if the loser transaction
-    // is currently rolling back
-    loser_xct_state_t            _loser_xct;
-
     // Latch object mainly for checkpoint to access information in txn object
     latch_t                      _latch;
 
@@ -467,8 +392,6 @@ protected:
                                                  lsn_t* plastlsn=NULL);
     // CS: decoupled from _commit to allow reuse in plog_xct_t
     rc_t _commit_read_only(uint32_t flags, lsn_t& inherited_read_watermark);
-    rc_t _pre_commit(uint32_t flags);
-    rc_t _pre_abort();
 
 private:
     bool                        one_thread_attached() const;   // assertion
@@ -495,28 +418,6 @@ public:
     bool                         get_query_exlock_for_select() const {return _query_exlock_for_select;}
     void                         set_query_exlock_for_select(bool mode) {_query_exlock_for_select = mode;}
 
-    bool                        is_loser_xct() const
-        {
-            if (loser_false == _loser_xct)
-                return false;   // Not a loser transaction
-            else
-                return true;    // Loser transaction
-        }
-    bool                        is_loser_xct_in_undo() const
-        {
-            if (true == is_loser_xct())
-            {
-                if (loser_undoing == _loser_xct)
-                    return true;   // Loser transaction and in the middle of undoing
-            }
-            return false;
-        }
-    void                        set_loser_xct_in_undo()
-        {
-            if (loser_false != _loser_xct)
-                _loser_xct = loser_undoing;
-        }
-
     ostream &                   dump_locks(ostream &) const;
 
     /////////////////////////////////////////////////////////////////
@@ -533,7 +434,7 @@ private:
                                     bool                 reset);
 
     w_rc_t                     _sync_logbuf(bool block=true, bool signal=true);
-    void                       _teardown(bool is_chaining);
+    void                       _teardown();
 
 public:
     /**
@@ -584,31 +485,7 @@ protected: // all data members protected
     // timestamp for calculating latency
     std::chrono::high_resolution_clock::time_point _begin_tstamp;
 
-    /*
-     *  log_m related
-     */
-    // logrec_t*                    _last_log;    // last log generated by xct
-    // logrec_t*                    _log_buf;
-    // /**
-    //  * As SSX log must be separated from outer transaction's logs, we maintain another buffer.
-    //  * This buffer is only used during one get/give_logbuf() call because it's SSX.
-    //  * Also, again because it's SSX, it can contain only one log.
-    //  */
-    // logrec_t*                    _log_buf_for_piggybacked_ssx;
-
-    bool                         _rolling_back;// true if aborting OR
-
-    bool                         should_consume_rollback_resv(int t) const;
-    bool                         should_reserve_for_rollback(int t)
-                                 const {
-                                    return  ! should_consume_rollback_resv(t);
-                                 }
-private:
-    lintel::Atomic<int> _in_compensated_op; // in the midst of a compensated operation
-                                            // use an int because they can be nested.
-
 public:
-    bool                        rolling_back() const { return _rolling_back; }
 #if W_DEBUG_LEVEL > 2
 private:
     bool                        _had_error;
@@ -625,7 +502,6 @@ public:
     tid_t                       tid() const {
                                     w_assert1(_core == NULL || _tid == _core->_tid);
                                     return _tid; }
-    uint32_t                    get_xct_chain_len() const { return _xct_chain_len;}
     uint32_t&                   ssx_chain_len() { return _ssx_chain_len;}
 
     const lsn_t&                get_read_watermark() const { return _read_watermark; }

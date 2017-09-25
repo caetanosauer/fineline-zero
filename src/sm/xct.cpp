@@ -221,14 +221,10 @@ xct_t::xct_core::xct_core(tid_t const &t, state_t s, int timeout)
     :
     _tid(t),
     _timeout(timeout),
-    _warn_on(true),
     _lock_info(agent_lock_info->take()),
     _lil_lock_info(agent_lil_lock_info->take()),
     _raw_lock_xct(NULL),
-    _state(s),
-    _read_only(false),
-    _xct_ended(0), // for assertions
-    _xct_aborting(0)
+    _state(s)
 {
     _lock_info->set_tid(_tid);
     w_assert1(_tid == _lock_info->tid());
@@ -261,7 +257,6 @@ xct_t::xct_t(sm_stats_t* stats, int timeout,
     __stats(stats),
     __saved_lockid_t(0),
     _tid(_core->_tid),
-    _xct_chain_len(0),
     _ssx_chain_len(0),
     _query_concurrency (smlevel_0::t_cc_none),
     _query_exlock_for_select(false),
@@ -269,13 +264,7 @@ xct_t::xct_t(sm_stats_t* stats, int timeout,
     _inquery_verify_keyorder(false),
     _inquery_verify_space(false),
     _read_watermark(lsn_t::null),
-    _elr_mode (elr_none),
-    // _last_log(0),
-#if CHECK_NESTING_VARIABLES
-#endif
-    // _log_buf(0),
-    _rolling_back(false),
-    _in_compensated_op(0)
+    _elr_mode (elr_none)
 #if W_DEBUG_LEVEL > 2
     ,
     _had_error(false)
@@ -293,24 +282,7 @@ xct_t::xct_t(sm_stats_t* stats, int timeout,
     w_assert2(tid() <= _nxt_tid);
     w_assert1(tid() == _core->_lock_info->tid());
 
-    if (true == loser_xct)
-        _loser_xct = loser_true;  // A loser transaction
-    else
-        _loser_xct = loser_false; // Not a loser transaction
-
     _ssx_positions[0] = 0;
-
-    // _log_buf = new logrec_t; // deleted when xct goes away
-    // _log_buf_for_piggybacked_ssx = new logrec_t;
-
-// #ifdef ZERO_INIT
-//     memset(_log_buf, '\0', sizeof(logrec_t));
-//     memset(_log_buf_for_piggybacked_ssx, '\0', sizeof(logrec_t));
-// #endif
-
-    // if (!_log_buf || !_log_buf_for_piggybacked_ssx)  {
-    //     W_FATAL(eOUTOFMEMORY);
-    // }
 
     if (timeout_c() == timeout_t::WAIT_SPECIFIED_BY_THREAD) {
         // override in this case
@@ -367,8 +339,7 @@ xct_t::~xct_t()
                 reinterpret_cast<uintptr_t>(this));
     }
 
-    _teardown(false);
-    w_assert3(_in_compensated_op==0);
+    _teardown();
 
     if (shutdown_clean)  {
         // if this transaction is system transaction,
@@ -558,12 +529,6 @@ xct_t::abort(bool save_stats_structure /* = false */)
     return _abort();
 }
 
-void
-xct_t::force_nonblocking()
-{
-//    lock_info()->set_nonblocking();
-}
-
 rc_t
 xct_t::commit(bool lazy,lsn_t* plastlsn)
 {
@@ -572,19 +537,6 @@ xct_t::commit(bool lazy,lsn_t* plastlsn)
     // in log_prepared and chkpt.cpp
 
     return _commit(t_normal | (lazy ? t_lazy : t_normal), plastlsn);
-}
-
-rc_t
-xct_t::commit_as_group_member()
-{
-    w_assert1(smthread_t::xct() == this);
-    return _commit(t_normal|t_group);
-}
-
-rc_t
-xct_t::chain(bool lazy)
-{
-    return _commit(t_chain | (lazy ? t_lazy : t_chain));
 }
 
 tid_t
@@ -666,7 +618,6 @@ operator<<(ostream& o, const xct_t& x)
 {
     o << "tid="<< x.tid();
     o << "\n" << " state=" << x.state() << "\n" << "   ";
-    o << " in_compensated_op=" << x._in_compensated_op;
 
     if(x.raw_lock_xct()) {
          x.raw_lock_xct()->dump_lockinfo(o);
@@ -677,35 +628,15 @@ operator<<(ostream& o, const xct_t& x)
 
 // common code needed by _commit(t_chain) and ~xct_t()
 void
-xct_t::_teardown(bool is_chaining) {
+xct_t::_teardown() {
     W_COERCE(acquire_xlist_mutex());
 
     _xlink.detach();
-    if(is_chaining) {
-        _tid = _core->_tid = ++_nxt_tid;
-        _core->_lock_info->set_tid(_tid); // WARNING: duplicated in
-        // lock_x and in core
-        _xlist.put_in_order(this);
-    }
 
     // find the new oldest xct
     xct_t* xd = _xlist.last();
     _oldest_tid = xd ? xd->_tid : _nxt_tid.load();
     release_xlist_mutex();
-}
-
-size_t xct_t::get_loser_count()
-{
-    size_t res = 0;
-
-    xct_t* xd;
-    xct_i iter(true);
-
-    while ((xd = iter.next())) {
-        if (xd->_loser_xct != loser_false) { res++; }
-    }
-
-    return res;
 }
 
 /*********************************************************************
@@ -733,18 +664,7 @@ xct_t::change_state(state_t new_state)
     w_assert2((new_state > _core->_state) ||
             (_core->_state == xct_chaining && new_state == xct_active));
 
-    // state_t old_state = _core->_state;
     _core->_state = new_state;
-    switch(new_state) {
-        case xct_aborting: _core->_xct_aborting = true; break;
-        // the whole poiint of _xct_aborting is to
-        // preserve it through xct_freeing space
-        // rather than create two versions of xct_freeing_space, which
-        // complicates restart
-        case xct_freeing_space: break;
-        case xct_ended: break; // arg see comments and logic in xct_t::_abort
-        default: _core->_xct_aborting = false; break;
-    }
 
     // Release the write latch
     latch().latch_release();
@@ -752,110 +672,11 @@ xct_t::change_state(state_t new_state)
 }
 
 
-/**\todo Figure out how log space warnings will interact with mtxct */
-void
-xct_t::log_warn_disable()
-{
-    _core->_warn_on = true;
-}
-
-void
-xct_t::log_warn_resume()
-{
-    _core->_warn_on = false;
-}
-
-bool
-xct_t::log_warn_is_on() const
-{
-    return _core->_warn_on;
-}
-
 bool xct_t::has_logs()
 {
     auto begin = _ssx_positions[_ssx_chain_len];
     auto end = smthread_t::get_redo_buf()->get_size();
     return end > begin;
-}
-
-rc_t
-xct_t::_pre_commit(uint32_t flags)
-{
-    // "normal" means individual commit; not group commit.
-    // Group commit cannot be lazy or chained.
-    bool individual = ! (flags & xct_t::t_group);
-    w_assert2(individual || ((flags & xct_t::t_chain) ==0));
-    w_assert2(individual || ((flags & xct_t::t_lazy) ==0));
-
-    w_assert1(_core->_state == xct_active);
-
-    w_assert1(_core->_xct_ended++ == 0);
-
-//    W_DO( ConvertAllLoadStoresToRegularStores() );
-
-    change_state(flags & xct_t::t_chain ? xct_chaining : xct_committing);
-
-    if (has_logs() || !smlevel_0::log)  {
-        /*
-         *  If xct generated some log, write a synchronous
-         *  Xct End Record.
-         *  Do this if logging is turned off. If it's turned off,
-         *  we won't have a _last_lsn, but we still have to do
-         *  some work here to complete the tx; in particular, we
-         *  have to destroy files...
-         *
-         *  Logging a commit must be serialized with logging
-         *  prepares (done by chkpt).
-         */
-
-        // Does not wait for the checkpoint to finish, checkpoint is a non-blocking operation
-        // chkpt_serial_m::read_acquire();
-
-        // OLD: don't allow a chkpt to occur between changing the
-        // state and writing the log record,
-        // since otherwise it might try to change the state
-        // to the current state (which causes an assertion failure).
-        // NEW: had to allow this below, because the freeing of
-        // locks needs to happen after the commit log record is written.
-        //
-        // Note freeing the locks and log flush occur after 'log_xct_end',
-        // and then change state.
-        // if the logic changes here, need to visit chkpt logic which is
-        // depending on the logic here when recording active transactions
-
-        state_t old_state = _core->_state;
-        change_state(xct_freeing_space);
-        rc_t rc = RCOK;
-        // CS TODO: removed xct_freeing_space (no 2pc support anyway)
-        // if (!is_sys_xct()) { // system transaction has nothing to free, so this log is not needed
-        //     Logger::log<xct_freeing_space_log>();
-        // }
-
-        // Does not wait for the checkpoint to finish, checkpoint is a non-blocking operation
-        // chkpt_serial_m::read_release();
-
-        // CS TODO exceptions!
-        // if(rc.is_error()) {
-            // Log insert failed.
-            // restore the state.
-            // Do this by hand; we'll fail the asserts if we
-            // use change_state.
-            // _core->_state = old_state;
-            // return rc;
-        // }
-
-        // CS FINELINE TODO: early lock release won't work like this, because commit_lsn is
-        // not known until log is actually flushed. I just replaced it with the current
-        // durable_lsn, but I'm not entirely sure if that is correct.
-        // We should always be able to insert this log
-        // record, what with log reservations.
-        lsn_t commit_lsn = smlevel_0::log->durable_lsn();
-        // now we have xct_end record though it might not be flushed yet. so,
-        // let's do ELR
-        W_DO(early_lock_release(commit_lsn));
-    }
-
-    return RCOK;
 }
 
 void xct_t::flush_redo_buffer(bool sys_xct)
@@ -898,33 +719,27 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
 
     bool sys_xct = is_sys_xct();
     if (!sys_xct) {
-        W_DO(_pre_commit(flags));
+        w_assert1(_core->_state == xct_active);
+
+        change_state(xct_committing);
+
+        if (has_logs())  {
+            // CS FINELINE TODO: early lock release won't work like this, because commit_lsn is
+            // not known until log is actually flushed. I just replaced it with the current
+            // durable_lsn, but I'm not entirely sure if that is correct.
+            lsn_t commit_lsn = smlevel_0::log->durable_lsn();
+            W_DO(early_lock_release(commit_lsn));
+        }
     }
 
     if (has_logs())  {
-
         flush_redo_buffer(sys_xct);
 
-        if (sys_xct) {
-            // If system txn, we're done here
-            return RCOK;
-        }
-
-        change_state(xct_ended);
-
-        // Free all locks. Do not free locks if chaining.
-        bool individual = ! (flags & xct_t::t_group);
-        if(individual && ! (flags & xct_t::t_chain) && _elr_mode != elr_sx)  {
-            W_DO(commit_free_locks());
-        }
-
-        if(flags & xct_t::t_chain)  {
-            // in this case the dependency is the previous xct itself, so take the commit LSN.
-            // CS TODO: what is this watermark used for?
-            // inherited_read_watermark = _last_lsn;
-            inherited_read_watermark = lsn_t::null;
-        }
-    }  else if (!sys_xct) {
+        // If system txn, we're done here
+        if (sys_xct) { return RCOK; }
+        if(_elr_mode != elr_sx)  { W_DO(commit_free_locks()); }
+    }
+    else if (!sys_xct) {
         W_DO(_commit_read_only(flags, inherited_read_watermark));
     }
 
@@ -932,44 +747,12 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
 
     INC_TSTAT(commit_xct_cnt);
 
+    change_state(xct_ended);
     smthread_t::detach_xct(this);        // no transaction for this thread
 
     /*
      *  Xct is now committed
      */
-
-    // CS FINELINE TODO: get rid of this chaining
-    if (flags & xct_t::t_chain)  {
-        w_assert0(!is_sys_xct()); // system transaction cannot chain (and never has to)
-
-        w_assert1(! (flags & xct_t::t_group));
-
-        ++_xct_chain_len;
-        /*
-         *  Start a new xct in place
-         */
-        _teardown(true);
-        if (inherited_read_watermark.valid()) {
-            _read_watermark = inherited_read_watermark;
-        }
-        // we do NOT reset _read_watermark here. the last xct of the chain
-        // is responsible to flush if it's read-only. (if read-write, it anyway flushes)
-        _core->_xct_ended = 0;
-        w_assert1(_core->_xct_aborting == false);
-        // _last_log = 0;
-
-        // should already be out of compensated operation
-        w_assert3( _in_compensated_op==0 );
-
-        smthread_t::attach_xct(this);
-        INC_TSTAT(begin_xct_cnt);
-        _core->_state = xct_chaining; // to allow us to change state back
-        // to active: there's an assert about this where we don't
-        // have context to know that it's where we're chaining.
-        change_state(xct_active);
-    } else {
-        _xct_chain_len = 0;
-    }
 
     auto end_tstamp = std::chrono::high_resolution_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_tstamp - _begin_tstamp);
@@ -988,11 +771,7 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
 rc_t
 xct_t::_commit_read_only(uint32_t flags, lsn_t& inherited_read_watermark)
 {
-    // Nothing logged; no need to write a log record.
-    change_state(xct_ended);
-
-    bool individual = ! (flags & xct_t::t_group);
-    if(individual && !is_sys_xct() && ! (flags & xct_t::t_chain)) {
+    if(!is_sys_xct()) {
         W_DO(commit_free_locks());
 
         // however, to make sure the ELR for X-lock and CLV is
@@ -1044,9 +823,6 @@ xct_t::_commit_read_only(uint32_t flags, lsn_t& inherited_read_watermark)
             _read_watermark = lsn_t::null;
         }
     } else {
-        if(flags & xct_t::t_chain)  {
-            inherited_read_watermark = _read_watermark;
-        }
         // even if chaining or grouped xct, we can do ELR
         // CS removed _last_lsn from xct_t
         // W_DO(early_lock_release());
@@ -1097,57 +873,6 @@ rc_t xct_t::early_lock_release(lsn_t last_lsn) {
     return RCOK;
 }
 
-
-rc_t
-xct_t::_pre_abort()
-{
-    // The transaction abort function is shared by :
-    // 1. Normal transaction abort, in such case the state would be in xct_active,
-    //     xct_committing, or xct_freeing_space, and the _loser_xct flag off
-    // 2. UNDO phase in Recovery, in such case the state would be in xct_active
-    //     but the _loser_xct flag is on to indicating a loser transaction
-    // Note that if we open the store for new transaction during Recovery
-    // we could encounter normal transaction abort while Recovery is going on,
-    // in such case the aborting transaction state would fall into case #1 above
-
-    if (!is_loser_xct()) {
-        // Not a loser txn
-        w_assert1(_core->_state == xct_active
-                || _core->_state == xct_committing /* if it got an error in commit*/
-                || _core->_state == xct_freeing_space /* if it got an error in commit*/
-                );
-        if(_core->_state != xct_committing && _core->_state != xct_freeing_space) {
-            w_assert1(_core->_xct_ended++ == 0);
-        }
-    }
-
-    if (true == is_loser_xct())
-    {
-        // Loser transaction rolling back, set the flag to indicate the status
-        set_loser_xct_in_undo();
-    }
-
-#if X_LOG_COMMENT_ON
-    // Do this BEFORE changing state so that we
-    // have, for log-space-reservations purposes,
-    // ensured that we inserted a record during
-    // forward processing, thereby reserving something
-    // for aborting, even if this is a read-only xct.
-    {
-        // w_ostrstream s;
-        // s << "aborting... ";
-        // TODO, bug... commenting this out, it appears
-        // Single Page Recovery when collecting log records
-        // it might have bugs dealing with this log record (before txn aborting)
-//        W_DO(log_comment(s.c_str()));
-    }
-#endif
-
-    change_state(xct_aborting);
-
-    return RCOK;
-}
-
 /*********************************************************************
  *
  *  xct_t::abort()
@@ -1158,84 +883,16 @@ xct_t::_pre_abort()
 rc_t
 xct_t::_abort()
 {
-    W_DO(_pre_abort());
+    w_assert1(_ssx_chain_len == 0);
+    w_assert1(_core->_state == xct_active
+            || _core->_state == xct_committing /* if it got an error in commit*/
+            || _core->_state == xct_freeing_space /* if it got an error in commit*/
+            );
 
-    /*
-     * clear the list of load stores as they are going to be destroyed
-     */
-    //ClearAllLoadStores();
-
-    W_DO( rollback() );
-
-    // if this is not part of chain or both-SX-ELR mode,
-    // we can safely release all locks at this point.
-    bool all_lock_released = false;
-    if (_xct_chain_len == 0 || _elr_mode == elr_sx) {
-        W_COERCE( commit_free_locks());
-        all_lock_released = true;
-    } else {
-        // if it's a part of chain, we have to make preceding
-        // xcts durable. so, unless it's SX-ELR, we can release only S-locks
-        W_COERCE( commit_free_locks(true));
-    }
-
-    if (has_logs()) {
-        /*
-         *  If xct generated some log, write a Xct End Record.
-         *  We flush because if this was a prepared
-         *  transaction, it really must be synchronous
-         */
-
-        // don't allow a chkpt to occur between changing the state and writing
-        // the log record, since otherwise it might try to change the state
-        // to the current state (which causes an assertion failure).
-
-        // NOTE: you cannot insert a log comment here; it'll break
-        // on an assertion having to do with the xct state. Wait until
-        // state is changed from aborting to something else.
-
-        // Does not wait for the checkpoint to finish, checkpoint is a non-blocking operation
-        // chkpt_serial_m::read_acquire();
-
-        // change_state(xct_freeing_space);
-        // Logger::log<xct_freeing_space_log>();
-
-        // Does not wait for the checkpoint to finish, checkpoint is a non-blocking operation
-        // chkpt_serial_m::read_release();
-
-        // CS: not needed in FineLine
-//         if (_xct_chain_len > 0) {
-//             // we need to flush only if it's chained or prepared xct
-//             _sync_logbuf();
-//         } else {
-//             // otherwise, we don't have to flush
-//             _sync_logbuf(false);
-//         }
-
-        // don't allow a chkpt to occur between changing the state and writing
-        // the log record, since otherwise it might try to change the state
-        // to the current state (which causes an assertion failure).
-
-        // Does not wait for the checkpoint to finish, checkpoint is a non-blocking operation
-        // chkpt_serial_m::read_acquire();
-
-        // Log transaction abort for both cases: 1) normal abort, 2) UNDO
-        change_state(xct_ended);
-        // Logger::log<xct_abort_log>();
-
-        // Does not wait for the checkpoint to finish, checkpoint is a non-blocking operation
-        // chkpt_serial_m::read_release();
-    }  else  {
-        change_state(xct_ended);
-    }
-
-    if (!all_lock_released) {
-        W_COERCE( commit_free_locks());
-    }
-
-    _core->_xct_aborting = false; // couldn't have xct_ended do this, arg
-                                  // CS: why not???
-    _xct_chain_len = 0;
+    change_state(xct_aborting);
+    W_DO(rollback());
+    W_COERCE(commit_free_locks());
+    change_state(xct_ended);
 
     smthread_t::detach_xct(this);        // no transaction for this thread
     INC_TSTAT(abort_xct_cnt);
@@ -1323,7 +980,7 @@ xct_t::rollback()
     if (!undo_buf->is_abortable()) {
         W_FATAL_MSG(eINTERNAL, <<
                 "Transaction too large -- cannot rollback! " <<
-                "Increase tc_t::UndoBufferSize and recompile");
+                "Increase UndoBufferSize and recompile");
     }
 
     if(!log) {
@@ -1332,15 +989,6 @@ xct_t::rollback()
         << endl;
         return RC(eNOABORT);
     }
-
-    w_rc_t            rc;
-
-    DBGX( << " in compensated op depth " <<  _in_compensated_op);
-    _in_compensated_op++;
-
-    // rollback is only one type of compensated op, and it doesn't nest
-    w_assert0(!_rolling_back);
-    _rolling_back = true;
 
     /*
      * CS FineLine txn rollback.
@@ -1353,10 +1001,7 @@ xct_t::rollback()
     }
 
     _read_watermark = lsn_t::null;
-    _xct_chain_len = 0;
-    _in_compensated_op --;
-    _rolling_back = false;
-    return rc;
+    return RCOK;
 }
 
 ostream &

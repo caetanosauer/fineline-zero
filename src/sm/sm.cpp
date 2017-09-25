@@ -602,27 +602,6 @@ ss_m::xct_state_t ss_m::state_xct(const xct_t* x)
     return x->state();
 }
 
-/*--------------------------------------------------------------*
- *  ss_m::chain_xct()                                *
- *--------------------------------------------------------------*/
-rc_t
-ss_m::chain_xct( sm_stats_t*&  _stats, bool lazy)
-{
-    W_DO( _chain_xct(_stats, lazy) );
-    return RCOK;
-}
-rc_t
-ss_m::chain_xct(bool lazy)
-{
-    sm_stats_t        *_stats = 0;
-    W_DO( _chain_xct(_stats, lazy) );
-    /*
-     * throw away the _stats, since user isn't harvesting...
-     */
-    delete _stats;
-    return RCOK;
-}
-
 rc_t
 ss_m::activate_archiver()
 {
@@ -826,28 +805,6 @@ ss_m::_commit_xct(sm_stats_t*& _stats, bool lazy,
         delete xp;
         w_assert1(!xct());
     }
-    return RCOK;
-}
-
-/*--------------------------------------------------------------*
- *  ss_m::_chain_xct()                                *
- *--------------------------------------------------------------*/
-rc_t
-ss_m::_chain_xct(
-        sm_stats_t*&  _stats, /* pass in a new one, get back the old */
-        bool lazy)
-{
-    sm_stats_t*  new_stats = _stats;
-    w_assert3(xct() != 0);
-    xct_t* x = xct();
-
-    W_DO( x->chain(lazy) );
-    w_assert3(xct() == x);
-    if(x->is_instrumented()) {
-        _stats = x->steal_stats();
-    }
-    x->give_stats(new_stats);
-
     return RCOK;
 }
 

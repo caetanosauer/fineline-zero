@@ -282,7 +282,7 @@ public:
                                     return         s;
                                 }
     const sm_stats_t&      const_stats_ref() { return *__stats; }
-    rc_t                        commit(bool lazy = false, lsn_t* plastlsn=NULL);
+    rc_t                        commit(bool sync_log = true);
     rc_t                        rollback();
     rc_t                        abort(bool save_stats = false);
 
@@ -386,12 +386,9 @@ private:
     latch_t                      _latch;
 
 protected:
-    void flush_redo_buffer(bool sys_xct = false);
+    void flush_redo_buffer(bool sys_xct = false, bool sync = true);
     rc_t                _abort();
-    rc_t                _commit(uint32_t flags,
-                                                 lsn_t* plastlsn=NULL);
-    // CS: decoupled from _commit to allow reuse in plog_xct_t
-    rc_t _commit_read_only(uint32_t flags, lsn_t& inherited_read_watermark);
+    rc_t _commit_read_only(lsn_t& inherited_read_watermark);
 
 private:
     bool                        one_thread_attached() const;   // assertion

@@ -131,6 +131,6 @@ void basethread_t::begin_xct()
 void basethread_t::commit_xct()
 {
     assert(current_xct != NULL);
-    current_xct->commit(false, NULL);
+    current_xct->commit();
     delete current_xct;
 }

@@ -529,16 +529,6 @@ xct_t::abort(bool save_stats_structure /* = false */)
     return _abort();
 }
 
-rc_t
-xct_t::commit(bool lazy,lsn_t* plastlsn)
-{
-    // removed because a checkpoint could
-    // be going on right now.... see comments
-    // in log_prepared and chkpt.cpp
-
-    return _commit(t_normal | (lazy ? t_lazy : t_normal), plastlsn);
-}
-
 tid_t
 xct_t::youngest_tid()
 {
@@ -679,7 +669,7 @@ bool xct_t::has_logs()
     return end > begin;
 }
 
-void xct_t::flush_redo_buffer(bool sys_xct)
+void xct_t::flush_redo_buffer(bool sys_xct, bool sync_log)
 {
     // CS FINELINE TODO: simplify this, by unifying all tcb, redobuf, xct,
     // and ss_m code
@@ -690,24 +680,16 @@ void xct_t::flush_redo_buffer(bool sys_xct)
     char* begin = redobuf->get_buffer_begin() + offset;
     auto commit_size = redobuf->get_size() - offset;
     w_assert1(commit_size > 0);
-    smlevel_0::log->insert_raw(begin, commit_size);
+    lsn_t lsn;
+    smlevel_0::log->insert_raw(begin, commit_size, &lsn);
     redobuf->drop_suffix(commit_size);
+
+    if (sync_log) {
+	smlevel_0::log->flush(lsn);
+    }
 }
 
-/*********************************************************************
- *
- *  xct_t::commit(flags)
- *
- *  Commit the transaction. If flag t_lazy, log is not synced.
- *  If flag t_chain, a new transaction is instantiated inside
- *  this one, and inherits all its locks.
- *
- *  In *plastlsn it returns the lsn of the last log record for this
- *  xct.
- *
- *********************************************************************/
-rc_t
-xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
+rc_t xct_t::commit(bool sync_log)
 {
     // when chaining, we inherit the read_watermark from the previous xct
     // in case the next transaction are read-only.
@@ -733,14 +715,14 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
     }
 
     if (has_logs())  {
-        flush_redo_buffer(sys_xct);
+        flush_redo_buffer(sys_xct, sync_log);
 
         // If system txn, we're done here
         if (sys_xct) { return RCOK; }
         if(_elr_mode != elr_sx)  { W_DO(commit_free_locks()); }
     }
     else if (!sys_xct) {
-        W_DO(_commit_read_only(flags, inherited_read_watermark));
+        W_DO(_commit_read_only(inherited_read_watermark));
     }
 
     if (sys_xct) { return RCOK; }
@@ -769,7 +751,7 @@ xct_t::_commit(uint32_t flags, lsn_t* plastlsn /* default NULL*/)
 }
 
 rc_t
-xct_t::_commit_read_only(uint32_t flags, lsn_t& inherited_read_watermark)
+xct_t::_commit_read_only(lsn_t& inherited_read_watermark)
 {
     if(!is_sys_xct()) {
         W_DO(commit_free_locks());

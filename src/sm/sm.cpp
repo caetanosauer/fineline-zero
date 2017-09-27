@@ -793,7 +793,8 @@ ss_m::_commit_xct(sm_stats_t*& _stats, bool lazy,
     w_assert3(x.state() == xct_t::xct_active ||
             (x.state() == xct_t::xct_aborting && x.is_sys_xct()));
 
-    W_DO( x.commit(lazy,plastlsn) );
+    bool sync_log = !lazy;
+    W_DO( x.commit(sync_log) );
     if (x.is_sys_xct()) {
         x.pop_ssx();
     }

@@ -114,7 +114,7 @@ public:
         std::ofstream ofs2;
         if (print_tput) {
             ofs.open("tput.txt", std::ofstream::out | std::ofstream::trunc);
-            ofs2.open("evict_time.txt", std::ofstream::out | std::ofstream::trunc);
+            // ofs2.open("evict_time.txt", std::ofstream::out | std::ofstream::trunc);
         }
 
         while (true) {
@@ -131,15 +131,15 @@ public:
                     prev_st[enum_to_base(sm_stat_id::commit_xct_cnt)];
                 ofs << diff << std::endl;
 
-                auto duration = st[enum_to_base(sm_stat_id::bf_evict_duration)] -
-                    prev_st[enum_to_base(sm_stat_id::bf_evict_duration)];
-                auto count = st[enum_to_base(sm_stat_id::bf_evict)] -
-                    prev_st[enum_to_base(sm_stat_id::bf_evict)];
-                auto evict_attempts = st[enum_to_base(sm_stat_id::bf_eviction_attempts)] -
-                    prev_st[enum_to_base(sm_stat_id::bf_eviction_attempts)];
-                auto evict_time = count > 0 ? (duration / count) : 0;
+                // auto duration = st[enum_to_base(sm_stat_id::bf_evict_duration)] -
+                //     prev_st[enum_to_base(sm_stat_id::bf_evict_duration)];
+                // auto count = st[enum_to_base(sm_stat_id::bf_evict)] -
+                //     prev_st[enum_to_base(sm_stat_id::bf_evict)];
+                // auto evict_attempts = st[enum_to_base(sm_stat_id::bf_eviction_attempts)] -
+                //     prev_st[enum_to_base(sm_stat_id::bf_eviction_attempts)];
+                // auto evict_time = count > 0 ? (duration / count) : 0;
 
-                ofs2 << evict_time << "\t" << evict_attempts << std::endl;
+                // ofs2 << evict_time << "\t" << evict_attempts << std::endl;
             }
 
             if (msec) { Logger::log_sys<tick_msec_log>(); }
@@ -149,7 +149,7 @@ public:
         }
 
         if (print_tput) { ofs.close(); }
-        if (print_tput) { ofs2.close(); }
+        // if (print_tput) { ofs2.close(); }
     }
 
 private:

@@ -7,9 +7,10 @@ public:
 
     virtual void invoke(logrec_t& r)
     {
-        std::cout << r.lsn().hi()
-            << '\t' << r.lsn().lo()
-            << '\t' << r.pid() << std::endl;
+        // CS TODO FINELINE
+        // std::cout << r.lsn().hi()
+        //     << '\t' << r.lsn().lo()
+        //     << '\t' << r.pid() << std::endl;
     }
 };
 

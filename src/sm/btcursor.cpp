@@ -70,7 +70,7 @@ void bt_cursor_t::_init(
     _eof = false;
     _pid = 0;
     _slot = -1;
-    _lsn = lsn_t::null;
+    _version = 0;
     _elen = 0;
 
     _needs_lock = g_xct_does_need_lock();
@@ -86,7 +86,7 @@ void bt_cursor_t::close()
     _slot = -1;
     _key.clear();
     _release_current_page();
-    _lsn = lsn_t::null;
+    _version = 0;
 }
 
 void bt_cursor_t::_release_current_page() {
@@ -106,8 +106,7 @@ void bt_cursor_t::_set_current_page(btree_page_h &page) {
     _pid = page.pid();
     // pin this page for subsequent refix()
     _pid_bfidx.set(page.pin_for_refix());
-    _lsn = page.get_page_lsn();
-    w_assert1(_lsn.valid()); // must have a valid LSN for _check_page_update to work
+    _version = page.version();
 }
 
 rc_t bt_cursor_t::_locate_first() {
@@ -215,7 +214,7 @@ rc_t bt_cursor_t::_locate_first() {
 rc_t bt_cursor_t::_check_page_update(btree_page_h &p)
 {
     // was the page changed?
-    if (_pid != p.pid() || p.get_page_lsn() != _lsn) {
+    if (_pid != p.pid() || p.version() != _version) {
         // check if the page still contains the key we are based on
         bool found = false;
         if (p.fence_contains(_key)) {

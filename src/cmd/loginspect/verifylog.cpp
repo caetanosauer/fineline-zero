@@ -86,7 +86,9 @@ void checkLSN(lsn_t lsn, lsn_t current, lsn_t expected)
 
 void VerifyHandler::checkAlloc(logrec_t& r)
 {
-    auto lsn = r.lsn();
+    // auto lsn = r.lsn();
+    // CS TODO FINELINE: pass lsn from log consumer into handlers
+    lsn_t lsn = lsn_t::null;
     PageID pid = *((PageID*) (r.data()));
     if (r.type() == alloc_page_log) {
         if (allocatedPages.find(pid) != allocatedPages.end()) {
@@ -119,7 +121,7 @@ void VerifyHandler::invoke(logrec_t& r)
 {
     w_assert0(r.valid_header());
 
-    lsn_t lsn = r.lsn();
+    // lsn_t lsn = r.lsn();
     PageID pid = r.pid();
 
     if (r.is_redo()) {
@@ -131,13 +133,13 @@ void VerifyHandler::invoke(logrec_t& r)
     if (merge) {
         w_assert0(pid >= lastPID);
         if (pid == lastPID) {
-            w_assert0(lsn > lastLSN);
+            // w_assert0(lsn > lastLSN);
         }
-        w_assert0(merge || lsn >= minLSN);
-        w_assert0(merge || lsn <= maxLSN);
+        // w_assert0(merge || lsn >= minLSN);
+        // w_assert0(merge || lsn <= maxLSN);
     }
 
-    lastLSN = lsn;
+    // lastLSN = lsn;
     lastPID = pid;
 
     count++;

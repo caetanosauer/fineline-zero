@@ -72,7 +72,7 @@ struct bf_tree_cb_t {
     static const uint16_t BP_MAX_REFCOUNT = 1024;
 
     /** Initializes all fields -- called by fix when fetching a new page */
-    void init(PageID pid = 0, lsn_t page_lsn = lsn_t::null)
+    void init(PageID pid = 0)
     {
         w_assert1(_pin_cnt == -1);
         _pin_cnt = 0;
@@ -82,7 +82,6 @@ struct bf_tree_cb_t {
         _check_recovery = false;
         _ref_count = 0;
         _ref_count_ex = 0;
-        _page_lsn = page_lsn;
 
         // Update _used last. Since it's an std::atomic, a thread seeing it set
         // to true (e.g., cleaner or fuzzy checkpoints) can rely on the fact that
@@ -135,15 +134,7 @@ struct bf_tree_cb_t {
     uint64_t _fill32; // +8 -> 32
     uint64_t _fill40; // +8 -> 40
     uint64_t _fill48; // +8 -> 48
-
-    lsn_t _page_lsn; // +8 -> 56
-    lsn_t get_page_lsn() const { return _page_lsn; }
-    void set_page_lsn(lsn_t lsn)
-    {
-        // caller must hold EX latch, since it has just performed an update on
-        // the page
-        _page_lsn = lsn;
-    }
+    uint64_t _fill56; // +8 -> 56
 
     /// Log volume generated on this page (for page_img logrec compression, see xct_logger.h)
     uint32_t _log_volume;        // +4 -> 60

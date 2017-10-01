@@ -105,13 +105,13 @@ btree_impl::_ux_lock_key(
         // we release the latch here. However, we increment the pin count before that
         // to prevent the page from being evicted.
         pin_for_refix_holder pin_holder(leaf.pin_for_refix()); // automatically releases the pin
-        lsn_t prelsn = leaf.get_page_lsn(); // to check if it's modified after this unlatch
+        uint32_t preversion = leaf.version(); // to check if it's modified after this unlatch
         leaf.unfix();
         // then, we try it unconditionally (this will block)
         W_DO(lm->retry_lock(&entry, !check_only /* acquire */));
         // now we got the lock.. but it might be changed because we unlatched.
         w_rc_t refix_rc = leaf.refix_direct(pin_holder.idx(), latch_mode);
-        if (refix_rc.is_error() || leaf.get_page_lsn() != prelsn)
+        if (refix_rc.is_error() || leaf.version() != preversion)
         {
             // release acquired lock
             if (entry != NULL) {
@@ -126,7 +126,7 @@ btree_impl::_ux_lock_key(
             }
             else
             {
-                w_assert1(leaf.get_page_lsn() != prelsn); // unluckily, it's the case
+                w_assert1(leaf.version() != preversion); // unluckily, it's the case
                 return RC(eLOCKRETRY); // retry!
             }
         }

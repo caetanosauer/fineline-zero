@@ -143,8 +143,9 @@ public:
     bool         is_dirty()  const;
 
     /// Updates page_lsn field stored in CB of buffered page
-    void update_page_lsn(const lsn_t & lsn) const;
-    lsn_t get_page_lsn() const;
+    void incr_version();
+    void set_version(uint32_t);
+    uint32_t get_version() const;
 
     /// returns log volume in the CB
     uint32_t get_log_volume();
@@ -153,9 +154,6 @@ public:
 
     /// return value of _check_recovery flag on CB
     bool has_check_recovery();
-
-    /// Updates lsn field inside generic_page (i.e., in the page image)
-    void set_img_page_lsn(const lsn_t& lsn);
 
     /// Return flag for if this page to be deleted when bufferpool evicts it.
     /// @pre We do not hold current page's latch in Q mode

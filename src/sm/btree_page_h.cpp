@@ -96,7 +96,7 @@ bool btree_page_h::set_foster_child(PageID foster_child_pid,
     return true;
 }
 
-void btree_page_h::accept_empty_child(lsn_t new_lsn, PageID new_page_id, const bool f_redo) {
+void btree_page_h::accept_empty_child(uint32_t new_version, PageID new_page_id, const bool f_redo) {
     // If called from Recovery, i.e. btree_norec_alloc_log::redo, do not check for
     // is_single_log_sys_xct(), the transaction flags are not setup properly
 
@@ -106,11 +106,11 @@ void btree_page_h::accept_empty_child(lsn_t new_lsn, PageID new_page_id, const b
     if (false == f_redo)
         w_assert1(smthread_t::xct()->is_sys_xct());
 
-    w_assert1(new_lsn != lsn_t::null || !smlevel_0::logging_enabled);
+    w_assert1(new_version > 0 || !smlevel_0::logging_enabled);
 
     // Slight change in foster-parent, touching only foster link and chain-high.
     page()->btree_foster = new_page_id;
-    page()->lsn          = new_lsn;
+    page()->version          = new_version;
 
     // the only case we have to change parent's chain-high is when this page is the first
     // foster child. otherwise, chain_fence_high is unchanged.
@@ -125,7 +125,7 @@ void btree_page_h::accept_empty_child(lsn_t new_lsn, PageID new_page_id, const b
     }
 }
 
-rc_t btree_page_h::format_steal(lsn_t            new_lsn,         // LSN of the operation that creates this new page
+rc_t btree_page_h::format_steal(uint32_t            new_version,
                                 const PageID&     pid,             // Destination page pid
                                 StoreID            store,           // Store number
                                 PageID           root,
@@ -166,7 +166,7 @@ rc_t btree_page_h::format_steal(lsn_t            new_lsn,         // LSN of the 
     // The _init inserts into slot 0 which contains the low, high (confusing nameing,
     // this is actually the foster key) and chain_high_fence (actually the high fence) keys,
     // but do not log it, since the actual record movement will move all the records
-    _init(new_lsn, pid, store, root, pid0, pid0_emlsn, foster, foster_emlsn,
+    _init(new_version, pid, store, root, pid0, pid0_emlsn, foster, foster_emlsn,
           l, fence_low, fence_high, chain_fence_high, ghost);
 
     // steal records from old page
@@ -272,7 +272,7 @@ rc_t btree_page_h::format_foster_child(btree_page_h& parent,
     }
 
     // Initialize fields
-    page()->lsn = lsn_t::null;
+    page()->version = 0;
     page()->pid = new_page_id;
     page()->store = parent.store();
     page()->tag = t_btree_p;
@@ -973,7 +973,7 @@ rc_t btree_page_h::norecord_split (PageID foster, lsn_t foster_emlsn,
         ::memcpy (&scratch, _pp, sizeof(scratch));
         btree_page_h scratch_p;
         scratch_p.fix_nonbufferpool_page(&scratch);
-        W_DO(format_steal(get_page_lsn(), scratch_p.pid(), scratch_p.store(),
+        W_DO(format_steal(get_version(), scratch_p.pid(), scratch_p.store(),
                           scratch_p.btree_root(), scratch_p.level(),
                           scratch_p.pid0(), scratch_p.get_pid0_emlsn(),
                           foster, foster_emlsn,
@@ -982,7 +982,7 @@ rc_t btree_page_h::norecord_split (PageID foster, lsn_t foster_emlsn,
                           &scratch_p, 0, scratch_p.nrecs()
         ));
         // format_steal() also clears lsn, so recover it from the copied page
-        update_page_lsn(scratch.lsn);
+        set_version(scratch.version);
     } else {
         // otherwise, just sets the fence keys and headers
         //sets new fence
@@ -1887,7 +1887,7 @@ bool btree_page_h::_check_space_for_insert(size_t data_length) {
 }
 
 
-void btree_page_h::_init(lsn_t lsn, PageID page_id, StoreID store,
+void btree_page_h::_init(uint32_t version, PageID page_id, StoreID store,
     PageID root_pid,
     PageID pid0, lsn_t pid0_emlsn,          // Non-leaf page only
     PageID foster_pid, lsn_t foster_emlsn,  // If foster child exists for this page
@@ -1920,7 +1920,7 @@ void btree_page_h::_init(lsn_t lsn, PageID page_id, StoreID store,
     memset(page(), '\017', sizeof(generic_page)); // trash the whole page
 #endif //ZERO_INIT
 
-    page()->lsn          = lsn;
+    page()->version          = version;
     page()->pid          = page_id;
     page()->store        = store;
     page()->tag          = t_btree_p;

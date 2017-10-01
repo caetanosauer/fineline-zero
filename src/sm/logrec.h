@@ -71,17 +71,20 @@ class xct_t;
 #include "generic_page.h" // logrec size == 3 * page size
 #include "allocator.h"
 
-struct baseLogHeader
+// 1/4 of typical cache-line size (64B)
+constexpr size_t LogrecAlignment = 16;
+
+struct alignas(LogrecAlignment) baseLogHeader
 {
-    uint16_t _len;  // length of the log record
-    uint8_t _type; // kind_t (included from logtype_gen.h)
-    uint8_t _fill4;
-    PageID             _pid; // 4 bytes
+    PageID _pid;
+    uint32_t _page_version;
+    uint16_t _len;
+    uint8_t _type;
 
     bool is_valid() const;
 };
 
-static_assert(sizeof(baseLogHeader) == 8, "Wrong logrec header size");
+static_assert(sizeof(baseLogHeader) == 16, "Wrong logrec header size");
 
 enum kind_t {
     comment_log = 0,
@@ -139,6 +142,30 @@ enum kind_t {
 };
 
 /**
+ * \brief Base struct for log records that touch multi-pages.
+ * \ingroup SSMLOG
+ * \details
+ * Such log records are so far _always_ single-log system transaction that touches 2 pages.
+ * If possible, such log record should contain everything we physically need to recover
+ * either page without the other page. This is an important property
+ * because otherwise it imposes write-order-dependency and a careful recovery.
+ * In such a case "page2" is the data source page while "page" is the data destination page.
+ * \NOTE a REDO operation of multi-page log must expect _either_ of page/page2 are given.
+ * It must first check if which page is requested to recover, then apply right changes
+ * to the page.
+ */
+struct multi_page_log_t {
+
+    /** Page ID of another page touched by the operation. */
+    PageID     _page2_pid; // +4
+
+    uint32_t _page2_version;
+
+    multi_page_log_t(PageID page2_pid) : _page2_pid(page2_pid) {
+    }
+};
+
+/**
  * \brief Represents a transactional log record.
  * \ingroup SSMLOG
  * \details
@@ -167,7 +194,7 @@ public:
     bool             is_multi_page() const;
     bool             is_system() const;
     bool             is_single_sys_xct() const;
-    bool             valid_header(const lsn_t & lsn_ck = lsn_t::null) const;
+    bool             valid_header() const;
     smsize_t         header_size() const;
 
     template <class PagePtr>
@@ -192,13 +219,14 @@ public:
     enum {
         max_sz = 3 * sizeof(generic_page),
         hdr_sz = sizeof(baseLogHeader),
-        max_data_sz = max_sz - hdr_sz - sizeof(lsn_t)
+        max_data_sz = max_sz - hdr_sz
     };
 
        tid_t   tid() const;
        StoreID        stid() const;
        PageID         pid() const;
        PageID         pid2() const;
+
 
 public:
     smsize_t             length() const;
@@ -215,22 +243,26 @@ public:
     multi_page_log_t*           data_multi();
     /** Const version */
     const multi_page_log_t*     data_multi() const;
-    const lsn_t&         lsn_ck() const {  return *_lsn_ck(); }
-    const lsn_t&         lsn() const {  return *_lsn_ck(); }
-    const lsn_t          get_lsn_ck() const {
-                                lsn_t    tmp = *_lsn_ck();
-                                return tmp;
-                            }
-    void                 set_lsn_ck(const lsn_t &lsn_ck) {
-                                // put lsn in last bytes of data
-                                lsn_t& where = *_lsn_ck();
-                                where = lsn_ck;
-                            }
-    void set_lsn(const lsn_t &lsn_ck) { set_lsn_ck(lsn_ck); }
 
-    // FINELINE
-    void set_lsn2(lsn_t lsn);
-    lsn_t lsn2() const;
+    uint32_t page_version() const
+    {
+        return header._page_version;
+    }
+
+    void set_page_version(uint32_t version)
+    {
+        header._page_version = version;
+    }
+
+    uint32_t page2_version() const
+    {
+        return data_multi()->_page2_version;
+    }
+
+    void set_page2_version(uint32_t version)
+    {
+        data_multi()->_page2_version = version;
+    }
 
     void                 corrupt();
 
@@ -274,20 +306,6 @@ protected:
 
     char            _data[max_data_sz];
 
-
-    // The last sizeof(lsn_t) bytes of data are used for
-    // recording the lsn.
-    // Should always be aligned to 8 bytes.
-    lsn_t*            _lsn_ck() {
-        w_assert3(alignon(header._len, 8));
-        char* this_ptr = reinterpret_cast<char*>(this);
-        return reinterpret_cast<lsn_t*>(this_ptr + header._len - sizeof(lsn_t));
-    }
-    const lsn_t*            _lsn_ck() const {
-        w_assert3(alignon(header._len, 8));
-        const char* this_ptr = reinterpret_cast<const char*>(this);
-        return reinterpret_cast<const lsn_t*>(this_ptr + header._len - sizeof(lsn_t));
-    }
 
 public:
     // overloaded new/delete operators for tailored memory management
@@ -449,34 +467,6 @@ inline bool baseLogHeader::is_valid() const
             && _len <= sizeof(logrec_t));
 }
 
-/**
- * \brief Base struct for log records that touch multi-pages.
- * \ingroup SSMLOG
- * \details
- * Such log records are so far _always_ single-log system transaction that touches 2 pages.
- * If possible, such log record should contain everything we physically need to recover
- * either page without the other page. This is an important property
- * because otherwise it imposes write-order-dependency and a careful recovery.
- * In such a case "page2" is the data source page while "page" is the data destination page.
- * \NOTE a REDO operation of multi-page log must expect _either_ of page/page2 are given.
- * It must first check if which page is requested to recover, then apply right changes
- * to the page.
- */
-struct multi_page_log_t {
-
-    /** Used for FINELINE; version counter of second page */
-    lsn_t _lsn2;
-
-    /** Page ID of another page touched by the operation. */
-    PageID     _page2_pid; // +4
-
-    /** for alignment only. */
-    uint32_t    _fill4;    // +4.
-
-    multi_page_log_t(PageID page2_pid) : _page2_pid(page2_pid) {
-    }
-};
-
 // for single-log system transaction, we use tid/_xid_prev as data area!
 inline const char*  logrec_t::data() const
 {
@@ -499,22 +489,6 @@ inline PageID logrec_t::pid2() const
 
     const multi_page_log_t* multi_log = reinterpret_cast<const multi_page_log_t*> (data());
     return multi_log->_page2_pid;
-}
-
-// FINELINE
-inline void logrec_t::set_lsn2(lsn_t lsn)
-{
-    if (!is_multi_page()) { return; }
-
-    auto multi_log = reinterpret_cast<multi_page_log_t*> (data());
-    multi_log->_lsn2 = lsn;
-}
-
-inline lsn_t logrec_t::lsn2() const
-{
-    if (!is_multi_page()) { return lsn_t::null; }
-    auto multi_log = reinterpret_cast<const multi_page_log_t*> (data());
-    return multi_log->_lsn2;
 }
 
 inline void

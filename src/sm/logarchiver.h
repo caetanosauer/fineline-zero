@@ -67,23 +67,23 @@ class ArchiverHeap {
 
         struct HeapEntry {
             fixed_lists_mem_t::slot_t slot;
-            lsn_t lsn;
+            uint32_t version;
             run_number_t run;
             PageID pid;
 
-            HeapEntry(run_number_t run, PageID pid, lsn_t lsn,
+            HeapEntry(run_number_t run, PageID pid, uint32_t version,
                     fixed_lists_mem_t::slot_t slot)
-                : slot(slot), lsn(lsn), run(run), pid(pid)
+                : slot(slot), version(version), run(run), pid(pid)
             {}
 
             HeapEntry()
-                : slot(NULL, 0), lsn(lsn_t::null), run(0), pid(0)
+                : slot(NULL, 0), version(0), run(0), pid(0)
             {}
 
             friend std::ostream& operator<<(std::ostream& os,
                     const HeapEntry& e)
             {
-                os << "[run " << e.run << ", " << e.pid << ", " << e.lsn <<
+                os << "[run " << e.run << ", " << e.pid << ", " << e.version <<
                     ", slot(" << e.slot.address << ", " << e.slot.length << ")]";
                 return os;
             }

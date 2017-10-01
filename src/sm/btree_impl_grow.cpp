@@ -29,7 +29,7 @@ rc_t btree_impl::_ux_create_tree_core(const StoreID& stid, const PageID& root_pi
     supremum.construct_posinfkey();
     w_assert1(supremum.is_constructed());
     W_DO(page.fix_root(stid, LATCH_EX, false, true));
-    W_DO(page.format_steal(page.get_page_lsn(), root_pid, stid, root_pid,
+    W_DO(page.format_steal(page.version(), root_pid, stid, root_pid,
                            1, // level=1. initial tree has only one level
                            0, lsn_t::null,// no pid0
                            0, lsn_t::null,// no foster child
@@ -81,9 +81,10 @@ btree_impl::_ux_shrink_tree_core(btree_page_h& rp)
         cp.copy_fence_low_key(fence_low);
         cp.copy_fence_high_key(fence_high);
         cp.copy_chain_fence_high_key(dummy_chain_high);
-        W_DO(rp.format_steal(rp.get_page_lsn(), rp_pid, rp.store(), rp_pid, // root page id is not changed.
+        W_DO(rp.format_steal(rp.version(), rp_pid, rp.store(), rp_pid, // root page id is not changed.
                              cp.level(), // one level shorter
-                             cp.pid(), cp.get_page_lsn(), // left-most is cp's left-most
+                             // CS FINELINE TODO: remove emlsn
+                             cp.pid(), lsn_t::null, // left-most is cp's left-most
                              cp.get_foster_opaqueptr(), cp.get_foster_emlsn(),// foster is cp's foster
                              fence_low, fence_high, dummy_chain_high,
                              true, // log it to avoid write-order dependency. anyway it's very rare!
@@ -96,7 +97,7 @@ btree_impl::_ux_shrink_tree_core(btree_page_h& rp)
         w_keystr_t infimum, supremum, dummy_chain_high;
         infimum.construct_neginfkey();
         supremum.construct_posinfkey();
-        W_DO(rp.format_steal(rp.get_page_lsn(), rp_pid, rp.store(),
+        W_DO(rp.format_steal(rp.version(), rp_pid, rp.store(),
                              rp_pid, // root page id is not changed.
                              1, // root is now leaf
                              0, lsn_t::null, // leaf has no pid0
@@ -137,7 +138,7 @@ btree_impl::_sx_grow_tree(btree_page_h& rp)
 
     btree_page_h cp;
     W_DO(cp.fix_nonroot(rp, new_pid, LATCH_EX, false, true));
-    W_DO(cp.format_steal(cp.get_page_lsn(), new_pid, rp.store(), rp.pid(), rp.level(),
+    W_DO(cp.format_steal(cp.version(), new_pid, rp.store(), rp.pid(), rp.level(),
         // CS: opaqueptr is important here because we don't want to unswizzle pid0
         // (I wasted many hours with this damn bug!!)
         rp.pid0_opaqueptr(), rp.get_pid0_emlsn(), // copy pid0 of root too
@@ -151,10 +152,11 @@ btree_impl::_sx_grow_tree(btree_page_h& rp)
     w_keystr_t infimum, supremum, dummy_chain_high;
     infimum.construct_neginfkey();
     supremum.construct_posinfkey();
-    W_DO(rp.format_steal(rp.get_page_lsn(), rp.pid(), rp.store(),
+    W_DO(rp.format_steal(rp.version(), rp.pid(), rp.store(),
                          rp.pid(), // root page id is not changed.
                          rp.level() + 1, // grow one level
-                         cp.pid(), cp.get_page_lsn(), // left-most is cp
+                             // CS FINELINE TODO: remove emlsn
+                         cp.pid(), lsn_t::null, // left-most is cp
                          0, lsn_t::null,// no foster
                             infimum, supremum, dummy_chain_high // empty fence keys=infimum-supremum
              )); // nothing to steal

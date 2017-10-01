@@ -145,6 +145,7 @@ void logrec_t::init_header(kind_t type)
 {
     header._type = type;
     header._pid = 0;
+    header._page_version = 0;
     // CS TODO: for most logrecs, set_size is called twice
     set_size(0);
 }
@@ -156,8 +157,7 @@ void logrec_t::set_size(size_t l)
         // zero out extra space to keep purify happy
         memset(dat+l, 0, ALIGN_BYTE(l)-l);
     }
-    unsigned int tmp = ALIGN_BYTE(l)
-        + (hdr_sz) + sizeof(lsn_t);
+    unsigned int tmp = ALIGN_BYTE(l) + (hdr_sz);
     tmp = (tmp + 7) & unsigned(-8); // force 8-byte alignment
     w_assert1(tmp <= sizeof(*this));
     header._len = tmp;
@@ -167,9 +167,9 @@ void logrec_t::set_size(size_t l)
  * Determine whether the log record header looks valid
  */
 bool
-logrec_t::valid_header(const lsn_t & lsn) const
+logrec_t::valid_header() const
 {
-    return header.is_valid() && (lsn == lsn_t::null || lsn == *_lsn_ck());
+    return header.is_valid();
 }
 
 
@@ -241,8 +241,7 @@ void logrec_t::redo(PagePtr page)
 		break;
     }
 
-    page->update_page_lsn(lsn());
-    page->set_img_page_lsn(lsn());
+    page->set_version(page_version());
 }
 
 void logrec_t::redo()
@@ -306,7 +305,6 @@ void logrec_t::remove_info_for_pid(PageID pid)
 {
     w_assert1(is_multi_page());
     w_assert1(pid == this->pid() || pid == pid2());
-    lsn_t lsn = lsn_ck();
 
     if (type() == btree_split_log) {
         size_t img_offset = reinterpret_cast<btree_bulk_delete_t*>(data())->size();
@@ -328,7 +326,6 @@ void logrec_t::remove_info_for_pid(PageID pid)
         }
     }
 
-    set_lsn_ck(lsn);
     w_assert1(valid_header());
 }
 
@@ -347,14 +344,13 @@ operator<<(ostream& o, logrec_t& l)
     ios_fmtflags        f = o.flags();
     o.setf(ios::left, ios::left);
 
-    o << "LSN=" << l.lsn_ck() << " ";
-
-    o << "len=" << l.length() << " ";
     o << l.type_str();
-    o << " p(" << l.pid() << ")";
+    o << " len=" << l.length();
+    o << " pid=" << l.pid();
+    o << " pversion=" << l.page_version();
     if (l.is_multi_page()) {
-        o << " src-" << l.pid2();
-        o << " LSN2=" << l.lsn2();
+        o << " pid2=" << l.pid2();
+        o << " p2version=" << l.page2_version();
     }
 
     switch(l.type()) {

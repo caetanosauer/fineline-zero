@@ -189,7 +189,8 @@ rc_t partition_t::flush(
 
     { // Copy a skip record to the end of the buffer.
         logrec_t* s = _owner->get_skip_log();
-        s->set_lsn_ck(lsn+size);
+        // CS TODO FINELINE: fix log priming
+        // s->set_lsn_ck(lsn+size);
 
         // Hopefully the OS is smart enough to coalesce the writes
         // before sending them to disk. If not, and it's a problem

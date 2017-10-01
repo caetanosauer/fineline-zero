@@ -335,7 +335,7 @@ public:
      * @pre in SSX (thus REDO-only. no worry for compensation log)
      * @pre latch_mode() == EX
      */
-    void accept_empty_child(lsn_t new_lsn, PageID new_page_id, const bool f_redo);
+    void accept_empty_child(uint32_t new_version, PageID new_page_id, const bool f_redo);
 
     /** \brief Initialize the page as a foster child of the given parent
      *
@@ -383,7 +383,7 @@ public:
      * @param[in] log_it            Should we log this change?
      * ...
      */
-    rc_t format_steal(lsn_t                new_lsn,
+    rc_t format_steal(uint32_t                new_version,
                       const PageID&        pid,
                       StoreID               store,
                       PageID              root,
@@ -968,7 +968,7 @@ private:
     /**
      * Initialize the whole image of this page as an empty page.
      */
-    void            _init(lsn_t lsn, PageID page_id, StoreID store,
+    void            _init(uint32_t version, PageID page_id, StoreID store,
         PageID root_pid, PageID pid0, lsn_t pid0_emlsn,
         PageID foster_pid, lsn_t foster_emlsn, int16_t btree_level,
         const w_keystr_t &low, const w_keystr_t &high,

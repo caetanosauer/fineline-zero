@@ -6,18 +6,17 @@
 #include <vector>
 
 #include "basics.h"
-#include "lsn.h"
 #include "logarchive_index.h"
 
 class ArchiveIndex;
 class RunFile;
 class logrec_t;
 
-struct MergeInput
+struct alignas(32) MergeInput
 {
     RunFile* runFile;
     size_t pos;
-    lsn_t keyLSN;
+    uint32_t keyVersion;
     PageID keyPID;
     PageID endPID;
 
@@ -57,7 +56,7 @@ private:
     std::vector<MergeInput>::iterator heapEnd;
 
     std::shared_ptr<ArchiveIndex> archIndex;
-    lsn_t prevLSN;
+    uint32_t prevVersion;
     PageID prevPID;
     bool singlePage;
 

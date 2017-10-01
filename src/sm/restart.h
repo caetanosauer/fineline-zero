@@ -62,7 +62,6 @@ public:
 
 private:
     ArchiveScan archive_scan;
-    lsn_t last_lsn;
     unsigned replayed_count;
 };
 

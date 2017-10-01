@@ -195,8 +195,8 @@ private:
     pin_for_refix_holder _pid_bfidx;
     /** current slot in the current page. */
     slotid_t    _slot;
-    /** lsn of the current page AS OF last access. */
-    lsn_t       _lsn;
+    /** version of the current page AS OF last access. */
+    uint32_t       _version;
 
     /** current key. */
     w_keystr_t  _key;

@@ -131,7 +131,7 @@ public:
 
         lsn_t lsn;
         W_COERCE(ss_m::log->insert(*logrec, &lsn));
-        logrec->set_lsn(lsn);
+        // logrec->set_lsn(lsn);
 
         delete logrec;
         return lsn;
@@ -140,14 +140,13 @@ public:
      template <class PagePtr>
      static void _update_page_version(PagePtr page, logrec_t* lr)
      {
-         lsn_t lsn = page->get_page_lsn() + 1;
-         page->update_page_lsn(lsn);
          page->increment_log_volume(lr->length());
+         page->incr_version();
          if (lr->pid() == page->pid()) {
-             lr->set_lsn_ck(lsn);
+             lr->set_page_version(page->version());
          }
          else { // multi-page logrec
-             lr->set_lsn2(lsn);
+             lr->set_page2_version(page->version());
          }
      }
 

@@ -90,8 +90,9 @@ bool page_evictioner_base::evict_one(bf_idx victim)
 
     if (_log_evictions) {
         constexpr bool was_dirty = false;
-        lsn_t page_lsn = cb.get_page_lsn();
-        Logger::log_sys<evict_page_log>(cb._pid, was_dirty, page_lsn);
+        // lsn_t page_lsn = cb.get_page_lsn();
+        // CS TODO FINELINE: no lsns on CB anymore
+        Logger::log_sys<evict_page_log>(cb._pid, was_dirty, lsn_t::null);
     }
 
     // remove it from hashtable.
@@ -180,14 +181,15 @@ bf_idx page_evictioner_base::pick_victim()
         auto archived_lsn = lsn_t(_bufferpool->get_archived_run() + 1, 0);
         lsn_t evict_lsn = std::min(archived_lsn,
                 smlevel_0::log->get_oldest_active_lsn());
-        if (cb.get_page_lsn().is_null() || cb.get_page_lsn() >= evict_lsn)
-        {
-            ERROUT(<< "Eviction failed on LSN for pid " << cb._pid <<
-                    " page_lsn=" << cb.get_page_lsn() <<
-                    " evict_lsn=" << evict_lsn);
-            cb.latch().latch_release();
-            continue;
-        }
+        // CS TODO FINELINE: epoch-based eviction!
+        // if (cb.get_page_lsn().is_null() || cb.get_page_lsn() >= evict_lsn)
+        // {
+        //     ERROUT(<< "Eviction failed on LSN for pid " << cb._pid <<
+        //             " page_lsn=" << cb.get_page_lsn() <<
+        //             " evict_lsn=" << evict_lsn);
+        //     cb.latch().latch_release();
+        //     continue;
+        // }
 
         // now we hold an EX latch -- check if page qualifies for eviction
         btree_page_h p;
@@ -290,22 +292,24 @@ bool page_evictioner_base::unswizzle_and_update_emlsn(bf_idx idx)
     // STEP 3: Page will be evicted -- update EMLSN on parent.
     //==========================================================================
     lsn_t old = parent_h.get_emlsn_general(child_slotid);
-    _bufferpool->_buffer[idx].lsn = cb.get_page_lsn();
-    if (_maintain_emlsn && old < _bufferpool->_buffer[idx].lsn) {
-        DBG3(<< "Updated EMLSN on page " << parent_h.pid()
-                << " slot=" << child_slotid
-                << " (child pid=" << pid << ")"
-                << ", OldEMLSN=" << old << " NewEMLSN=" <<
-                _bufferpool->_buffer[idx].lsn);
+    // CS TODO FINELINE: no more page_lsn on CB!
+    // _bufferpool->_buffer[idx].lsn = cb.get_page_lsn();
+    // CS TODO FINELINE: get rid of emlsn!
+    // if (_maintain_emlsn && old < _bufferpool->_buffer[idx].lsn) {
+    //     DBG3(<< "Updated EMLSN on page " << parent_h.pid()
+    //             << " slot=" << child_slotid
+    //             << " (child pid=" << pid << ")"
+    //             << ", OldEMLSN=" << old << " NewEMLSN=" <<
+    //             _bufferpool->_buffer[idx].lsn);
 
-        w_assert1(parent_cb.latch().is_mine());
+    //     w_assert1(parent_cb.latch().is_mine());
 
-        _bufferpool->_sx_update_child_emlsn(parent_h, child_slotid,
-                                            _bufferpool->_buffer[idx].lsn);
+    //     _bufferpool->_sx_update_child_emlsn(parent_h, child_slotid,
+    //                                         _bufferpool->_buffer[idx].lsn);
 
-        w_assert1(parent_h.get_emlsn_general(child_slotid)
-                    == _bufferpool->_buffer[idx].lsn);
-    }
+    //     w_assert1(parent_h.get_emlsn_general(child_slotid)
+    //                 == _bufferpool->_buffer[idx].lsn);
+    // }
 
     parent_cb.latch().latch_release();
     return true;

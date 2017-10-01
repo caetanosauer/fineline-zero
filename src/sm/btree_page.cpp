@@ -331,7 +331,7 @@ bool btree_page_data::eq(const btree_page_data& b) const
 {
     bool eqHeader =
         pid == b.pid &&
-        lsn == b.lsn &&
+        version == b.version &&
         tag == b.tag &&
         page_flags == b.page_flags &&
         btree_root == b.btree_root &&
@@ -352,7 +352,7 @@ bool btree_page_data::eq(const btree_page_data& b) const
 std::ostream& operator<<(std::ostream& os, btree_page_data& b)
 {
     os << "BTREE PAGE " << b.pid << '\n';
-    os << "  LSN: " << b.lsn << '\n';
+    os << "  VERSION: " << b.version << '\n';
     os << "  TAG: " << b.tag << " FLAGS: " << b.page_flags << '\n';
     os << "  ROOT: " << b.btree_root << " LEVEL: " << b.btree_level << '\n';
     os << "  1st CHILD: " << b.btree_pid0 << " FOSTER CHILD: " <<

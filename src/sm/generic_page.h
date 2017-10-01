@@ -52,8 +52,8 @@ public:
     /// ID of this page
     PageID           pid;          // +4 -> 8
 
-    /// LSN (Log Sequence Number) of the last write to this page
-    lsn_t            lsn;          // +8 -> 16
+    /// FINELINE: page version counter
+    uint32_t            version;          // +8 -> 16
 
     /// ID of the store to which this page belongs (0 if none)
     StoreID           store;        // +4 -> 20
@@ -154,7 +154,7 @@ public:
 
     page_tag_t    tag()   const { return (page_tag_t) _pp->tag; }
 
-    const lsn_t&  lsn()   const { return _pp->lsn; }
+    const uint32_t&  version()   const { return _pp->version; }
 
 protected:
     generic_page_h(generic_page* s, const PageID& pid, page_tag_t tag,

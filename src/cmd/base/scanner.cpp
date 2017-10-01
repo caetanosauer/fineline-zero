@@ -253,7 +253,6 @@ void LogArchiveScanner::run()
                     // fstats.level
             );
 
-        lsn_t prevLSN = lsn_t::null;
         PageID prevPid = 0;
 
         logrec_t* lr;
@@ -264,7 +263,6 @@ void LogArchiveScanner::run()
 
             handle(lr);
 
-            prevLSN = lr->lsn_ck();
             prevPid = lr->pid();
         };
     }
@@ -295,7 +293,6 @@ void MergeScanner::run()
 
     logrec_t* lr;
 
-    lsn_t prevLSN = lsn_t::null;
     PageID prevPid = 0;
 
     while (scan.next(lr)) {

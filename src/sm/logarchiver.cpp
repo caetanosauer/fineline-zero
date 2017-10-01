@@ -207,14 +207,13 @@ bool ArchiverHeap::push(logrec_t* lr, run_number_t run, bool duplicate)
     w_assert1(lr->valid_header());
     slot_t dest = allocate(lr->length());
     if (!dest.address) {
-        DBGTHRD(<< "heap full for logrec: " << lr->type_str()
-                << " at " << lr->lsn());
+        DBGTHRD(<< "heap full for logrec: " << lr->type_str());
         return false;
     }
 
     w_assert1(dest.length >= lr->length());
     PageID pid = lr->pid();
-    lsn_t lsn = lr->lsn();
+    auto version = lr->page_version();
     memcpy(dest.address, lr, lr->length());
 
     // CS: Multi-page log records are replicated so that each page can be
@@ -228,11 +227,11 @@ bool ArchiverHeap::push(logrec_t* lr, run_number_t run, bool duplicate)
         // calling recursively without duplication. Note that the original
         // contents were already saved with the memcpy operation above.
         auto pid2 = lr->pid2();
-        auto lsn2 = lr->lsn2();
+        auto version2 = lr->page2_version();
         auto orig_len = lr->length();
         lr->remove_info_for_pid(lr->pid());
         lr->set_pid(pid2);
-        lr->set_lsn(lsn2);
+        lr->set_page_version(version2);
         w_assert1(lr->valid_header());
         // w_assert1(lr->valid_header(lsn));
         if (!push(lr, run, false)) {
@@ -258,8 +257,7 @@ bool ArchiverHeap::push(logrec_t* lr, run_number_t run, bool duplicate)
     //        lr->length() << " into run " << (int) currentRun);
 
     // insert key and pointer into w_heap
-    // FINELINE: currentRun replaced with lsn.hi() (see comment above)
-    HeapEntry k(run, pid, lsn, dest);
+    HeapEntry k(run, pid, version, dest);
 
     // CS: caution: AddElementDontHeapify does NOT work!!!
     w_heap.AddElement(k);
@@ -302,7 +300,7 @@ bool ArchiverHeap::Cmp::gt(const HeapEntry& a,
     if (a.pid != b.pid) {
         return a.pid< b.pid;
     }
-    return a.lsn < b.lsn;
+    return a.version < b.version;
 }
 
 /**

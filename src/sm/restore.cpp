@@ -48,7 +48,7 @@ void LogReplayer::replay(LogScan logs, PageIter& pagesBegin, PageIter pagesEnd)
     auto page = pagesBegin;
     logrec_t* lr;
 
-    lsn_t prev_lsn = lsn_t::null;
+    uint32_t prev_version = 0;
     PageID prev_pid = 0;
     unsigned replayed = 0;
 
@@ -56,7 +56,7 @@ void LogReplayer::replay(LogScan logs, PageIter& pagesBegin, PageIter pagesEnd)
 
     while (logs->next(lr)) {
         auto pid = lr->pid();
-        w_assert0(pid > prev_pid || (pid == prev_pid && lr->lsn() > prev_lsn));
+        w_assert0(pid > prev_pid || (pid == prev_pid && lr->page_version() > prev_version));
 
         while (page != pagesEnd && page.current_pid() < pid) {
             ++page;
@@ -86,14 +86,14 @@ void LogReplayer::replay(LogScan logs, PageIter& pagesBegin, PageIter pagesEnd)
             p->pid = pid;
         }
 
-        if (lr->lsn() > fixable.lsn()) {
+        if (lr->page_version() > fixable.version()) {
             lr->redo(&fixable);
         }
 
         w_assert0(p->pid == pid);
-        w_assert0(p->lsn != lsn_t::null);
+        w_assert0(p->version> 0);
         prev_pid = pid;
-        prev_lsn = lr->lsn();
+        prev_version = lr->page_version();
 
         ADD_TSTAT(restore_log_volume, lr->length());
         replayed++;

@@ -104,7 +104,7 @@ rc_t btree_impl::_sx_split_foster(btree_page_h& page, PageID& new_page_id,
      */
     Logger::log_p<btree_split_log>(&new_page, &page, move_count, split_key, new_chain);
 
-    w_assert1(new_page.get_page_lsn() != lsn_t::null);
+    w_assert1(new_page.version() > 0);
 
     // hint for subsequent accesses
     increase_forster_child(page.pid());

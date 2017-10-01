@@ -36,7 +36,8 @@ void TruncateLog::run()
     logrec_t* logrec = (logrec_t*) (buffer + pos);
     logrec->init_header(skip_log);
     // reinterpret_cast<skip_log*>(logrec)->construct();
-    logrec->set_lsn_ck(lsn_t(partition, pos));
+    // CS TODO FINELINE: new log priming
+    // logrec->set_lsn_ck(lsn_t(partition, pos));
     pos += logrec->length();
 
     {

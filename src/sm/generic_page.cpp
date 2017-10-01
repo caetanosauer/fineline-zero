@@ -35,7 +35,7 @@ uint32_t generic_page_header::calculate_checksum () const {
 std::ostream& operator<<(std::ostream& os, generic_page_header& p)
 {
     os << "PAGE " << p.pid
-        << " LSN: " << p.lsn
+        << " VERSION: " << p.version
         << " TAG: " << p.tag
         << " FLAGS: " << p.page_flags
         << " STORE: " << p.store;

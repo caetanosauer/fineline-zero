@@ -123,21 +123,22 @@ void fixable_page_h::fix_nonbufferpool_page(generic_page* s)
     _mode               = LATCH_EX;
 }
 
-lsn_t fixable_page_h::get_page_lsn() const
+uint32_t fixable_page_h::get_version() const
 {
     w_assert1(_pp);
-    return smlevel_0::bf->get_page_lsn(_pp);
+    return _pp->version;
 }
 
-void fixable_page_h::update_page_lsn(const lsn_t & lsn) const
+void fixable_page_h::incr_version()
 {
     w_assert1(_pp);
-    smlevel_0::bf->set_page_lsn(_pp, lsn);
+    _pp->version++;
 }
 
-void fixable_page_h::set_img_page_lsn(const lsn_t & lsn)
+void fixable_page_h::set_version(uint32_t version)
 {
-    if (_pp) { _pp->lsn = lsn; }
+    w_assert1(_pp);
+    _pp->version = version;
 }
 
 void fixable_page_h::set_check_recovery(bool chk)

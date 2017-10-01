@@ -16,11 +16,11 @@ thread_local std::vector<MergeInput> ArchiveScan::_mergeInputVector;
 bool mergeInputCmpGt(const MergeInput& a, const MergeInput& b)
 {
     if (a.keyPID != b.keyPID) { return a.keyPID > b.keyPID; }
-    return a.keyLSN > b.keyLSN;
+    return a.keyVersion > b.keyVersion;
 }
 
 ArchiveScan::ArchiveScan(std::shared_ptr<ArchiveIndex> archIndex)
-    : archIndex(archIndex), prevLSN(lsn_t::null), prevPID(0), singlePage(false)
+    : archIndex(archIndex), prevVersion(0), prevPID(0), singlePage(false)
 {
     clear();
 }
@@ -74,7 +74,7 @@ void ArchiveScan::clear()
     inputs.clear();
     heapBegin = inputs.end();
     heapEnd = inputs.end();
-    prevLSN = lsn_t::null;
+    prevVersion = 0;
     prevPID = 0;
 }
 
@@ -102,7 +102,7 @@ bool ArchiveScan::next(logrec_t*& lr)
         auto top = std::prev(heapEnd);
         if (!top->finished()) {
             lr = top->logrec();
-            w_assert1(lr->lsn() == top->keyLSN && lr->pid() == top->keyPID);
+            w_assert1(lr->page_version() == top->keyVersion && lr->pid() == top->keyPID);
             top->next();
             std::push_heap(heapBegin, heapEnd, mergeInputCmpGt);
         }
@@ -112,7 +112,7 @@ bool ArchiveScan::next(logrec_t*& lr)
         }
     }
 
-    prevLSN = lr->lsn();
+    prevVersion = lr->page_version();
     prevPID = lr->pid();
 
     return true;
@@ -139,7 +139,7 @@ bool MergeInput::open(PageID startPID)
 {
     if (!finished()) {
         auto lr = logrec();
-        keyLSN = lr->lsn();
+        keyVersion = lr->page_version();
         keyPID = lr->pid();
 
         // advance index until firstPID is reached
@@ -160,7 +160,7 @@ bool MergeInput::open(PageID startPID)
         return false;
     }
 
-    w_assert1(keyLSN == logrec()->lsn());
+    w_assert1(keyVersion == logrec()->page_version());
     return true;
 }
 
@@ -177,5 +177,5 @@ void MergeInput::next()
     pos += logrec()->length();
     w_assert1(logrec()->valid_header());
     keyPID = logrec()->pid();
-    keyLSN = logrec()->lsn();
+    keyVersion = logrec()->page_version();
 }

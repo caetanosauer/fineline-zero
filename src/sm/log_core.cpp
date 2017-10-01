@@ -228,7 +228,7 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt, const bool forward)
         size_t i = ll.hi() - _fetch_buf_first;
         if (_fetch_buffers[i]) {
             logrec_t* rp = (logrec_t*) (_fetch_buffers[i] + ll.lo());
-            w_assert1(rp->valid_header(ll));
+            w_assert1(rp->valid_header());
 
             if (rp->type() == skip_log)
             {
@@ -241,7 +241,7 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt, const bool forward)
                 }
 
                 rp = (logrec_t*) (_fetch_buffers[i] + ll.lo());
-                w_assert1(rp->valid_header(ll));
+                w_assert1(rp->valid_header());
             }
 
             if (nxt) {
@@ -286,7 +286,7 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt, const bool forward)
     lsn_t prev_lsn = lsn_t::null;
     DBGOUT3(<< "fetch @ lsn: " << ll);
     W_COERCE(p->read(rp, ll, forward ? NULL : &prev_lsn));
-    w_assert1(rp->valid_header(ll));
+    w_assert1(rp->valid_header());
 
     // handle skip log record
     if (rp->type() == skip_log)
@@ -304,7 +304,7 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt, const bool forward)
             DBGOUT3(<< "fetch @ lsn: " << ll);
             W_DO(p->open_for_read());
             W_COERCE(p->read(rp, ll));
-            w_assert1(rp->valid_header(ll));
+            w_assert1(rp->valid_header());
         }
         else { // backward scan
             // just get previous log record using prev_lsn which was set inside
@@ -313,7 +313,7 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt, const bool forward)
             ll = prev_lsn;
             DBGOUT3(<< "fetch @ lsn: " << ll);
             W_COERCE(p->read(rp, ll, &prev_lsn));
-            w_assert1(rp->valid_header(ll));
+            w_assert1(rp->valid_header());
         }
     }
 
@@ -341,7 +341,7 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt, const bool forward)
 
     memcpy(buf, rp, rp->length());
     p->release_read();
-    w_assert1(((logrec_t*) buf)->valid_header(ll));
+    w_assert1(((logrec_t*) buf)->valid_header());
 
     return RCOK;
 }
@@ -360,7 +360,7 @@ bool log_core::fetch_direct(lsn_t lsn, logrec_t*& lr, lsn_t& prev_lsn)
 	    prev_lsn = lsn_t(p->num(), p->get_size());
 	}
     }
-    w_assert0(lr->valid_header(lsn));
+    w_assert0(lr->valid_header());
     p->release_read();
 
     return true;
@@ -773,7 +773,8 @@ lsn_t log_core::_copy_to_buffer(logrec_t &rec, long pos, long recsize, CArraySlo
       do the memcpy (or two)
     */
     lsn_t rlsn = info->lsn + pos;
-    rec.set_lsn_ck(rlsn);
+    // CS FINELINE TODO: xct_end must have lsn as member; fix log priming
+    // rec.set_lsn_ck(rlsn);
 
     _copy_raw(info, pos, (char const*) &rec, recsize);
 

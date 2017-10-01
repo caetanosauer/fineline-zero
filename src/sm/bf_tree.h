@@ -203,13 +203,6 @@ public:
      */
     bool is_used (bf_idx idx) const;
 
-    /**
-     * Sets the page_lsn field on the control block. Used by every update
-     * operation on a page, including redo.
-     */
-    void set_page_lsn(generic_page*, lsn_t);
-    lsn_t get_page_lsn(generic_page*);
-
     /***
      * Marks the frame as in possible need of recovery
      * (used for prefetched pages during warmup)

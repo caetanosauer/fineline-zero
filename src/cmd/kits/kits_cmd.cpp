@@ -186,7 +186,8 @@ void KitsCommand::randomRootPageFailure()
 
     page.fix_root(stores.at(randomStore), LATCH_EX);
     generic_page* raw_page = page.get_generic_page();
-    raw_page->lsn = lsn_t(1, 0);
+    // CS TODO FINELINE
+    // raw_page->lsn = lsn_t(1, 0);
     page.unfix(true);
 }
 

@@ -391,7 +391,6 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
     if (!cb._check_recovery) { return; }
 
     w_assert1(cb.latch().is_mine());
-    w_assert1(cb.get_page_lsn() == page->lsn);
 
     auto pid = cb._pid;
     btree_page_h p;
@@ -403,11 +402,11 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
 
     w_assert0(page->pid == pid);
     w_assert0(cb._pid == pid);
-    w_assert0(page->lsn > lsn_t::null);
+    w_assert0(page->version > 0);
     cb.set_check_recovery(false);
 
     if (_log_fetches) {
-        Logger::log_sys<fetch_page_log>(pid, page->lsn, page->store);
+        Logger::log_sys<fetch_page_log>(pid, page->version, page->store);
     }
 }
 
@@ -532,7 +531,7 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
             page = &_buffer[idx];
 
             // initialize contents of virgin page
-            cb.init(pid, lsn_t::null);
+            cb.init(pid);
             ::memset(page, 0, sizeof(generic_page));
             page->pid = pid;
 
@@ -1127,35 +1126,6 @@ void bf_tree_m::unfix(const generic_page* p, bool evict)
 
 bool bf_tree_m::is_used (bf_idx idx) const {
     return _is_active_idx(idx);
-}
-
-void bf_tree_m::set_page_lsn(generic_page* p, lsn_t lsn)
-{
-    uint32_t idx = p - _buffer;
-    p->lsn = lsn;
-
-    // CS: workaround for design limitation of restore. When redoing a log
-    // record, the LSN should only be updated if the page image being used
-    // belongs to the buffer pool. Initially, we checked this by only calling
-    // this method when _bufferpool_managed was set in fixable_page_h. However,
-    // that would break single-page recovery, since fix_nonbufferpool_page is
-    // required in that case. To fix that, I enabled updating page LSN for any
-    // page image, and the check below makes sure it belongs to the buffer pool
-    if (!_is_valid_idx(idx)) { return; }
-
-    w_assert1 (_is_active_idx(idx));
-    bf_tree_cb_t& cb = get_cb(idx);
-    w_assert1(cb.latch().is_mine());
-    w_assert1(cb.latch().mode() == LATCH_EX);
-    w_assert1(cb.is_pinned_for_restore() || cb.get_page_lsn() <= lsn);
-    cb.set_page_lsn(lsn);
-}
-
-lsn_t bf_tree_m::get_page_lsn(generic_page* p)
-{
-    uint32_t idx = p - _buffer;
-    w_assert1 (_is_active_idx(idx));
-    return get_cb(idx).get_page_lsn();
 }
 
 void bf_tree_m::set_check_recovery(generic_page* p, bool chk)

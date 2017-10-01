@@ -1122,10 +1122,11 @@ bool log_core::_should_group_commit(long write_size)
     if (write_size < _group_commit_size) {
         // Only supress flush if timeout hasn't expired
         if (_group_commit_timeout > 0 &&
-                _group_commit_timer.time_ms() < _group_commit_timeout)
+                _group_commit_timer.time_ms() > _group_commit_timeout)
         {
-            return false;
+            return true;
         }
+        return false;
     }
 
     return true;

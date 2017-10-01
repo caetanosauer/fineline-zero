@@ -61,8 +61,7 @@ public:
         char* dest = redobuf->acquire();
         w_assert0(dest);
         auto logrec = reinterpret_cast<logrec_t*>(dest);
-        logrec->init_header(LR);
-        logrec->init_page_info(p);
+        logrec->init_header(LR, p->pid());
         LogrecSerializer<LR>::serialize(p, logrec, args...);
         w_assert1(logrec->valid_header());
         _update_page_version(p, logrec);
@@ -91,8 +90,7 @@ public:
         char* dest = redobuf->acquire();
         w_assert0(dest);
         auto logrec = reinterpret_cast<logrec_t*>(dest);
-        logrec->init_header(LR);
-        logrec->init_page_info(p);
+        logrec->init_header(LR, p->pid());
         LogrecSerializer<LR>::serialize(p, p2, logrec, args...);
         w_assert1(logrec->valid_header());
 

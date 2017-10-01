@@ -206,12 +206,11 @@ public:
 
     static void undo(kind_t type, StoreID stid, const char* data);
 
-    void init_header(kind_t);
+    void init_header(kind_t, PageID = 0);
 
-    template <class PagePtr>
-    void init_page_info(const PagePtr p)
+    void set_pid(PageID pid)
     {
-        header._pid = p->pid();
+        header._pid = pid;
     }
 
     void set_size(size_t l);
@@ -230,7 +229,6 @@ public:
 
 public:
     smsize_t             length() const;
-    void                 set_pid(const PageID& p);
     kind_t               type() const;
     const char*          type_str() const
     {
@@ -489,12 +487,6 @@ inline PageID logrec_t::pid2() const
 
     const multi_page_log_t* multi_log = reinterpret_cast<const multi_page_log_t*> (data());
     return multi_log->_page2_pid;
-}
-
-inline void
-logrec_t::set_pid(const PageID& p)
-{
-    header._pid = p;
 }
 
 inline smsize_t

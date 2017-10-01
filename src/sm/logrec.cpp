@@ -141,10 +141,10 @@ logrec_t::get_type_str(kind_t type)
     return 0;
 }
 
-void logrec_t::init_header(kind_t type)
+void logrec_t::init_header(kind_t type, PageID pid)
 {
     header._type = type;
-    header._pid = 0;
+    header._pid = pid;
     header._page_version = 0;
     // CS TODO: for most logrecs, set_size is called twice
     set_size(0);

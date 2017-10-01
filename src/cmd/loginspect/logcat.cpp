@@ -4,9 +4,9 @@
 #undef private
 
 class PrintHandler : public Handler {
-    virtual void invoke(logrec_t& r)
+    virtual void invoke(logrec_t& r, lsn_t lsn)
     {
-        std::cout << r << endl;
+        std::cout << lsn << " " << r << endl;
     }
 
     virtual void finalize() {};

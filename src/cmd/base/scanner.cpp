@@ -10,10 +10,10 @@ const static int DFT_BLOCK_SIZE = 1024 * 1024; // 1MB = 128 pages
 
 const auto& parseRunFileName = ArchiveIndex::parseRunFileName;
 
-void BaseScanner::handle(logrec_t* lr)
+void BaseScanner::handle(logrec_t* lr, lsn_t lsn)
 {
     for (auto h : handlers) {
-        h->invoke(*lr);
+        h->invoke(*lr, lsn);
     }
 }
 
@@ -128,6 +128,7 @@ void BlockScanner::run()
             //cerr << "Reading block at " << fpos << " from " << fname.str();
 
             // read next block from partition file
+            auto readpos = fpos;
             in.seekg(fpos);
             if (in.fail()) {
                 throw runtime_error("IO error seeking into file");
@@ -153,7 +154,7 @@ void BlockScanner::run()
 
             bpos = 0;
             while (logScanner->nextLogrec(currentBlock, bpos, lr)) {
-                handle(lr);
+                handle(lr, lsn_t(pnum, readpos + bpos - lr->length()));
                 if (lr->type() == skip_log) {
                     fpos = fend;
                     break;

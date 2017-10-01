@@ -17,8 +17,16 @@ public:
     virtual ~Handler() {};
 
     virtual void initialize() {};
-    virtual void invoke(logrec_t &r) = 0;
     virtual void finalize() {};
+
+    virtual void invoke(logrec_t& r)
+    {
+    }
+
+    virtual void invoke(logrec_t &r, lsn_t)
+    {
+        invoke(r);
+    }
 
     virtual void newFile(const char* /* fname */) {};
 

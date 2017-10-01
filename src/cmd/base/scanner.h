@@ -34,7 +34,7 @@ public:
     }
 
 protected:
-    virtual void handle(logrec_t* lr);
+    virtual void handle(logrec_t* lr, lsn_t lsn = lsn_t::null);
     virtual void finalize();
     virtual void initialize();
     po::variables_map options;

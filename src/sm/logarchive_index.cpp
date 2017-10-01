@@ -341,6 +341,10 @@ rc_t ArchiveIndex::append(char* data, size_t length, unsigned level)
                 appendPos[level]);
     CHECK_ERRNO(ret);
     appendPos[level] += length;
+
+    ret = ::fsync(appendFd[level]);
+    CHECK_ERRNO(ret);
+
     return RCOK;
 }
 

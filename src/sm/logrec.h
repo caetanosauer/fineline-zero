@@ -209,7 +209,6 @@ public:
         return get_type_str(type());
     }
     static const char*   get_type_str(kind_t);
-    const char*          cat_str() const;
     const char*          data() const;
     char*                data();
     /** Returns the log record data as a multi-page SSX log. */

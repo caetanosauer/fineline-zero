@@ -43,45 +43,6 @@ DEFINE_SM_ALLOC(logrec_t);
 
 /*********************************************************************
  *
- *  logrec_t::cat_str()
- *
- *  Return a string describing the category of the log record.
- *
- *********************************************************************/
-const char*
-logrec_t::cat_str() const
-{
-    auto c = cat();
-    switch (c)  {
-    case t_system:
-        return "s---";
-
-    case t_undo:
-        return "--u-";
-
-    case t_redo:
-        return "-r--";
-
-    case t_undo | t_redo:
-        return "-ru-";
-
-    case t_redo | t_single_sys_xct:
-        return "ssx-";
-    case t_multi | t_redo | t_single_sys_xct:
-        return "ssxm";
-
-#if W_DEBUG_LEVEL > 0
-    case t_bad_cat:
-        // for debugging only
-        return "BAD-";
-#endif
-    default:
-      return 0;
-    }
-}
-
-/*********************************************************************
- *
  *  logrec_t::type_str()
  *
  *  Return a string describing the type of the log record.
@@ -389,7 +350,7 @@ operator<<(ostream& o, logrec_t& l)
     o << "LSN=" << l.lsn_ck() << " ";
 
     o << "len=" << l.length() << " ";
-    o << l.type_str() << ":" << l.cat_str();
+    o << l.type_str();
     o << " p(" << l.pid() << ")";
     if (l.is_multi_page()) {
         o << " src-" << l.pid2();

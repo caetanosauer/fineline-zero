@@ -40,7 +40,7 @@ public:
     void reset();
 
     LogScanner(size_t blockSize)
-        : truncCopied(0), truncMissing(0), toSkip(0), blockSize(blockSize)
+        : truncCopied(0), toSkip(0), blockSize(blockSize)
     {
         // maximum logrec size = 3 pages
         truncBuf = new char[3 * log_storage::BLOCK_SIZE];
@@ -72,7 +72,6 @@ public:
 
 private:
     size_t truncCopied;
-    size_t truncMissing;
     size_t toSkip;
     const size_t blockSize;
     char* truncBuf;

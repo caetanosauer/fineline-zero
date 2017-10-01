@@ -391,12 +391,12 @@ bool LogConsumer::next(logrec_t*& lr, lsn_t* lsn)
 
 bool LogScanner::hasPartialLogrec()
 {
-    return truncMissing > 0;
+    return truncCopied > 0;
 }
 
 void LogScanner::reset()
 {
-    truncMissing = 0;
+    truncCopied = 0;
 }
 
 /**
@@ -424,33 +424,28 @@ tryagain:
 
     lr = (logrec_t*) (src + pos);
 
-    if (truncMissing > 0) {
+    if (truncCopied > 0) {
         // finish up the trunc logrec from last block
-        DBG5(<< "Reading partial log record -- missing: "
-                << truncMissing << " of " << truncCopied + truncMissing);
-        w_assert1(truncMissing <= remaining);
-        memcpy(truncBuf + truncCopied, src + pos, truncMissing);
-        pos += truncMissing;
+        // DBG3(<< "Reading partial log record -- missing: "
+        //         << truncMissing << " of " << truncCopied + truncMissing);
+        // w_assert1(truncMissing <= remaining);
+        memcpy(truncBuf + truncCopied, src + pos, sizeof(logrec_t) - truncCopied);
         lr = (logrec_t*) truncBuf;
-        truncCopied += truncMissing;
-        truncMissing = 0;
-        w_assert1(truncCopied == lr->length());
+        pos += (lr->length() - truncCopied);
+        truncCopied = 0;
     }
-    // we need at least two bytes to read the length
-    else if (remaining == 1 || lr->length() > remaining) {
-        // remainder of logrec must be read from next block
-        w_assert0(remaining < sizeof(baseLogHeader) || lr->valid_header());
-        DBG5(<< "Log record with length "
-                << (remaining > 1 ? lr->length() : -1)
+    // we need at least the header bytes to read the length
+    else if (remaining < sizeof(baseLogHeader) || lr->length() > remaining) {
+        DBG3(<< "Log record with length "
+                << (remaining >= sizeof(baseLogHeader) ? lr->length() : -1)
                 << " does not fit in current block of " << remaining);
         w_assert0(remaining <= sizeof(logrec_t));
         memcpy(truncBuf, src + pos, remaining);
         truncCopied = remaining;
-        truncMissing = lr->length() - remaining;
         pos += remaining;
 
         if (lrLength) {
-            *lrLength = (remaining > 1) ? lr->length() : -1;
+            *lrLength = (remaining >= sizeof(baseLogHeader)) ? lr->length() : -1;
         }
 
         return false;

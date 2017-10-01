@@ -158,6 +158,7 @@ rc_t partition_t::flush(
     w_assert0(end2 >= start2);
     long size = (end2 - start2) + (end1 - start1);
     long write_size = size;
+    long file_offset;
 
     { // sync log: Seek the file to the right place.
         DBG5( << "Sync-ing log lsn " << lsn
@@ -167,7 +168,7 @@ rc_t partition_t::flush(
                 << " end2 " << end2 );
 
         // works because BLOCK_SIZE is always a power of 2
-        long file_offset = floor2(lsn.lo(), log_storage::BLOCK_SIZE);
+        file_offset = floor2(lsn.lo(), log_storage::BLOCK_SIZE);
         // offset is rounded down to a block_size
 
         long delta = lsn.lo() - file_offset;
@@ -182,8 +183,7 @@ rc_t partition_t::flush(
            can flush at a time and all other accesses to the file use
            pread/pwrite (which doesn't change the file pointer).
          */
-        off_t where = file_offset;
-        auto ret = lseek(_fhdl_app, where, SEEK_SET);
+        auto ret = lseek(_fhdl_app, file_offset, SEEK_SET);
         CHECK_ERRNO(ret);
     } // end sync log
 
@@ -212,6 +212,11 @@ rc_t partition_t::flush(
             // 2-or-more-block flush
             INC_TSTAT(log_long_flush);
         }
+
+        // CS FINELINE TODO: this is a temporary solution for the log priming problem.
+        // For now, we set the PID of the skip log record as the file offset and
+        // look for that when initializing the log.
+        s->set_pid(file_offset + write_size);
 
         struct iovec iov[] = {
             // iovec_t expects void* not const void *
@@ -458,17 +463,17 @@ rc_t partition_t::close_for_read()
     return RCOK;
 }
 
-size_t partition_t::get_size(bool must_be_skip)
+size_t partition_t::get_size()
 {
     if (_size < 0) {
-        W_COERCE(scan_for_size(must_be_skip));
+        W_COERCE(scan_for_size());
     }
 
     w_assert3(_size >= 0);
     return _size;
 }
 
-rc_t partition_t::scan_for_size(bool must_be_skip)
+rc_t partition_t::scan_for_size()
 {
     // start scanning backwards from end of file until first valid logrec
     // is found; then check for must_be_skip
@@ -487,33 +492,21 @@ rc_t partition_t::scan_for_size(bool must_be_skip)
     w_assert3(fsize >= XFERSIZE);
     char buf[2*XFERSIZE];
     size_t bpos = fsize - XFERSIZE;
-    int pos = 2*XFERSIZE - sizeof(lsn_t);
+    int pos = 2*XFERSIZE - sizeof(baseLogHeader);
+    int fpos = fsize - sizeof(baseLogHeader);
     // start reading just the last of 2 blocks, because the file may be just one block
     auto bytesRead = ::pread(_fhdl_rd, buf + XFERSIZE, XFERSIZE, bpos);
     CHECK_ERRNO(bytesRead);
     if (bytesRead != XFERSIZE) { return RC(stSHORTIO); }
 
-    lsn_t lsn;
+    logrec_t* lr;
     while (pos >= 0) {
-        lsn = *((lsn_t*) (buf + pos));
-        if (lsn.hi() == _num && lsn.lo() < fsize) {
-            // Hi LSN bytes match an lo bytes are below current file
-            // position -- good chance we've found the last logrec. Read
-            // record header to check validity
-            baseLogHeader h;
-            bytesRead = ::pread(_fhdl_rd, &h, sizeof(baseLogHeader), lsn.lo());
-            CHECK_ERRNO(bytesRead);
-            if (bytesRead != sizeof(baseLogHeader)) { return RC(stSHORTIO); }
-
-            if (h.is_valid()) {
-                if (must_be_skip && h._type != skip_log) {
-                    W_FATAL_MSG(eINTERNAL,
-                            << "Found last log record in partition " << _num
-                            << " but it is not a skip");
-                }
-                _size = lsn.lo();
-                break; // Found it!
-            }
+        lr = reinterpret_cast<logrec_t*>(buf + pos);
+        if (lr->type() == skip_log && lr->length() == sizeof(baseLogHeader)
+                && lr->pid() == fpos && lr->valid_header())
+        {
+            _size = lr->pid();
+            break; // Found it!
         }
 
         if (pos == XFERSIZE) {
@@ -525,10 +518,11 @@ rc_t partition_t::scan_for_size(bool must_be_skip)
             if (bytesRead != XFERSIZE) { return RC(stSHORTIO); }
         }
         pos--;
+        fpos--;
     }
 
     if (_size <= 0) {
-        W_FATAL_MSG(eINTERNAL, << "Could lot find end of log partition " << _num);
+        W_FATAL_MSG(eINTERNAL, << "Could not find end of log partition " << _num);
     }
 
     return RCOK;

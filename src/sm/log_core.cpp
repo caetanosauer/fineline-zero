@@ -428,7 +428,7 @@ log_core::log_core(const sm_options& options)
 
     auto p = _storage->curr_partition();
     W_COERCE(p->open_for_read());
-    _curr_lsn = _durable_lsn = _flush_lsn = lsn_t(p->num(), p->get_size(false));
+    _curr_lsn = _durable_lsn = _flush_lsn = lsn_t(p->num(), p->get_size());
 
     size_t prime_offset = 0;
     W_COERCE(p->prime_buffer(_buf, _durable_lsn, prime_offset));

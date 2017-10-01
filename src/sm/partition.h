@@ -100,7 +100,7 @@ public:
         return (_fhdl_app != invalid_fhdl);
     }
 
-    size_t get_size(bool must_be_skip = true);
+    size_t get_size();
 
     void set_size(size_t size) { _size = size; }
 
@@ -121,7 +121,7 @@ private:
     char* _mmap_buffer;
 
     void             fsync_delayed(int fd);
-    rc_t scan_for_size(bool must_be_skip);
+    rc_t scan_for_size();
 
     // Serialize (non-mmap) read calls, which use the same buffer
     mutex _read_mutex;

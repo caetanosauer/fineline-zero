@@ -64,6 +64,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include <AtomicCounter.hpp>
 #include <vector> // only for _collect_single_page_recovery_logs()
 #include <limits>
+#include <atomic>
 
 // in sm_base for the purpose of log callback function argument type
 class      partition_t ; // forward
@@ -107,6 +108,8 @@ public:
     lsn_t curr_lsn() const { return _curr_lsn; }
 
     lsn_t durable_lsn() const { return _durable_lsn; }
+
+    uint64_t epoch_number() const { return _epoch_number; }
 
     void start_flush_daemon();
 
@@ -161,6 +164,7 @@ protected:
 
     lsn_t           _curr_lsn;
     lsn_t           _durable_lsn;
+    std::atomic<uint64_t> _epoch_number;
 
     // Set of pointers into _buf (circular log buffer)
     // and associated lsns. See detailed comments at log_core::insert

@@ -387,7 +387,6 @@ private:
 
 protected:
     void flush_redo_buffer(bool sys_xct = false, bool sync = true);
-    rc_t                _abort();
     rc_t _commit_read_only(lsn_t& inherited_read_watermark);
 
 private:
@@ -430,7 +429,6 @@ private:
                                     u_long&             aborts,
                                     bool                 reset);
 
-    w_rc_t                     _sync_logbuf(bool block=true, bool signal=true);
     void                       _teardown();
 
 public:

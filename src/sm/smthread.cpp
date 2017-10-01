@@ -402,7 +402,8 @@ void
 smthread_t::detach_xct(xct_t* x)
 {
     tcb_t*& tcb = tcb_ptr();
-    w_assert0(tcb->xct == x);
+    w_assert1(tcb->xct == x);
+    w_assert1(get_redo_buf()->get_size() == 0);
     no_xct(x);
     tcb->xct = nullptr;
 }

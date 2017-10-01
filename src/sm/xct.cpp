@@ -519,16 +519,6 @@ xct_t::oldest_tid()
 }
 
 
-rc_t
-xct_t::abort(bool save_stats_structure /* = false */)
-{
-    if(is_instrumented() && !save_stats_structure) {
-        delete __stats;
-        __stats = 0;
-    }
-    return _abort();
-}
-
 tid_t
 xct_t::youngest_tid()
 {
@@ -715,6 +705,7 @@ rc_t xct_t::commit(bool sync_log)
     }
 
     if (has_logs())  {
+        // CS TODO FINELINE: no actual ELR if we wait for log flush here
         flush_redo_buffer(sys_xct, sync_log);
 
         // If system txn, we're done here
@@ -747,6 +738,38 @@ rc_t xct_t::commit(bool sync_log)
         _latency_count = 0;
     }
 
+    return RCOK;
+}
+
+rc_t
+xct_t::abort(bool save_stats_structure /* = false */)
+{
+    if(is_instrumented() && !save_stats_structure) {
+        delete __stats;
+        __stats = 0;
+    }
+
+    w_assert1(_ssx_chain_len == 0);
+    w_assert1(_core->_state == xct_active
+            || _core->_state == xct_committing /* if it got an error in commit*/
+            || _core->_state == xct_freeing_space /* if it got an error in commit*/
+            );
+
+    change_state(xct_aborting);
+    W_DO(rollback());
+    W_COERCE(commit_free_locks());
+
+    if (has_logs())  {
+        // System transactions are not abortable for now
+        constexpr bool sys_xct = false;
+        constexpr bool sync_log = false;
+        flush_redo_buffer(sys_xct, sync_log);
+    }
+
+    change_state(xct_ended);
+
+    smthread_t::detach_xct(this);        // no transaction for this thread
+    INC_TSTAT(abort_xct_cnt);
     return RCOK;
 }
 
@@ -855,32 +878,6 @@ rc_t xct_t::early_lock_release(lsn_t last_lsn) {
     return RCOK;
 }
 
-/*********************************************************************
- *
- *  xct_t::abort()
- *
- *  Abort the transaction by calling rollback().
- *
- *********************************************************************/
-rc_t
-xct_t::_abort()
-{
-    w_assert1(_ssx_chain_len == 0);
-    w_assert1(_core->_state == xct_active
-            || _core->_state == xct_committing /* if it got an error in commit*/
-            || _core->_state == xct_freeing_space /* if it got an error in commit*/
-            );
-
-    change_state(xct_aborting);
-    W_DO(rollback());
-    W_COERCE(commit_free_locks());
-    change_state(xct_ended);
-
-    smthread_t::detach_xct(this);        // no transaction for this thread
-    INC_TSTAT(abort_xct_cnt);
-    return RCOK;
-}
-
 
 /*********************************************************************
  *
@@ -904,48 +901,6 @@ xct_t::dispose()
     smthread_t::detach_xct(this);
     return RCOK;
 }
-
-/*********************************************************************
- *
- *  xct_t::_sync_logbuf()
- *
- *  Force log entries up to the most recently written to disk.
- *
- *  block: If not set it does not block, but kicks the flusher. The
- *         default is to block, the no block option is used by AsynchCommit
- * signal: Whether we even fire the log buffer
- *********************************************************************/
-w_rc_t
-xct_t::_sync_logbuf(bool block, bool signal)
-{
-    if(log) {
-        INC_TSTAT(xct_log_flush);
-        // CS TODO Fineline -- code above is non-durable
-        // return log->flush(_last_lsn,block,signal);
-        return log->flush(lsn_t::null,block,signal);
-    }
-    return RCOK;
-}
-
-// rc_t xct_t::get_logbuf(logrec_t*& ret)
-// {
-//     // then , use tentative log buffer.
-//     // CS: system transactions should also go through log reservation,
-//     // since they are consuming space which user transactions think
-//     // is available for rollback. This is probably a bug.
-//     if (is_piggy_backed_single_log_sys_xct()) {
-//         ret = _log_buf_for_piggybacked_ssx;
-//         return RCOK;
-//     }
-
-
-//     // Instead of flushing here, we'll flush at the end of give_logbuf()
-//     // and assert here that we've got nothing buffered:
-//     w_assert1(!_last_log);
-//     ret = _last_log = _log_buf;
-
-//     return RCOK;
-// }
 
 
 /*********************************************************************

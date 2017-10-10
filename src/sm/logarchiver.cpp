@@ -223,33 +223,30 @@ bool ArchiverHeap::push(logrec_t* lr, run_number_t run, bool duplicate)
     // log record. For restore, it must be duplicated because log records are
     // sorted and there is no chain.
     if (duplicate) {
+        auto lr2 = reinterpret_cast<logrec_t*>(dest.address);
         // If we have to duplciate the log record, make sure there is room by
         // calling recursively without duplication. Note that the original
         // contents were already saved with the memcpy operation above.
         auto pid2 = lr->pid2();
         auto version2 = lr->page2_version();
         auto orig_len = lr->length();
-        lr->remove_info_for_pid(lr->pid());
-        lr->set_pid(pid2);
-        lr->set_page_version(version2);
-        w_assert1(lr->valid_header());
+        lr2->remove_info_for_pid(lr->pid());
+        lr2->set_pid(pid2);
+        lr2->set_page_version(version2);
+        w_assert1(lr2->valid_header());
         // w_assert1(lr->valid_header(lsn));
-        if (!push(lr, run, false)) {
+        if (!push(lr2, run, false)) {
             // If duplicated did not fit, then insertion of the original must
-            // also fail. We have to (1) restore the original contents of
-            // the log record for the next attempt; and (2) free its memory
-            // from the workspace. Since nothing was added to the heap yet, it
-            // stays untouched.
-            memcpy(lr, dest.address, orig_len);
-            // w_assert1(lr->valid_header(lsn));
-            w_assert1(lr->valid_header());
+            // also fail. We have to free its memory from the workspace. Since
+            // nothing was added to the heap yet, it stays untouched.
             W_COERCE(workspace->free(dest));
             return false;
         }
         // now that a compressed log record of pid2 has been pushed, compress
-        // this log record, i.e., of pid1.
-        logrec_t* lr_comp = reinterpret_cast<logrec_t*>(dest.address);
-        lr_comp->remove_info_for_pid(lr_comp->pid2());
+        // this log record, i.e., of pid1. Must copy into scratch memory,
+        // because lr is coming from unmodifiable mmaped memory.
+        memcpy(dest.address, lr, lr->length());
+        lr2->remove_info_for_pid(lr2->pid2());
     }
 
     //DBGTHRD(<< "Processing logrec " << lr->lsn_ck() << ", type " <<

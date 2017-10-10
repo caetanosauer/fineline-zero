@@ -64,6 +64,7 @@ public:
  * from the various prime methods of the old log_core.
  */
 log_storage::log_storage(const sm_options& options)
+    : _curr_partition(nullptr)
 {
     // CS TODO: log record refactoring
     _skip_log = new logrec_t;
@@ -129,22 +130,7 @@ log_storage::log_storage(const sm_options& options)
     }
 
     auto p = get_partition(last_partition);
-    if (!p) {
-        create_partition(last_partition);
-        p = get_partition(last_partition);
-        w_assert0(p);
-    }
-
-    W_COERCE(p->open());
-    _curr_partition = p;
-
-    if(!p) {
-        cerr << "ERROR: could not open log file for partition "
-            << last_partition << endl;
-        W_FATAL(eINTERNAL);
-    }
-
-    w_assert3(p->num() == last_partition);
+    if (p) { _curr_partition = p; }
 }
 
 log_storage::~log_storage()

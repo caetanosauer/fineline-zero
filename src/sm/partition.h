@@ -97,11 +97,7 @@ public:
         return (_fhdl != invalid_fhdl);
     }
 
-    size_t get_size();
-
     void set_size(size_t size) { _size = size; }
-
-    rc_t prime_buffer(char* buffer, lsn_t lsn, size_t& prime_offset);
 
     void destroy();
 
@@ -118,7 +114,6 @@ private:
     char* _mmap_buffer;
 
     void             fsync_delayed(int fd);
-    rc_t scan_for_size();
 
     // Serialize (non-mmap) read calls, which use the same buffer
     mutex _read_mutex;

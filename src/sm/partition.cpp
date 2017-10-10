@@ -218,28 +218,6 @@ rc_t partition_t::flush(
     return RCOK;
 }
 
-rc_t partition_t::prime_buffer(char* buffer, lsn_t lsn, size_t& prime_offset)
-{
-    if (get_size() > 0) {
-        logrec_t* lr;
-#ifdef USE_MMAP
-        size_t offset = XFERSIZE * (lsn.lo() / XFERSIZE);
-        lsn_t block_lsn = lsn_t(num(), offset);
-        W_DO(read(lr, block_lsn));
-        memcpy(buffer, lr, XFERSIZE);
-        prime_offset = lsn.lo() - offset;
-#else
-        W_DO(read(lr, lsn, NULL));
-        memcpy(buffer, _readbuf, XFERSIZE);
-        prime_offset = (char*) lr - _readbuf;
-        release_read();
-#endif
-    }
-    else { prime_offset = 0; }
-
-    return RCOK;
-}
-
 #ifdef USE_MMAP
 rc_t partition_t::read(logrec_t *&rp, lsn_t &ll)
 {
@@ -425,71 +403,6 @@ rc_t partition_t::close()
         CHECK_ERRNO(ret2);
         _fhdl = invalid_fhdl;
     }
-    return RCOK;
-}
-
-size_t partition_t::get_size()
-{
-    if (_size < 0) {
-        W_COERCE(scan_for_size());
-    }
-
-    w_assert3(_size >= 0);
-    return _size;
-}
-
-rc_t partition_t::scan_for_size()
-{
-    // start scanning backwards from end of file until first valid logrec
-    // is found; then check for must_be_skip
-    W_DO(open());
-
-    struct stat stat;
-    auto ret = ::fstat(_fhdl, &stat);
-    CHECK_ERRNO(ret);
-    off_t fsize = stat.st_size;
-
-    if (fsize == 0) {
-        _size = 0;
-        return RCOK;
-    }
-
-    w_assert3(fsize >= XFERSIZE);
-    char buf[2*XFERSIZE];
-    size_t bpos = fsize - XFERSIZE;
-    int pos = 2*XFERSIZE - sizeof(baseLogHeader);
-    int fpos = fsize - sizeof(baseLogHeader);
-    // start reading just the last of 2 blocks, because the file may be just one block
-    auto bytesRead = ::pread(_fhdl, buf + XFERSIZE, XFERSIZE, bpos);
-    CHECK_ERRNO(bytesRead);
-    if (bytesRead != XFERSIZE) { return RC(stSHORTIO); }
-
-    logrec_t* lr;
-    while (pos >= 0) {
-        lr = reinterpret_cast<logrec_t*>(buf + pos);
-        if (lr->type() == skip_log && lr->length() == sizeof(baseLogHeader)
-                && lr->pid() == fpos && lr->valid_header())
-        {
-            _size = lr->pid();
-            break; // Found it!
-        }
-
-        if (pos == XFERSIZE) {
-            // We've scanned last block and didn't find it -- read second
-            // last block
-            bpos -= XFERSIZE;
-            bytesRead = ::pread(_fhdl, buf, XFERSIZE, bpos);
-            CHECK_ERRNO(bytesRead);
-            if (bytesRead != XFERSIZE) { return RC(stSHORTIO); }
-        }
-        pos--;
-        fpos--;
-    }
-
-    if (_size <= 0) {
-        W_FATAL_MSG(eINTERNAL, << "Could not find end of log partition " << _num);
-    }
-
     return RCOK;
 }
 

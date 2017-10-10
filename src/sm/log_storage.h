@@ -93,6 +93,8 @@ public:
 
     void list_partitions(std::vector<partition_number_t>& vec) const;
 
+    shared_ptr<partition_t> create_partition(partition_number_t pnum);
+
     // used by partition_t
     logrec_t*       get_skip_log()  { return _skip_log; }
 
@@ -107,7 +109,6 @@ public:
     unsigned delete_old_partitions(partition_number_t older_than = 0);
 
 private:
-    shared_ptr<partition_t> create_partition(partition_number_t pnum);
 
     fs::path _logpath;
     off_t _partition_size;

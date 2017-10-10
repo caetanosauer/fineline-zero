@@ -323,12 +323,11 @@ log_core::log_core(const sm_options& options)
 
     _storage = new log_storage(options);
 
-    auto p = _storage->curr_partition();
+    auto curr_p = _storage->curr_partition();
+    auto pnum = (curr_p ? curr_p->num() : 0) + 1;
+    auto p = _storage->create_partition(pnum);
     W_COERCE(p->open());
-    _curr_lsn = _durable_lsn = _flush_lsn = lsn_t(p->num(), p->get_size());
-
-    size_t prime_offset = 0;
-    W_COERCE(p->prime_buffer(_buf, _durable_lsn, prime_offset));
+    _curr_lsn = _durable_lsn = _flush_lsn = lsn_t(pnum, 0);
     cerr << "Initialized curr_lsn to " << _curr_lsn << endl;
 
     _oldest_lsn_tracker = new PoorMansOldestLsnTracker(1 << 20);
@@ -349,9 +348,6 @@ log_core::log_core(const sm_options& options)
     w_assert1(_flush_daemon_running == false);
     _buf_epoch = _cur_epoch = epoch(start_lsn, base, offset, offset);
     _end = _start = _durable_lsn.lo();
-
-    // move the primed data where it belongs (watch out, it might overlap)
-    memmove(_buf + offset - prime_offset, _buf, prime_offset);
 
     _ticker = NULL;
     if (options.get_bool_option("sm_ticker_enable", false)) {

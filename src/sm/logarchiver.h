@@ -3,7 +3,6 @@
 
 #include "worker_thread.h"
 #include "sm_base.h"
-#include "log_consumer.h"
 #include "logarchive_index.h"
 #include "logarchive_writer.h"
 #include "w_heap.h"
@@ -202,7 +201,6 @@ public:
     LogArchiver(const sm_options& options);
     LogArchiver(
             ArchiveIndex*,
-            LogConsumer*,
             ArchiverHeap*,
             BlockAssembly*
     );
@@ -217,14 +215,7 @@ public:
     void archiveUntil(run_number_t);
 
     std::shared_ptr<ArchiveIndex> getIndex() { return index; }
-    lsn_t getNextConsumedLSN() { return consumer->getNextLSN(); }
-    void setEager(bool e)
-    {
-        eager = e;
-        lintel::atomic_thread_fence(lintel::memory_order_release);
-    }
-
-    bool getEager() const { return eager; }
+    lsn_t getNextConsumedLSN() { return nextLSN; }
 
     /*
      * IMPORTANT: the block size must be a multiple of the log
@@ -236,27 +227,20 @@ public:
 
 private:
     std::shared_ptr<ArchiveIndex> index;
-    LogConsumer* consumer;
     ArchiverHeap* heap;
     BlockAssembly* blkAssemb;
     MergerDaemon* merger;
 
     std::atomic<bool> shutdownFlag;
-    ArchiverControl control;
     bool selfManaged;
-    bool eager;
-    bool readWholeBlocks;
-    int slowLogGracePeriod;
-    lsn_t nextActLSN;
     lsn_t flushReqLSN;
+    lsn_t nextLSN;
+    lsn_t endRoundLSN;
 
     void replacement();
     bool selection();
     void pushIntoHeap(logrec_t*, run_number_t run, bool duplicate);
-    bool waitForActivation();
     bool processFlushRequest();
-    bool isLogTooSlow();
-    bool shouldActivate(bool logTooSlow);
 
 };
 

@@ -882,26 +882,6 @@ int ShoreEnv::start_sm()
     return (0);
 }
 
-
-
-/*********************************************************************
- *
- *  @fn:      checkpoint()
- *
- *  @brief:   Takes a db checkpoint
- *
- *  @note:    Used between iterations and measurements that explicitly
- *            request periodic checkpoints.
- *
- *********************************************************************/
-
-void ShoreEnv::activate_archiver()
-{
-    if (_enable_archiver) {
-        _pssm->activate_archiver();
-    }
-}
-
 /******************************************************************
  *
  *  @fn:    get_trx_{att,com}()

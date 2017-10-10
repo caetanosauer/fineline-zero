@@ -20,51 +20,40 @@ typedef fixed_lists_mem_t::slot_t slot_t;
 const static int DFT_BLOCK_SIZE = 1024 * 1024; // 1MB = 128 pages
 
 LogArchiver::LogArchiver(
-        ArchiveIndex* d, LogConsumer* c, ArchiverHeap* h, BlockAssembly* b)
+        ArchiveIndex* d, ArchiverHeap* h, BlockAssembly* b)
     :
-    consumer(c), heap(h), blkAssemb(b),
-    shutdownFlag(false), control(&shutdownFlag), selfManaged(false),
+    heap(h), blkAssemb(b),
+    shutdownFlag(false), selfManaged(false),
     flushReqLSN(lsn_t::null)
 {
     index.reset(d);
-    nextActLSN = lsn_t(index->getLastRun() + 1, 0);
+    nextLSN = lsn_t(index->getLastRun() + 1, 0);
 }
 
 LogArchiver::LogArchiver(const sm_options& options)
     :
-    shutdownFlag(false), control(&shutdownFlag), selfManaged(true),
+    shutdownFlag(false), selfManaged(true),
     flushReqLSN(lsn_t::null)
 {
     constexpr size_t defaultWorkspaceSize = 1600;
     size_t workspaceSize = 1024 * 1024 * // convert MB -> B
         options.get_int_option("sm_archiver_workspace_size", defaultWorkspaceSize);
 
-    size_t blockSize = DFT_BLOCK_SIZE;
-    // CS TODO: archiver currently only works with 1MB blocks
-        // options.get_int_option("sm_archiver_block_size", DFT_BLOCK_SIZE);
-
-    // FINELINE: log archive always eager
-    eager = true;
-    readWholeBlocks = options.get_bool_option(
-            "sm_archiver_read_whole_blocks", DFT_READ_WHOLE_BLOCKS);
-    slowLogGracePeriod = options.get_int_option(
-            "sm_archiver_slow_log_grace_period", DFT_GRACE_PERIOD);
     bool compression = options.get_int_option("sm_page_img_compression", 0);
 
     index = std::make_shared<ArchiveIndex>(options);
-    nextActLSN = lsn_t(index->getLastRun() + 1, 0);
-    w_assert1(nextActLSN.hi() > 0);
+    nextLSN = lsn_t(index->getLastRun() + 1, 0);
+    w_assert1(nextLSN.hi() > 0);
 
     constexpr bool startFromFirstLogPartition = true;
-    if (smlevel_0::log && nextActLSN == lsn_t(1,0) && startFromFirstLogPartition) {
+    if (smlevel_0::log && nextLSN == lsn_t(1,0) && startFromFirstLogPartition) {
         std::vector<partition_number_t> partitions;
         smlevel_0::log->get_storage()->list_partitions(partitions);
         if (partitions.size() > 0) {
-            nextActLSN = lsn_t(partitions[0], 0);
+            nextLSN = lsn_t(partitions[0], 0);
         }
     }
 
-    consumer = new LogConsumer(nextActLSN, blockSize);
     heap = new ArchiverHeap(workspaceSize);
     blkAssemb = new BlockAssembly(index.get(), 1 /*level*/, compression);
 
@@ -96,8 +85,6 @@ void LogArchiver::shutdown()
     // this flag indicates that reader and writer threads delivering null
     // blocks is not an error, but a termination condition
     archiveUntil(smlevel_0::log->durable_lsn().hi());
-    DBGOUT(<< "CONSUMER SHUTDOWN STARTING");
-    consumer->shutdown();
     DBGOUT(<< "LOG ARCHIVER SHUTDOWN STARTING");
     shutdownFlag = true;
     join();
@@ -117,7 +104,6 @@ LogArchiver::~LogArchiver()
     }
     if (selfManaged) {
         delete blkAssemb;
-        delete consumer;
         delete heap;
         index = nullptr;
         if (merger) { delete merger; }
@@ -322,24 +308,24 @@ bool ArchiverHeap::Cmp::gt(const HeapEntry& a,
 void LogArchiver::replacement()
 {
     while(true) {
-        logrec_t* lr;
-        lsn_t lsn {lsn_t::null};
-        if (!consumer->next(lr, &lsn)) {
-            w_assert0(readWholeBlocks ||
-                    control.endLSN <= consumer->getNextLSN());
-            if (control.endLSN < consumer->getNextLSN()) {
-                // nextLSN may be greater than endLSN due to skip
-                control.endLSN = consumer->getNextLSN();
-                // TODO: in which correct situation can this assert fail???
-                // w_assert0(control.endLSN.hi() == 0);
-                DBGTHRD(<< "Replacement changed endLSN to " << control.endLSN);
-            }
-            return;
+        if (nextLSN >= endRoundLSN) {
+            nextLSN = endRoundLSN;
+            break;
         }
 
-        if (!lr->is_redo()) {
+        logrec_t* lr;
+        bool got_it = smlevel_0::log->fetch_direct(nextLSN, lr);
+        w_assert0(got_it);
+
+        if (lr->type() == skip_log) {
+            nextLSN = lsn_t(nextLSN.hi() + 1, 0);
             continue;
         }
+
+        auto lsn = nextLSN;
+        nextLSN += lr->length();
+
+        if (!lr->is_redo()) { continue; }
 
         w_assert1(lr->valid_header());
         w_assert1(lsn.hi() > 0);
@@ -372,77 +358,49 @@ void LogArchiver::pushIntoHeap(logrec_t* lr, run_number_t run, bool duplicate)
     }
 }
 
-void LogArchiver::activate(lsn_t endLSN, bool wait)
+bool LogArchiver::processFlushRequest()
 {
-    if (eager) return;
-
-    w_assert0(smlevel_0::log);
-    if (endLSN == lsn_t::null) {
-        endLSN = smlevel_0::log->durable_lsn();
+    if (flushReqLSN != lsn_t::null) {
+        DBGTHRD(<< "Archive flush requested until LSN " << flushReqLSN);
+        if (nextLSN < flushReqLSN) {
+        }
+        else {
+        }
     }
-
-    while (!control.activate(wait, endLSN)) {
-        if (!wait) break;
-    }
+    return false;
 }
 
-bool LogArchiver::waitForActivation()
+void LogArchiver::run()
 {
-    if (eager) {
-        lsn_t newEnd = smlevel_0::log->durable_lsn();
-        while (control.endLSN == newEnd) {
+    while(true) {
+        endRoundLSN = smlevel_0::log->durable_lsn();
+        while (nextLSN == endRoundLSN) {
             // we're going faster than log, sleep a bit (1ms)
             ::usleep(1000);
-            newEnd = smlevel_0::log->durable_lsn();
+            endRoundLSN = smlevel_0::log->durable_lsn();
 
-            if (shutdownFlag) {
-                return false;
-            }
+            if (shutdownFlag) { break; }
 
             // Flushing requested (e.g., by restore manager)
-            if (flushReqLSN != lsn_t::null) {
-                return true;
-            }
+            if (flushReqLSN != lsn_t::null) { break; }
 
-            if (newEnd.lo() == 0) {
+            if (endRoundLSN.lo() == 0) {
                 // If durable_lsn is at the beginning of a new log partition,
                 // it can happen that at this point the file was not created
                 // yet, which would cause the reader thread to fail.
                 continue;
             }
         }
-        control.endLSN = newEnd;
-    }
-    else {
-        bool activated = control.waitForActivation();
-        if (!activated) {
-            return false;
-        }
-    }
 
-    if (shutdownFlag) {
-        return false;
-    }
+        if (shutdownFlag) { break; }
 
-    return true;
-}
+        INC_TSTAT(la_activations);
+        DBGOUT(<< "Log archiver activated from " << nextLSN << " to " << endRoundLSN);
 
-bool LogArchiver::processFlushRequest()
-{
-    if (flushReqLSN != lsn_t::null) {
-        DBGTHRD(<< "Archive flush requested until LSN " << flushReqLSN);
-        if (getNextConsumedLSN() < flushReqLSN) {
-            // if logrec hasn't been read into heap yet, then selection
-            // will never reach it. Do another round until heap has
-            // consumed it.
-            if (control.endLSN < flushReqLSN) {
-                control.endLSN = flushReqLSN;
-            }
-            DBGTHRD(<< "LSN requested for flush hasn't been consumed yet. "
-                    << "Trying again after another round");
-            return false;
-        }
-        else {
+        replacement();
+
+        if (flushReqLSN != lsn_t::null) {
+            w_assert0(endRoundLSN >= flushReqLSN);
             // consume whole heap
             while (selection()) {}
             // Heap empty: Wait for all blocks to be consumed and writen out
@@ -469,126 +427,7 @@ bool LogArchiver::processFlushRequest()
              */
             flushReqLSN = lsn_t::null;
             lintel::atomic_thread_fence(lintel::memory_order_release);
-            return true;
         }
-    }
-    return false;
-}
-
-bool LogArchiver::isLogTooSlow()
-{
-    if (!eager) { return false; }
-
-    int minActWindow = index->getBlockSize();
-
-    auto isSmallWindow = [minActWindow](lsn_t endLSN, lsn_t nextLSN) {
-        int nextHi = nextLSN.hi();
-        int nextLo = nextLSN.lo();
-        int endHi = endLSN.hi();
-        int endLo = endLSN.lo();
-        return (endHi == nextHi && endLo - nextLo< minActWindow) ||
-            (endHi == nextHi + 1 && endLo < minActWindow);
-    };
-
-    if (isSmallWindow(control.endLSN, nextActLSN))
-    {
-        // If this happens to often, the block size should be decreased.
-        ::usleep(slowLogGracePeriod);
-        // To better exploit device bandwidth, we only start archiving if
-        // at least one block worth of log is available for consuption.
-        // This happens when the log is growing too slow.
-        // However, if it seems like log activity has stopped (i.e.,
-        // durable_lsn did not advance since we started), then we proceed
-        // with the small activation window.
-        bool logStopped = control.endLSN == smlevel_0::log->durable_lsn();
-        if (!isSmallWindow(control.endLSN, nextActLSN) && !logStopped) {
-            return false;
-        }
-        INC_TSTAT(la_log_slow);
-        DBGTHRD(<< "Log growing too slow");
-        return true;
-    }
-    return false;
-}
-
-bool LogArchiver::shouldActivate(bool logTooSlow)
-{
-    if (flushReqLSN == control.endLSN) {
-        return control.endLSN > nextActLSN;
-    }
-
-    // CS TODO: temporary hack -- do not kick-off archiver until buffer pool has warmed up
-    // if (!smlevel_0::bf || !smlevel_0::bf->is_warmup_done()) {
-    //     return false;
-    // }
-
-    if (logTooSlow && control.endLSN == smlevel_0::log->durable_lsn()) {
-        // Special case: log is not only groing too slow, but it has actually
-        // halted. This means the application/experiment probably already
-        // finished and is just waiting for the archiver. In that case, we
-        // allow the activation with a small window. However, it may not be
-        // a window of size zero (s.t. endLSN == nextActLSN)
-        DBGTHRD(<< "Log seems halted -- accepting small window");
-        return control.endLSN > nextActLSN;
-    }
-
-    // Try to keep activation window at block boundaries to better utilize
-    // I/O bandwidth
-    if (eager && readWholeBlocks && !logTooSlow) {
-        size_t boundary = index->getBlockSize() *
-            (control.endLSN.lo() / index->getBlockSize());
-        control.endLSN = lsn_t(control.endLSN.hi(), boundary);
-        if (control.endLSN <= nextActLSN) {
-            return false;
-        }
-        if (control.endLSN.lo() == 0) {
-            // If durable_lsn is at the beginning of a new log partition,
-            // it can happen that at this point the file was not created
-            // yet, which would cause the reader thread to fail. This does
-            // not happen with eager archiving, so we should eventually
-            // remove it
-            return false;
-        }
-        DBGTHRD(<< "Adjusted activation window to block boundary " <<
-                control.endLSN);
-    }
-
-    if (control.endLSN == lsn_t::null
-            || control.endLSN <= nextActLSN)
-    {
-        DBGTHRD(<< "Archiver already passed this range. Continuing...");
-        return false;
-    }
-
-    w_assert1(control.endLSN > nextActLSN);
-    return true;
-}
-
-void LogArchiver::run()
-{
-    while(true) {
-        CRITICAL_SECTION(cs, control.mutex);
-
-        if (!waitForActivation()) {
-            break;
-        }
-        bool logTooSlow = isLogTooSlow();
-
-        if (processFlushRequest()) {
-            continue;
-        }
-
-        if (!shouldActivate(logTooSlow)) {
-            continue;
-        }
-        INC_TSTAT(la_activations);
-
-        DBGOUT(<< "Log archiver activated from " << nextActLSN << " to "
-                << control.endLSN);
-
-        consumer->open(control.endLSN, readWholeBlocks && !logTooSlow);
-
-        replacement();
 
         /*
          * Selection is not invoked here because log archiving should be a
@@ -603,15 +442,7 @@ void LogArchiver::run()
          * cycles, but on signals/events generated by the writer thread (TODO)
          */
 
-        // nextActLSN = consumer->getNextLSN();
-        nextActLSN = control.endLSN;
-        DBGOUT(<< "Log archiver consumed all log records until LSN "
-                << nextActLSN);
-
-        if (!eager) {
-            control.endLSN = lsn_t::null;
-            control.activated = false;
-        }
+        DBGOUT(<< "Log archiver consumed all log records until LSN " << endRoundLSN);
     }
 
     // Perform selection until all remaining entries are flushed out of
@@ -647,9 +478,6 @@ void LogArchiver::requestFlushSync(lsn_t reqLSN)
 {
     smlevel_0::log->flush(reqLSN);
     DBGTHRD(<< "Requesting flush until LSN " << reqLSN);
-    if (!eager) {
-        activate(reqLSN);
-    }
     while (!requestFlushAsync(reqLSN)) {
         usleep(1000); // 1ms
     }
@@ -673,8 +501,7 @@ void LogArchiver::archiveUntil(run_number_t run)
     lsn_t until = smlevel_0::log->durable_lsn();
 
     // wait for log record to be consumed
-    while (getNextConsumedLSN() < until) {
-        activate(until, true);
+    while (nextLSN < until) {
         ::usleep(10000); // 10ms
     }
 

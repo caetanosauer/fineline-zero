@@ -601,15 +601,6 @@ ss_m::xct_state_t ss_m::state_xct(const xct_t* x)
     return x->state();
 }
 
-rc_t
-ss_m::activate_archiver()
-{
-    if (logArchiver) {
-        logArchiver->activate(lsn_t::null, false);
-    }
-    return RCOK;
-}
-
 /*--------------------------------------------------------------*
  *  ss_m::dump_buffers()                            *
  *  For debugging, smsh

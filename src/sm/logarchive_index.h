@@ -197,6 +197,7 @@ private:
     std::string archdir;
     std::vector<int> appendFd;
     std::vector<off_t> appendPos;
+    size_t appendBlockCount;
     size_t blockSize;
 
     fs::path archpath;

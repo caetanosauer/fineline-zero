@@ -180,6 +180,8 @@ ArchiveIndex::ArchiveIndex(const sm_options& options)
         // runRecycler.reset(new RunRecycler {replFactor, this});
         // runRecycler->fork();
     }
+
+    appendBlockCount = 0;
 }
 
 ArchiveIndex::~ArchiveIndex()
@@ -342,8 +344,11 @@ rc_t ArchiveIndex::append(char* data, size_t length, unsigned level)
     CHECK_ERRNO(ret);
     appendPos[level] += length;
 
-    ret = ::fsync(appendFd[level]);
-    CHECK_ERRNO(ret);
+    // Hack to achieve constant and high bandwidth: fsync every N blocks
+    if (++appendBlockCount % 16 == 0) {
+        ret = ::fsync(appendFd[level]);
+        CHECK_ERRNO(ret);
+    }
 
     return RCOK;
 }

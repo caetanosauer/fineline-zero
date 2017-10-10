@@ -75,7 +75,6 @@ struct CArraySlot;
 class PoorMansOldestLsnTracker;
 class plog_xct_t;
 class ticker_thread_t;
-class fetch_buffer_loader_t;
 class flush_daemon_thread_t;
 
 #include <partition.h>
@@ -99,8 +98,8 @@ public:
     rc_t            flush(const lsn_t &lsn, bool block=true, bool signal=true, bool *ret_flushed=NULL);
     rc_t    flush_all(bool block=true) {
                           return flush(curr_lsn().advance(-1), block); }
-    rc_t            fetch(lsn_t &lsn, void* buf, lsn_t* nxt, const bool forward);
-    bool fetch_direct(lsn_t lsn, logrec_t*& lr, lsn_t& prev_lsn);
+    rc_t            fetch(lsn_t &lsn, void* buf, lsn_t* nxt);
+    bool fetch_direct(lsn_t lsn, logrec_t*& lr);
 
     void            shutdown();
     rc_t            truncate();
@@ -118,10 +117,6 @@ public:
     void            flush_daemon();
 
     lsn_t           flush_daemon_work(lsn_t old_mark);
-
-    rc_t load_fetch_buffers();
-    void discard_fetch_buffers(partition_number_t recycled =
-            std::numeric_limits<partition_number_t>::max());
 
     // log buffer segment size = 128 MB
     enum { SEGMENT_SIZE = 16384 * log_storage::BLOCK_SIZE };
@@ -149,16 +144,6 @@ protected:
 
     char*                _buf; // log buffer: _segsize buffer into which
                          // inserts copy log records with log_core::insert
-
-    /** Buffers for fetch operation -- used during log analysis and
-     * single-page redo. One buffer is used for each partition.
-     * The number of partitions is specified by sm_log_fetch_buf_partitions */
-    vector<char*> _fetch_buffers;
-    uint32_t _fetch_buf_first;
-    uint32_t _fetch_buf_last;
-    lsn_t _fetch_buf_begin;
-    lsn_t _fetch_buf_end;
-    shared_ptr<fetch_buffer_loader_t> _fetch_buf_loader;
 
     ticker_thread_t* _ticker;
 
@@ -345,8 +330,8 @@ protected:
 class log_i {
 public:
     /// start a scan of the given log a the given log sequence number.
-    NORET                        log_i(log_core& l, const lsn_t& lsn, const bool forward = true) ;
-    NORET                        ~log_i();
+    log_i(log_core& l, const lsn_t& lsn) ;
+    ~log_i();
 
     /// Get the next log record for transaction, put its sequence number in argument \a lsn
     bool                         xct_next(lsn_t& lsn, logrec_t*& r);
@@ -358,12 +343,11 @@ private:
     log_core&                       log;
     lsn_t                        cursor;
     w_rc_t                       last_rc;
-    bool                         forward_scan;
 }; // log_i
 
 inline NORET
-log_i::log_i(log_core& l, const lsn_t& lsn, const bool forward)  // Default: true for forward scan
-    : log(l), cursor(lsn), forward_scan(forward)
+log_i::log_i(log_core& l, const lsn_t& lsn)  // Default: true for forward scan
+    : log(l), cursor(lsn)
 { }
 
 inline

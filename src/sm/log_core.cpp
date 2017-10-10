@@ -162,25 +162,6 @@ private:
     bool even_round;
 };
 
-class fetch_buffer_loader_t : public thread_wrapper_t
-{
-public:
-    fetch_buffer_loader_t(log_core* log) : log(log)
-    {
-    }
-
-    virtual ~fetch_buffer_loader_t() {}
-
-    void run()
-    {
-        W_COERCE(log->load_fetch_buffers());
-    }
-
-private:
-    log_core* log;
-};
-
-
 class flush_daemon_thread_t : public thread_wrapper_t
 {
     log_core* _log;
@@ -217,64 +198,13 @@ void log_core::start_flush_daemon()
  *********************************************************************/
 
 rc_t
-log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt, const bool forward)
+log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
 {
     INC_TSTAT(log_fetches);
 
-    lintel::atomic_thread_fence(lintel::memory_order_acquire);
-    if (ll < _fetch_buf_end && ll >= _fetch_buf_begin)
-    {
-        // log record can be found in fetch buffer -- no I/O
-        size_t i = ll.hi() - _fetch_buf_first;
-        if (_fetch_buffers[i]) {
-            logrec_t* rp = (logrec_t*) (_fetch_buffers[i] + ll.lo());
-            w_assert1(rp->valid_header());
-
-            if (rp->type() == skip_log)
-            {
-                if (forward) {
-                    ll = lsn_t(ll.hi() + 1, 0);
-                    return fetch(ll, buf, nxt, forward);
-                }
-                else { // backward scan
-                    ll = *((lsn_t*) (_fetch_buffers[i] + ll.lo() - sizeof(lsn_t)));
-                }
-
-                rp = (logrec_t*) (_fetch_buffers[i] + ll.lo());
-                w_assert1(rp->valid_header());
-            }
-
-            if (nxt) {
-                if (!forward && ll.lo() == 0) {
-                    auto p = _storage->get_partition(ll.hi() - 1);
-                    *nxt = p ? lsn_t(p->num(), p->get_size()) : lsn_t::null;
-                }
-                else {
-                    if (forward) {
-                        *nxt = ll;
-                        nxt->advance(rp->length());
-                    }
-                    else {
-                        memcpy(nxt, (char*) rp - sizeof(lsn_t), sizeof(lsn_t));
-                    }
-                }
-            }
-
-            memcpy(buf, rp, rp->length());
-            INC_TSTAT(log_buffer_hit);
-
-            return RCOK;
-        }
-    }
-
-    if (forward && ll >= durable_lsn()) {
+    if (ll >= durable_lsn()) {
         w_assert1(ll == durable_lsn());
         // reading the durable_lsn during recovery yields a skip log record,
-        return RC(eEOF);
-    }
-    if (!forward && ll == lsn_t::null) {
-        // for a backward scan, nxt pointer is set to null
-        // when the first log record in the first partition is set
         return RC(eEOF);
     }
 
@@ -285,58 +215,31 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt, const bool forward)
     logrec_t* rp;
     lsn_t prev_lsn = lsn_t::null;
     DBGOUT3(<< "fetch @ lsn: " << ll);
-    W_COERCE(p->read(rp, ll, forward ? NULL : &prev_lsn));
+    W_COERCE(p->read(rp, ll));
     w_assert1(rp->valid_header());
 
     // handle skip log record
     if (rp->type() == skip_log)
     {
         p->release_read();
-        if (forward) {
-            DBGTHRD(<<"seeked to skip" << ll );
-            DBGTHRD(<<"getting next partition.");
-            ll = lsn_t(ll.hi() + 1, 0);
+        DBGTHRD(<<"seeked to skip" << ll );
+        DBGTHRD(<<"getting next partition.");
+        ll = lsn_t(ll.hi() + 1, 0);
 
-            p = _storage->get_partition(ll.hi());
-            if(!p) { return RC(eEOF); }
+        p = _storage->get_partition(ll.hi());
+        if(!p) { return RC(eEOF); }
 
-            // re-read
-            DBGOUT3(<< "fetch @ lsn: " << ll);
-            W_DO(p->open_for_read());
-            W_COERCE(p->read(rp, ll));
-            w_assert1(rp->valid_header());
-        }
-        else { // backward scan
-            // just get previous log record using prev_lsn which was set inside
-            // the first call to p->read()
-            w_assert1(prev_lsn != lsn_t::null);
-            ll = prev_lsn;
-            DBGOUT3(<< "fetch @ lsn: " << ll);
-            W_COERCE(p->read(rp, ll, &prev_lsn));
-            w_assert1(rp->valid_header());
-        }
+        // re-read
+        DBGOUT3(<< "fetch @ lsn: " << ll);
+        W_DO(p->open_for_read());
+        W_COERCE(p->read(rp, ll));
+        w_assert1(rp->valid_header());
     }
 
     // set nxt pointer accordingly
     if (nxt) {
-        if (!forward && prev_lsn == lsn_t::null) {
-            if (ll == lsn_t(1,0)) {
-                *nxt = lsn_t::null;
-            }
-            else {
-                auto p = _storage->get_partition(ll.hi() - 1);
-                *nxt = p ? lsn_t(p->num(), p->get_size()) : lsn_t::null;
-            }
-        }
-        else {
-            if (forward) {
-                *nxt = ll;
-                nxt->advance(rp->length());
-            }
-            else {
-                *nxt = prev_lsn;
-            }
-        }
+        *nxt = ll;
+        nxt->advance(rp->length());
     }
 
     memcpy(buf, rp, rp->length());
@@ -346,21 +249,15 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt, const bool forward)
     return RCOK;
 }
 
-bool log_core::fetch_direct(lsn_t lsn, logrec_t*& lr, lsn_t& prev_lsn)
+bool log_core::fetch_direct(lsn_t lsn, logrec_t*& lr)
 {
     auto p = _storage->get_partition(lsn.hi());
     if(!p) { return false; }
     W_COERCE(p->open_for_read());
 
-    W_COERCE(p->read(lr, lsn, &prev_lsn));
-
-    if (prev_lsn.is_null() && lsn.hi() > 1) {
-	p = _storage->get_partition(lsn.hi() - 1);
-	if (p) {
-	    prev_lsn = lsn_t(p->num(), p->get_size());
-	}
-    }
+    W_COERCE(p->read(lr, lsn));
     w_assert0(lr->valid_header());
+    //  CS TODO: release_read makes no sense with USE_MMAP
     p->release_read();
 
     return true;
@@ -468,21 +365,6 @@ log_core::log_core(const sm_options& options)
 
     _page_img_compression = options.get_int_option("sm_page_img_compression", 0);
 
-    // Load fetch buffers
-    int fetchbuf_partitions = options.get_int_option("sm_log_fetch_buf_partitions", 0);
-    if (fetchbuf_partitions > 0) {
-        _fetch_buf_last = _durable_lsn.hi();
-        _fetch_buf_first = _fetch_buf_last - fetchbuf_partitions + 1;
-        _fetch_buf_end = _durable_lsn;
-        _fetch_buf_begin = _durable_lsn;
-    }
-    else {
-        _fetch_buf_last = 0;
-        _fetch_buf_first = 0;
-        _fetch_buf_end = lsn_t::null;
-        _fetch_buf_begin = lsn_t::null;
-    }
-
     directIO = options.get_bool_option("sm_log_o_direct", false);
 
     if (1) {
@@ -506,10 +388,6 @@ rc_t log_core::init()
     if (_ticker) {
         _ticker->fork();
     }
-    if (_fetch_buf_first > 0) {
-        _fetch_buf_loader = make_shared<fetch_buffer_loader_t>(this);
-        _fetch_buf_loader->fork();
-    }
     start_flush_daemon();
 
     return RCOK;
@@ -522,8 +400,6 @@ log_core::~log_core()
         _ticker->join();
         delete _ticker;
     }
-
-    discard_fetch_buffers();
 
     delete _storage;
     delete _oldest_lsn_tracker;
@@ -1260,88 +1136,6 @@ lsn_t log_core::flush_daemon_work(lsn_t old_mark)
     return end_lsn;
 }
 
-rc_t log_core::load_fetch_buffers()
-{
-    _fetch_buffers.resize(_fetch_buf_last - _fetch_buf_first + 1, NULL);
-
-    for (size_t p = _fetch_buf_last; p >= _fetch_buf_first; p--) {
-        int fd;
-
-        string fname = _storage->make_log_name(p);
-        int flags = O_RDONLY;
-        if (directIO) { flags |= O_DIRECT; }
-
-        // get file size and whether it exists
-        struct stat file_info;
-        int status = stat(fname.c_str(), &file_info);
-        if (status < 0) {
-            continue;
-        }
-
-        // Allocate buffer space and open file
-        char* buf = new char[file_info.st_size];
-        _fetch_buffers[p - _fetch_buf_first] = buf;
-        fd = ::open(fname.c_str(), flags, 0744);
-        CHECK_ERRNO(fd);
-
-        // Main loop that loads chunks of 32MB in reverse sequential order
-        size_t chunk = 32 * 1024 * 1024;
-        long offset = file_info.st_size - chunk;
-        while (true) {
-            size_t read_size = offset >= 0 ? chunk : chunk + offset;
-            if (offset < 0) { offset = 0; }
-
-            auto bytesRead = ::pread(fd, buf + offset, read_size, offset);
-            CHECK_ERRNO(bytesRead);
-            if (bytesRead != (int) read_size) { return RC(stSHORTIO); }
-
-            // CS TODO: use std::atomic
-            _fetch_buf_begin = lsn_t(p, offset);
-            lintel::atomic_thread_fence(lintel::memory_order_release);
-
-            if (offset == 0) { break; }
-            offset -= read_size;
-        }
-
-        auto ret = ::close(fd);
-        CHECK_ERRNO(ret);
-
-        // size_t pos = 0;
-        // while (pos < file_info.st_size) {
-        //     logrec_t* lr = (logrec_t*) (_fetch_buffers[p - _fetch_buf_first] + pos);
-        //     w_assert0(lr->valid_header(lsn_t(p, pos)));
-        //     ERROUT(<< *lr);
-        //     pos += lr->length();
-        // }
-    }
-    return RCOK;
-}
-
-void log_core::discard_fetch_buffers(partition_number_t recycled_until)
-{
-    // If all buffered logs haven't been recycled yet, they might still
-    // be needed by running transactions
-    if (_fetch_buf_last > recycled_until) { return; }
-
-    if (_fetch_buf_loader) {
-        _fetch_buf_loader->join();
-        _fetch_buf_loader = nullptr;
-    }
-
-    for (size_t p = _fetch_buf_first; p > 0 && p <= _fetch_buf_last; p++) {
-        size_t i = p - _fetch_buf_first;
-        if (_fetch_buffers[i]) {
-            delete[] _fetch_buffers[i];
-        }
-    }
-
-    _fetch_buffers.clear();
-    _fetch_buf_first = 0;
-    _fetch_buf_last = 0;
-    _fetch_buf_begin = lsn_t::null;
-    _fetch_buf_end = lsn_t::null;
-}
-
 lsn_t log_core::get_oldest_active_lsn()
 {
     return _oldest_lsn_tracker->get_oldest_active_lsn(curr_lsn());
@@ -1368,7 +1162,7 @@ bool log_i::xct_next(lsn_t& lsn, logrec_t& r)
 
     if (! eof) {
         lsn = cursor;
-        rc_t rc = log.fetch(lsn, &r, &cursor, forward_scan);  // Either forward or backward scan
+        rc_t rc = log.fetch(lsn, &r, &cursor);  // Either forward or backward scan
 
         if (rc.is_error())  {
             last_rc = RC_AUGMENT(rc);

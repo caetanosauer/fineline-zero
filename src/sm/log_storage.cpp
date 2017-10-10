@@ -205,109 +205,6 @@ shared_ptr<partition_t> log_storage::get_partition(partition_number_t n) const
     return it->second;
 }
 
-/*********************************************************************
- *
- *  log_storage::close_min(n)
- *
- *  Close the partition with the smallest index(num) or an unused
- *  partition, and
- *  return a ptr to the partition
- *
- *  The argument n is the partition number for which we are going
- *  to use the free partition.
- *
- *********************************************************************/
-// CS TODO: disabled for now because we are supporting an unbouded
-// number of partitions -- bounded list & recycling will be implemented later
-// MUTEX: partition
-#if 0
-partition_t        *
-log_storage::_close_min(partition_number_t n)
-{
-    // kick the cleaner thread(s)
-    //if(smlevel_0::bf) smlevel_0::bf->wakeup_cleaners();
-
-    /*
-     *  If a free partition exists, return it.
-     */
-
-    /*
-     * first try the slot that is n % PARTITION_COUNT
-     * That one should be free.
-     */
-    int tries=0;
- again:
-    partition_index_t    i =  (int)((n-1) % PARTITION_COUNT);
-    partition_number_t   min = min_chkpt_rec_lsn().hi();
-    partition_t         *victim;
-
-    victim = _partition(i);
-    if((victim->num() == 0)  ||
-        (victim->num() < min)) {
-        // found one -- doesn't matter if it's the "lowest"
-        // but it should be
-    } else {
-        victim = 0;
-    }
-
-    if (victim)  {
-        w_assert3( victim->index() == (partition_index_t)((n-1) % PARTITION_COUNT));
-    }
-    /*
-     *  victim is the chosen victim partition.
-     */
-    if(!victim) {
-        /*
-         * uh-oh, no space left. Kick the page cleaners, wait a bit, and
-         * try again. Do this no more than 8 times.
-         *
-         */
-        {
-            w_ostrstream msg;
-            msg << "Thread " << me()->id << " "
-            << "Out of log space  ("
-            //<< space_left()
-            << "); No empty partitions."
-            << endl;
-            fprintf(stderr, "%s\n", msg.c_str());
-        }
-
-        if(tries++ > 8) W_FATAL(eOUTOFLOGSPACE);
-        //if(smlevel_0::bf) smlevel_0::bf->wakeup_cleaners();
-        me()->sleep(1000);
-        goto again;
-    }
-    w_assert1(victim);
-    // num could be 0
-
-    /*
-     *  Close it.
-     */
-    if(victim->exists()) {
-        /*
-         * Cannot close it if we need it for recovery.
-         */
-        if(victim->num() >= min_chkpt_rec_lsn().hi()) {
-            w_ostrstream msg;
-            msg << " Cannot close min partition -- still in use!" << endl;
-            // not mt-safe
-            cerr  << msg.c_str() << endl;
-        }
-        w_assert1(victim->num() < min_chkpt_rec_lsn().hi());
-
-        victim->close(true);
-        victim->destroy();
-
-    } else {
-        w_assert3(! victim->is_open_for_append());
-        w_assert3(! victim->is_open_for_read());
-    }
-
-    victim->clear();
-
-    return victim;
-}
-#endif
 shared_ptr<partition_t> log_storage::create_partition(partition_number_t pnum)
 {
 #if W_DEBUG_LEVEL > 2
@@ -403,9 +300,6 @@ unsigned log_storage::delete_old_partitions(partition_number_t older_than)
         // and the critical section above guarantees visibility.
         p->destroy();
     }
-
-    // Recycle log fetch buffer
-    smlevel_0::log->discard_fetch_buffers(highest_deleted);
 
     return to_be_deleted.size();
 }

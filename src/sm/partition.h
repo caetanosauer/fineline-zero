@@ -82,7 +82,11 @@ public:
     rc_t close_for_append();
     rc_t close_for_read();
 
+#ifdef USE_MMAP
+    rc_t read(logrec_t *&r, lsn_t &ll);
+#else
     rc_t read(logrec_t *&r, lsn_t &ll, lsn_t* prev_lsn = NULL);
+#endif
     void release_read();
 
     size_t read_block(void* buf, size_t count, off_t offset);

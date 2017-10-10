@@ -260,23 +260,13 @@ rc_t partition_t::prime_buffer(char* buffer, lsn_t lsn, size_t& prime_offset)
 }
 
 #ifdef USE_MMAP
-rc_t partition_t::read(logrec_t *&rp, lsn_t &ll, lsn_t* prev_lsn)
+rc_t partition_t::read(logrec_t *&rp, lsn_t &ll)
 {
     w_assert1(ll.hi() == num());
     w_assert3(is_open_for_read());
 
     size_t pos = ll.lo();
     rp = reinterpret_cast<logrec_t*>(_readbuf + pos);
-
-    if (prev_lsn) {
-        if (pos == 0) {
-            *prev_lsn = lsn_t::null;
-        }
-        else {
-            w_assert1(pos > sizeof(lsn_t) + sizeof(baseLogHeader));
-            *prev_lsn = *(reinterpret_cast<lsn_t*>(_readbuf + pos - sizeof(lsn_t)));
-        }
-    }
 
     return RCOK;
 }

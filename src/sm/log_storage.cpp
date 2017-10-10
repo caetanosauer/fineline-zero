@@ -135,7 +135,7 @@ log_storage::log_storage(const sm_options& options)
         w_assert0(p);
     }
 
-    W_COERCE(p->open_for_append());
+    W_COERCE(p->open());
     _curr_partition = p;
 
     if(!p) {
@@ -161,8 +161,7 @@ log_storage::~log_storage()
     partition_map_t::iterator it = _partitions.begin();
     while (it != _partitions.end()) {
         auto p = it->second;
-        p->close_for_read();
-        p->close_for_append();
+        p->close();
         it++;
     }
 
@@ -188,9 +187,9 @@ shared_ptr<partition_t> log_storage::get_partition_for_flush(lsn_t start_lsn,
         w_assert3(n != 0);
 
         {
-            W_COERCE(p->close_for_append());
+            W_COERCE(p->close());
             p = create_partition(n+1);
-            W_COERCE(p->open_for_append());
+            W_COERCE(p->open());
         }
     }
 
@@ -207,17 +206,6 @@ shared_ptr<partition_t> log_storage::get_partition(partition_number_t n) const
 
 shared_ptr<partition_t> log_storage::create_partition(partition_number_t pnum)
 {
-#if W_DEBUG_LEVEL > 2
-    // No other partition may be open for append
-    {
-        spinlock_read_critical_section cs(&_partition_map_latch);
-        partition_map_t::iterator it = _partitions.begin();
-        for (; it != _partitions.end(); it++) {
-            w_assert3(!it->second->is_open_for_append());
-        }
-    }
-#endif
-
     // we should also free up if necessary, as done in close_min
     auto p = get_partition(pnum);
     if (p) {

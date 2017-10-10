@@ -210,7 +210,7 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
 
     auto p = _storage->get_partition(ll.hi());
     if(!p) { return RC(eEOF); }
-    W_DO(p->open_for_read());
+    W_DO(p->open());
 
     logrec_t* rp;
     lsn_t prev_lsn = lsn_t::null;
@@ -231,7 +231,7 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
 
         // re-read
         DBGOUT3(<< "fetch @ lsn: " << ll);
-        W_DO(p->open_for_read());
+        W_DO(p->open());
         W_COERCE(p->read(rp, ll));
         w_assert1(rp->valid_header());
     }
@@ -253,7 +253,7 @@ bool log_core::fetch_direct(lsn_t lsn, logrec_t*& lr)
 {
     auto p = _storage->get_partition(lsn.hi());
     if(!p) { return false; }
-    W_COERCE(p->open_for_read());
+    W_COERCE(p->open());
 
     W_COERCE(p->read(lr, lsn));
     w_assert0(lr->valid_header());
@@ -324,7 +324,7 @@ log_core::log_core(const sm_options& options)
     _storage = new log_storage(options);
 
     auto p = _storage->curr_partition();
-    W_COERCE(p->open_for_read());
+    W_COERCE(p->open());
     _curr_lsn = _durable_lsn = _flush_lsn = lsn_t(p->num(), p->get_size());
 
     size_t prime_offset = 0;

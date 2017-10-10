@@ -77,10 +77,8 @@ public:
 
     partition_number_t num() const   { return _num; }
 
-    rc_t open_for_append();
-    rc_t open_for_read();
-    rc_t close_for_append();
-    rc_t close_for_read();
+    rc_t open();
+    rc_t close();
 
 #ifdef USE_MMAP
     rc_t read(logrec_t *&r, lsn_t &ll);
@@ -94,14 +92,9 @@ public:
     rc_t flush(lsn_t lsn, const char* const buf, long start1, long end1,
             long start2, long end2);
 
-    bool is_open_for_read() const
+    bool is_open() const
     {
-        return (_fhdl_rd != invalid_fhdl);
-    }
-
-    bool is_open_for_append() const
-    {
-        return (_fhdl_app != invalid_fhdl);
+        return (_fhdl != invalid_fhdl);
     }
 
     size_t get_size();
@@ -116,10 +109,10 @@ private:
     partition_number_t    _num;
     log_storage*          _owner;
     long                  _size;
-    int                   _fhdl_rd;
-    int                   _fhdl_app;
+    int                   _fhdl;
     static int            _artificial_flush_delay;  // in microseconds
     char*                 _readbuf;
+    size_t _open_count;
 
     size_t _max_partition_size;
     char* _mmap_buffer;

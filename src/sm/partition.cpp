@@ -80,7 +80,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 
 partition_t::partition_t(log_storage *owner, partition_number_t num)
     : _num(num), _owner(owner), _size(-1),
-      _fhdl_rd(invalid_fhdl), _fhdl_app(invalid_fhdl)
+      _fhdl(invalid_fhdl), _open_count(0)
 {
     _max_partition_size = owner->get_partition_size();
 #ifndef USE_MMAP
@@ -92,25 +92,6 @@ partition_t::partition_t(log_storage *owner, partition_number_t num)
 #else
     _readbuf = nullptr;
 #endif
-}
-
-/*
- * open_for_append(num, end_hint)
- * "open" a file  for the given num for append, and
- * make it the current file.
- */
-// MUTEX: flush, insert, partition
-rc_t partition_t::open_for_append()
-{
-    w_assert3(!is_open_for_append());
-
-    int fd, flags = O_RDWR | O_CREAT;
-    string fname = _owner->make_log_name(_num);
-    fd = ::open(fname.c_str(), flags, 0744 /*mode*/);
-    CHECK_ERRNO(fd);
-    _fhdl_app = fd;
-
-    return RCOK;
 }
 
 long floor2(long offset, long block_size)
@@ -183,7 +164,7 @@ rc_t partition_t::flush(
            can flush at a time and all other accesses to the file use
            pread/pwrite (which doesn't change the file pointer).
          */
-        auto ret = lseek(_fhdl_app, file_offset, SEEK_SET);
+        auto ret = lseek(_fhdl, file_offset, SEEK_SET);
         CHECK_ERRNO(ret);
     } // end sync log
 
@@ -227,13 +208,13 @@ rc_t partition_t::flush(
             { block_of_zeros(),         grand_total-total},
         };
 
-        auto ret = ::writev(_fhdl_app, iov, 4);
+        auto ret = ::writev(_fhdl, iov, 4);
         CHECK_ERRNO(ret);
 
         ADD_TSTAT(log_bytes_written, grand_total);
     } // end copy skip record
 
-    fsync_delayed(_fhdl_app); // fsync
+    fsync_delayed(_fhdl); // fsync
     return RCOK;
 }
 
@@ -244,7 +225,7 @@ rc_t partition_t::prime_buffer(char* buffer, lsn_t lsn, size_t& prime_offset)
 #ifdef USE_MMAP
         size_t offset = XFERSIZE * (lsn.lo() / XFERSIZE);
         lsn_t block_lsn = lsn_t(num(), offset);
-        W_DO(read(lr, block_lsn, NULL));
+        W_DO(read(lr, block_lsn));
         memcpy(buffer, lr, XFERSIZE);
         prime_offset = lsn.lo() - offset;
 #else
@@ -263,7 +244,7 @@ rc_t partition_t::prime_buffer(char* buffer, lsn_t lsn, size_t& prime_offset)
 rc_t partition_t::read(logrec_t *&rp, lsn_t &ll)
 {
     w_assert1(ll.hi() == num());
-    w_assert3(is_open_for_read());
+    w_assert3(is_open());
 
     size_t pos = ll.lo();
     rp = reinterpret_cast<logrec_t*>(_readbuf + pos);
@@ -275,7 +256,7 @@ rc_t partition_t::read(logrec_t *&rp, lsn_t &ll, lsn_t* prev_lsn)
 {
     _read_mutex.lock();
 
-    w_assert3(is_open_for_read());
+    w_assert3(is_open());
 
     off_t pos = ll.lo();
     off_t lower = pos / XFERSIZE;
@@ -284,7 +265,7 @@ rc_t partition_t::read(logrec_t *&rp, lsn_t &ll, lsn_t* prev_lsn)
     off_t off = pos - lower;
 
     DBG5(<<"seek to lsn " << ll
-        << " index=" << _index << " fd=" << _fhdl_rd
+        << " index=" << _index << " fd=" << _fhdl
         << " pos=" << pos
     );
 
@@ -303,7 +284,7 @@ rc_t partition_t::read(logrec_t *&rp, lsn_t &ll, lsn_t* prev_lsn)
 
         DBG5(<<"leftover=" << int(leftover) << " b=" << b);
 
-        auto bytesRead = ::pread(_fhdl_rd, (void *)(_readbuf + b), XFERSIZE, lower + b);
+        auto bytesRead = ::pread(_fhdl, (void *)(_readbuf + b), XFERSIZE, lower + b);
         CHECK_ERRNO(bytesRead);
         if (bytesRead != XFERSIZE) { return RC(stSHORTIO); }
 
@@ -328,7 +309,7 @@ rc_t partition_t::read(logrec_t *&rp, lsn_t &ll, lsn_t* prev_lsn)
                         *prev_lsn = lsn_t::null;
                     }
                     else {
-                        bytesRead = pread(_fhdl_rd, (void*) prev_lsn, sizeof(lsn_t),
+                        bytesRead = pread(_fhdl, (void*) prev_lsn, sizeof(lsn_t),
                                     prev_offset);
                         CHECK_ERRNO(bytesRead);
                         if (bytesRead != sizeof(lsn_t)) { return RC(stSHORTIO); }
@@ -349,8 +330,8 @@ rc_t partition_t::read(logrec_t *&rp, lsn_t &ll, lsn_t* prev_lsn)
 
 size_t partition_t::read_block(void* buf, size_t count, off_t offset)
 {
-    w_assert0(is_open_for_read());
-    auto bytesRead = ::pread(_fhdl_rd, buf, count, offset);
+    w_assert0(is_open());
+    auto bytesRead = ::pread(_fhdl, buf, count, offset);
     CHECK_ERRNO(bytesRead);
 
     return bytesRead;
@@ -363,25 +344,28 @@ void partition_t::release_read()
 #endif
 }
 
-rc_t partition_t::open_for_read()
+rc_t partition_t::open()
 {
     // mmap code needs lock just to synchronize multiple open calls, reads don't need it
     lock_guard<mutex> lck(_read_mutex);
 
-    if(_fhdl_rd == invalid_fhdl) {
+    if(_open_count == 0) {
         string fname = _owner->make_log_name(_num);
-        int fd, flags = O_RDONLY;
-        fd = ::open(fname.c_str(), flags, 0 /*mode*/);
+        int fd, flags = O_RDWR | O_CREAT;
+        fd = ::open(fname.c_str(), flags, 0744 /*mode*/);
         CHECK_ERRNO(fd);
-        w_assert3(_fhdl_rd == invalid_fhdl);
-        _fhdl_rd = fd;
+        auto res = ::ftruncate(fd, _max_partition_size);
+        w_assert3(_fhdl == invalid_fhdl);
+        _fhdl = fd;
 #ifdef USE_MMAP
         _readbuf = reinterpret_cast<char*>(
-                mmap(nullptr, _max_partition_size, PROT_READ, MAP_SHARED, _fhdl_rd, 0));
+                mmap(nullptr, _max_partition_size, PROT_READ, MAP_SHARED, _fhdl, 0));
         CHECK_ERRNO((long) _readbuf);
 #endif
     }
-    w_assert3(is_open_for_read());
+
+    _open_count++;
+
 
     return RCOK;
 }
@@ -428,27 +412,18 @@ void partition_t::fsync_delayed(int fd)
     }
 }
 
-rc_t partition_t::close_for_append()
+rc_t partition_t::close()
 {
-    if (_fhdl_app != invalid_fhdl)  {
-        auto ret = close(_fhdl_app);
-        CHECK_ERRNO(ret);
-        _fhdl_app = invalid_fhdl;
-    }
-    return RCOK;
-}
-
-rc_t partition_t::close_for_read()
-{
-    if (_fhdl_rd != invalid_fhdl)  {
+    --_open_count;
+    if (_open_count == 0)  {
 #ifdef USE_MMAP
         auto ret = munmap(_readbuf, _max_partition_size);
         CHECK_ERRNO(ret);
         _readbuf = nullptr;
 #endif
-        auto ret2 = close(_fhdl_rd);
+        auto ret2 = ::close(_fhdl);
         CHECK_ERRNO(ret2);
-        _fhdl_rd = invalid_fhdl;
+        _fhdl = invalid_fhdl;
     }
     return RCOK;
 }
@@ -467,10 +442,10 @@ rc_t partition_t::scan_for_size()
 {
     // start scanning backwards from end of file until first valid logrec
     // is found; then check for must_be_skip
-    W_DO(open_for_read());
+    W_DO(open());
 
     struct stat stat;
-    auto ret = ::fstat(_fhdl_rd, &stat);
+    auto ret = ::fstat(_fhdl, &stat);
     CHECK_ERRNO(ret);
     off_t fsize = stat.st_size;
 
@@ -485,7 +460,7 @@ rc_t partition_t::scan_for_size()
     int pos = 2*XFERSIZE - sizeof(baseLogHeader);
     int fpos = fsize - sizeof(baseLogHeader);
     // start reading just the last of 2 blocks, because the file may be just one block
-    auto bytesRead = ::pread(_fhdl_rd, buf + XFERSIZE, XFERSIZE, bpos);
+    auto bytesRead = ::pread(_fhdl, buf + XFERSIZE, XFERSIZE, bpos);
     CHECK_ERRNO(bytesRead);
     if (bytesRead != XFERSIZE) { return RC(stSHORTIO); }
 
@@ -503,7 +478,7 @@ rc_t partition_t::scan_for_size()
             // We've scanned last block and didn't find it -- read second
             // last block
             bpos -= XFERSIZE;
-            bytesRead = ::pread(_fhdl_rd, buf, XFERSIZE, bpos);
+            bytesRead = ::pread(_fhdl, buf, XFERSIZE, bpos);
             CHECK_ERRNO(bytesRead);
             if (bytesRead != XFERSIZE) { return RC(stSHORTIO); }
         }
@@ -522,8 +497,7 @@ void partition_t::destroy()
 {
     lock_guard<mutex> lck(_read_mutex);
 
-    W_COERCE(close_for_read());
-    W_COERCE(close_for_append());
+    W_COERCE(close());
 
     fs::path f = _owner->make_log_name(_num);
     fs::remove(f);

@@ -974,7 +974,8 @@ void log_core::flush_daemon()
             if(!success && !*&_waiting_for_flush) {
                 // Use signal since the only thread that should be waiting
                 // on the _flush_cond is the log flush daemon.
-                DO_PTHREAD(pthread_cond_wait(&_flush_cond, &_wait_flush_lock));
+                // CS FINELINE: log not waiting for signal anymore (higher tput)
+                // DO_PTHREAD(pthread_cond_wait(&_flush_cond, &_wait_flush_lock));
             }
         }
 

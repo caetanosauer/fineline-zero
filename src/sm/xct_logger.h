@@ -8,6 +8,62 @@
 #include "logrec_support.h"
 #include "logrec_serialize.h"
 
+class UndoOnlyLogger
+{
+public:
+
+    template <kind_t LR, class... Args>
+    static void log(const Args&...)
+    {
+    }
+
+    template <kind_t LR, class PagePtr, class... Args>
+    static void log_p(PagePtr p, const Args&... args)
+    {
+        p->incr_version();
+
+        if (logrec_t::get_logrec_cat(LR) & logrec_t::t_undo) {
+            auto undobuf = smthread_t::get_undo_buf();
+            char* dest = undobuf->acquire();
+            if (dest) {
+                auto len = UndoLogrecSerializer<LR>::serialize(dest, args...);
+                StoreID stid = p->store();
+                undobuf->release(len, stid, LR);
+            }
+        }
+    }
+
+    template <kind_t LR, class PagePtr, class... Args>
+    static void log_p(PagePtr p, PagePtr p2, const Args&... args)
+    {
+        p->incr_version();
+        p2->incr_version();
+        // w_assert1(!logrec->is_undo());
+        return;
+    }
+
+    /// This Logger still generates system log records
+    template <kind_t LR, class... Args>
+    static lsn_t log_sys(const Args&... args)
+    {
+        // this should use TLS allocator, so it's fast
+        // (see macro DEFINE_SM_ALLOC in allocator.h and logrec.cpp)
+        logrec_t* logrec = new logrec_t;
+
+        logrec->init_header(LR);
+        LogrecSerializer<LR>::serialize(nullptr, logrec, args...);
+        w_assert1(logrec->valid_header());
+        w_assert1(logrec_t::get_logrec_cat(LR) == logrec_t::t_system);
+
+        lsn_t lsn;
+        W_COERCE(ss_m::log->insert(*logrec, &lsn));
+        // logrec->set_lsn(lsn);
+
+        delete logrec;
+        return lsn;
+    }
+};
+
 class XctLogger
 {
 public:
@@ -16,9 +72,6 @@ public:
     static void log(const Args&... args)
     {
         xct_t* xd = smthread_t::xct();
-        bool should_log = smlevel_0::log && smlevel_0::logging_enabled && xd;
-        if (!should_log)  { return; }
-
         auto redobuf = smthread_t::get_redo_buf();
         char* dest = redobuf->acquire();
         w_assert0(dest);
@@ -41,9 +94,6 @@ public:
     static void log_p(PagePtr p, const Args&... args)
     {
         xct_t* xd = smthread_t::xct();
-        bool should_log = smlevel_0::log && smlevel_0::logging_enabled && xd;
-        if (!should_log)  { return; }
-
         if (_should_apply_img_compression(LR, p)) {
             // log this page image as an SX to keep it out of the xct undo chain
             sys_xct_section_t sx;
@@ -83,9 +133,6 @@ public:
     static void log_p(PagePtr p, PagePtr p2, const Args&... args)
     {
         xct_t* xd = smthread_t::xct();
-        bool should_log = smlevel_0::log && smlevel_0::logging_enabled && xd;
-        if (!should_log)  { return; }
-
         auto redobuf = smthread_t::get_redo_buf();
         char* dest = redobuf->acquire();
         w_assert0(dest);

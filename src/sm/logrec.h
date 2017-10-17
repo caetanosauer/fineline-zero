@@ -280,8 +280,6 @@ public:
 
     friend ostream& operator<<(ostream&, logrec_t&);
 
-protected:
-
     enum category_t {
         /** should not happen. */
         t_bad_cat   = 0x00,
@@ -299,6 +297,8 @@ protected:
     };
 
     u_char             cat() const;
+
+protected:
 
     baseLogHeader header;
 

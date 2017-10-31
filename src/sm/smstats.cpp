@@ -82,6 +82,12 @@ const char* get_stat_name(sm_stat_id s)
         case sm_stat_id::bf_unfix_cleaned: return "bf_unfix_cleaned";
         case sm_stat_id::bf_evict: return "bf_evict";
         case sm_stat_id::bf_evict_duration: return "bf_evict_duration";
+        case sm_stat_id::bf_evict_failed_latch: return "bf_evict_failed_latch";
+        case sm_stat_id::bf_evict_failed_pinned: return "bf_evict_failed_pinned";
+        case sm_stat_id::bf_evict_failed_flags: return "bf_evict_failed_flags";
+        case sm_stat_id::bf_evict_failed_unused: return "bf_evict_failed_unused";
+        case sm_stat_id::bf_evict_failed_clock: return "bf_evict_failed_clock";
+        case sm_stat_id::bf_evict_failed_unswizzle: return "bf_evict_failed_unswizzle";
         case sm_stat_id::rwlock_r_waits: return "rwlock_r_waits";
         case sm_stat_id::rwlock_w_waits: return "rwlock_w_waits";
         case sm_stat_id::need_latch_condl: return "need_latch_condl";

@@ -75,12 +75,14 @@ bool page_evictioner_base::evict_one(bf_idx victim)
          * proceed with this victim. We just jump to the next iteration and
          * hope for better luck next time. */
         cb.latch().latch_release();
+        INC_TSTAT(bf_evict_failed_unswizzle);
         return false;
     }
 
     // Try to atomically set pin from 0 to -1; give up if it fails
     if (!cb.prepare_for_eviction()) {
         cb.latch().latch_release();
+        INC_TSTAT(bf_evict_failed_pinned);
         return false;
     }
 
@@ -142,6 +144,7 @@ bf_idx page_evictioner_base::pick_victim()
         auto& cb = _bufferpool->get_cb(idx);
 
         if (!cb._used) {
+            INC_TSTAT(bf_evict_failed_unused);
             continue;
         }
 
@@ -158,6 +161,7 @@ bf_idx page_evictioner_base::pick_victim()
         if (cb.latch().held_by_me()) {
             // I (this thread) currently have the latch on this frame, so
             // obviously I should not evict it
+            INC_TSTAT(bf_evict_failed_latch);
             continue;
         }
 
@@ -165,6 +169,7 @@ bf_idx page_evictioner_base::pick_victim()
         rc_t latch_rc;
         latch_rc = cb.latch().latch_acquire(LATCH_EX, timeout_t::WAIT_IMMEDIATE);
         if (latch_rc.is_error()) {
+            INC_TSTAT(bf_evict_failed_latch);
             DBG3(<< "Eviction failed on latch for " << idx);
             continue;
         }
@@ -174,6 +179,7 @@ bf_idx page_evictioner_base::pick_victim()
         if (_use_clock && _clock_ref_bits[idx]) {
             _clock_ref_bits[idx] = false;
             cb.latch().latch_release();
+            INC_TSTAT(bf_evict_failed_clock);
             continue;
         }
 
@@ -209,14 +215,21 @@ bf_idx page_evictioner_base::pick_victim()
                 // || (p.tag() == t_btree_p && p.get_foster() != 0)
                 // ... unused frames, which don't hold a valid page
                 || !cb._used
-                // ... pinned frames, i.e., someone required it not be evicted
-                || cb._pin_cnt != 0
                 // ... frames prefetched by restore but not yet restored
                 || cb.is_pinned_for_restore()
         )
         {
             cb.latch().latch_release();
+            INC_TSTAT(bf_evict_failed_flags);
             DBG5(<< "Eviction failed on flags for " << idx);
+            continue;
+        }
+
+        // ... pinned frames, i.e., someone required it not be evicted
+        if(cb._pin_cnt != 0) {
+            cb.latch().latch_release();
+            INC_TSTAT(bf_evict_failed_pinned);
+            DBG5(<< "Eviction failed on pin_cnt for " << idx);
             continue;
         }
 

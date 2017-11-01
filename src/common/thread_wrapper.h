@@ -45,6 +45,8 @@ public:
         run();
         after_run();
 
+        // save my stats before leaving
+        smlevel_0::add_to_global_stats(smthread_t::TL_stats()); // before detaching them
         smthread_t::remove_me_from_thread_list();
         tls_tricks::tls_manager::thread_fini();
 

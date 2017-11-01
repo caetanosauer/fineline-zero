@@ -494,6 +494,7 @@ private:
             while (iter != _tcb_list.end()) {
                 if (*iter == tcb_ptr()) {
                     iter = _tcb_list.erase(iter);
+                    break;
                 }
                 else { iter++; }
             }

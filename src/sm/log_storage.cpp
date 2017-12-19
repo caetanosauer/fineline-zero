@@ -236,7 +236,7 @@ void log_storage::wakeup_recycler()
 
 unsigned log_storage::delete_old_partitions(partition_number_t older_than)
 {
-    if (!smlevel_0::log || !smlevel_0::bf || !_delete_old_partitions) { return 0; }
+    if (!smlevel_0::log || !smlevel_0::bf) { return 0; }
 
     if (older_than == 0) {
         older_than = smlevel_0::bf->get_archived_run();
@@ -272,7 +272,7 @@ unsigned log_storage::delete_old_partitions(partition_number_t older_than)
         // Now this partition is owned exclusively by me.  Other threads cannot
         // increment reference counters because objects were removed from map,
         // and the critical section above guarantees visibility.
-        p->destroy();
+        p->destroy(_delete_old_partitions);
     }
 
     return to_be_deleted.size();

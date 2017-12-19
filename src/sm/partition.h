@@ -99,7 +99,7 @@ public:
 
     void set_size(size_t size) { _size = size; }
 
-    void destroy();
+    void destroy(bool delete_file);
 
 private:
     partition_number_t    _num;

@@ -406,12 +406,14 @@ rc_t partition_t::close()
     return RCOK;
 }
 
-void partition_t::destroy()
+void partition_t::destroy(bool delete_file)
 {
     lock_guard<mutex> lck(_read_mutex);
 
     W_COERCE(close());
 
-    fs::path f = _owner->make_log_name(_num);
-    fs::remove(f);
+    if (delete_file) {
+	fs::path f = _owner->make_log_name(_num);
+	fs::remove(f);
+    }
 }

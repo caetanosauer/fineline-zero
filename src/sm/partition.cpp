@@ -83,15 +83,7 @@ partition_t::partition_t(log_storage *owner, partition_number_t num)
       _fhdl(invalid_fhdl), _open_count(0)
 {
     _max_partition_size = owner->get_partition_size();
-#ifndef USE_MMAP
-#if SM_PAGESIZE < 8192
-    _readbuf = new char[log_storage::BLOCK_SIZE*4];
-#else
-    _readbuf = new char[SM_PAGESIZE*4];
-#endif
-#else
     _readbuf = nullptr;
-#endif
 }
 
 long floor2(long offset, long block_size)
@@ -218,93 +210,14 @@ rc_t partition_t::flush(
     return RCOK;
 }
 
-#ifdef USE_MMAP
-rc_t partition_t::read(logrec_t *&rp, lsn_t &ll)
+void partition_t::read(logrec_t *&rp, lsn_t &ll)
 {
     w_assert1(ll.hi() == num());
     w_assert3(is_open());
 
     size_t pos = ll.lo();
     rp = reinterpret_cast<logrec_t*>(_readbuf + pos);
-
-    return RCOK;
 }
-#else
-rc_t partition_t::read(logrec_t *&rp, lsn_t &ll, lsn_t* prev_lsn)
-{
-    _read_mutex.lock();
-
-    w_assert3(is_open());
-
-    off_t pos = ll.lo();
-    off_t lower = pos / XFERSIZE;
-
-    lower *= XFERSIZE;
-    off_t off = pos - lower;
-
-    DBG5(<<"seek to lsn " << ll
-        << " index=" << _index << " fd=" << _fhdl
-        << " pos=" << pos
-    );
-
-    /*
-     * read & inspect header size and see
-     * and see if there's more to read
-     */
-    int64_t b = 0;
-    bool first_time = true;
-
-    rp = (logrec_t *)(_readbuf + off);
-
-    off_t leftover = 0;
-
-    while (first_time || leftover > 0) {
-
-        DBG5(<<"leftover=" << int(leftover) << " b=" << b);
-
-        auto bytesRead = ::pread(_fhdl, (void *)(_readbuf + b), XFERSIZE, lower + b);
-        CHECK_ERRNO(bytesRead);
-        if (bytesRead != XFERSIZE) { return RC(stSHORTIO); }
-
-        b += XFERSIZE;
-
-        if (first_time) {
-            first_time = false;
-            leftover = rp->length() - (b - off);
-            DBG5(<<" leftover now=" << leftover);
-
-            // Try to get lsn of previous log record (for backward scan)
-            if (prev_lsn) {
-                if (off >= (int64_t)sizeof(lsn_t)) {
-                    // most common and easy case -- prev_lsn is on the
-                    // same block
-                    *prev_lsn = *((lsn_t*) (_readbuf + off - sizeof(lsn_t)));
-                }
-                else {
-                    // we were unlucky -- extra IO required to fetch prev_lsn
-                    int64_t prev_offset = lower + b - XFERSIZE - sizeof(lsn_t);
-                    if (prev_offset < 0) {
-                        *prev_lsn = lsn_t::null;
-                    }
-                    else {
-                        bytesRead = pread(_fhdl, (void*) prev_lsn, sizeof(lsn_t),
-                                    prev_offset);
-                        CHECK_ERRNO(bytesRead);
-                        if (bytesRead != sizeof(lsn_t)) { return RC(stSHORTIO); }
-                    }
-                }
-            }
-        } else {
-            leftover -= XFERSIZE;
-            w_assert3(leftover == (int)rp->length() - (b - off));
-            DBG5(<<" leftover now=" << leftover);
-        }
-    }
-    w_assert0(rp != NULL);
-    w_assert0(rp->valid_header(ll));
-    return RCOK;
-}
-#endif
 
 size_t partition_t::read_block(void* buf, size_t count, off_t offset)
 {
@@ -315,19 +228,15 @@ size_t partition_t::read_block(void* buf, size_t count, off_t offset)
     return bytesRead;
 }
 
-void partition_t::release_read()
+void partition_t::open()
 {
-#ifndef USE_MMAP
-    _read_mutex.unlock();
-#endif
-}
-
-rc_t partition_t::open()
-{
-    // mmap code needs lock just to synchronize multiple open calls, reads don't need it
-    lock_guard<mutex> lck(_read_mutex);
-
     if(_open_count == 0) {
+        lock_guard<mutex> lck(_mutex);
+        // Other thread might have opened already
+        if (_open_count > 0) {
+            _open_count++;
+            return;
+        }
         string fname = _owner->make_log_name(_num);
         int fd, flags = O_RDWR | O_CREAT;
         fd = ::open(fname.c_str(), flags, 0744 /*mode*/);
@@ -335,17 +244,11 @@ rc_t partition_t::open()
         auto res = ::ftruncate(fd, _max_partition_size);
         w_assert3(_fhdl == invalid_fhdl);
         _fhdl = fd;
-#ifdef USE_MMAP
         _readbuf = reinterpret_cast<char*>(
                 mmap(nullptr, _max_partition_size, PROT_READ, MAP_SHARED, _fhdl, 0));
         CHECK_ERRNO((long) _readbuf);
-#endif
     }
-
     _open_count++;
-
-
-    return RCOK;
 }
 
 // CS TODO: why is this definition here?
@@ -390,27 +293,24 @@ void partition_t::fsync_delayed(int fd)
     }
 }
 
-rc_t partition_t::close()
+void partition_t::close()
 {
     --_open_count;
     if (_open_count == 0)  {
-#ifdef USE_MMAP
         auto ret = munmap(_readbuf, _max_partition_size);
         CHECK_ERRNO(ret);
         _readbuf = nullptr;
-#endif
-        auto ret2 = ::close(_fhdl);
-        CHECK_ERRNO(ret2);
+        ret = ::close(_fhdl);
+        CHECK_ERRNO(ret);
         _fhdl = invalid_fhdl;
     }
-    return RCOK;
 }
 
 void partition_t::destroy(bool delete_file)
 {
-    lock_guard<mutex> lck(_read_mutex);
-
-    W_COERCE(close());
+    w_assert0(!is_open());
+    // Caller must guarantee thread safety (log_storage::delete_old_partitions)
+    close();
 
     if (delete_file) {
 	fs::path f = _owner->make_log_name(_num);

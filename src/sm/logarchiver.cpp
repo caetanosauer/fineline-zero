@@ -313,9 +313,9 @@ void LogArchiver::replacement()
             break;
         }
 
-        logrec_t* lr;
-        bool got_it = smlevel_0::log->fetch_direct(nextLSN, lr);
-        w_assert0(got_it);
+        auto logFetch = smlevel_0::log->fetch_direct(nextLSN);
+        logrec_t* lr = logFetch.ptr;
+        w_assert0(lr);
 
         if (lr->type() == skip_log) {
             nextLSN = lsn_t(nextLSN.hi() + 1, 0);

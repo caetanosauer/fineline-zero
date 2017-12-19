@@ -62,6 +62,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include "sm_base.h" // for partition_number_t (CS TODO)
 #include "logrec.h"
 #include <mutex>
+#include <atomic>
 
 class log_storage; // forward
 
@@ -77,15 +78,10 @@ public:
 
     partition_number_t num() const   { return _num; }
 
-    rc_t open();
-    rc_t close();
+    void open();
+    void close();
 
-#ifdef USE_MMAP
-    rc_t read(logrec_t *&r, lsn_t &ll);
-#else
-    rc_t read(logrec_t *&r, lsn_t &ll, lsn_t* prev_lsn = NULL);
-#endif
-    void release_read();
+    void read(logrec_t *&r, lsn_t &ll);
 
     size_t read_block(void* buf, size_t count, off_t offset);
 
@@ -108,15 +104,15 @@ private:
     int                   _fhdl;
     static int            _artificial_flush_delay;  // in microseconds
     char*                 _readbuf;
-    size_t _open_count;
+    std::atomic<size_t> _open_count;
 
     size_t _max_partition_size;
     char* _mmap_buffer;
 
     void             fsync_delayed(int fd);
 
-    // Serialize (non-mmap) read calls, which use the same buffer
-    mutex _read_mutex;
+    // Serialize open and close
+    mutex _mutex;
 };
 
 #endif

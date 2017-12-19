@@ -83,6 +83,24 @@ class flush_daemon_thread_t;
 #include "log_storage.h"
 #include "stopwatch.h"
 
+// This is returned by fetch_direct to make sure that close() is invoked on
+// partition_t after every fetch
+class LogFetch
+{
+public:
+    LogFetch(std::shared_ptr<partition_t> p) : ptr(nullptr), partition(p)
+    {}
+
+    ~LogFetch()
+    {
+        if (ptr) { partition->close(); }
+    }
+
+    logrec_t* ptr;
+private:
+    std::shared_ptr<partition_t> partition;
+};
+
 class log_core
 {
 public:
@@ -99,7 +117,7 @@ public:
     rc_t    flush_all(bool block=true) {
                           return flush(curr_lsn().advance(-1), block); }
     rc_t            fetch(lsn_t &lsn, void* buf, lsn_t* nxt);
-    bool fetch_direct(lsn_t lsn, logrec_t*& lr);
+    LogFetch fetch_direct(lsn_t lsn);
 
     void            shutdown();
     rc_t            truncate();

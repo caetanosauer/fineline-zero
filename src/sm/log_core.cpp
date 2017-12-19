@@ -210,18 +210,18 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
 
     auto p = _storage->get_partition(ll.hi());
     if(!p) { return RC(eEOF); }
-    W_DO(p->open());
+    p->open();
 
     logrec_t* rp;
     lsn_t prev_lsn = lsn_t::null;
     DBGOUT3(<< "fetch @ lsn: " << ll);
-    W_COERCE(p->read(rp, ll));
+    p->read(rp, ll);
     w_assert1(rp->valid_header());
 
     // handle skip log record
     if (rp->type() == skip_log)
     {
-        p->release_read();
+        p->close();
         DBGTHRD(<<"seeked to skip" << ll );
         DBGTHRD(<<"getting next partition.");
         ll = lsn_t(ll.hi() + 1, 0);
@@ -231,8 +231,8 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
 
         // re-read
         DBGOUT3(<< "fetch @ lsn: " << ll);
-        W_DO(p->open());
-        W_COERCE(p->read(rp, ll));
+        p->open();
+        p->read(rp, ll);
         w_assert1(rp->valid_header());
     }
 
@@ -243,24 +243,22 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
     }
 
     memcpy(buf, rp, rp->length());
-    p->release_read();
+    p->close();
     w_assert1(((logrec_t*) buf)->valid_header());
 
     return RCOK;
 }
 
-bool log_core::fetch_direct(lsn_t lsn, logrec_t*& lr)
+LogFetch log_core::fetch_direct(lsn_t lsn)
 {
     auto p = _storage->get_partition(lsn.hi());
-    if(!p) { return false; }
-    W_COERCE(p->open());
+    LogFetch res(p);
+    if(!p) { return res; }
 
-    W_COERCE(p->read(lr, lsn));
-    w_assert0(lr->valid_header());
-    //  CS TODO: release_read makes no sense with USE_MMAP
-    p->release_read();
-
-    return true;
+    p->open();
+    p->read(res.ptr, lsn);
+    w_assert0(res.ptr->valid_header());
+    return res;
 }
 
 void log_core::shutdown()
@@ -326,7 +324,7 @@ log_core::log_core(const sm_options& options)
     auto curr_p = _storage->curr_partition();
     auto pnum = (curr_p ? curr_p->num() : 0) + 1;
     auto p = _storage->create_partition(pnum);
-    W_COERCE(p->open());
+    p->open();
     _curr_lsn = _durable_lsn = _flush_lsn = lsn_t(pnum, 0);
     cerr << "Initialized curr_lsn to " << _curr_lsn << endl;
 

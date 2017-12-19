@@ -173,9 +173,9 @@ shared_ptr<partition_t> log_storage::get_partition_for_flush(lsn_t start_lsn,
         w_assert3(n != 0);
 
         {
-            W_COERCE(p->close());
+            p->close();
             p = create_partition(n+1);
-            W_COERCE(p->open());
+            p->open();
         }
     }
 

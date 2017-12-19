@@ -13,8 +13,9 @@ class UndoOnlyLogger
 public:
 
     template <kind_t LR, class... Args>
-    static void log(const Args&...)
+    static void log(const Args&... args)
     {
+        log_sys<LR>(args...);
     }
 
     template <kind_t LR, class PagePtr, class... Args>
@@ -221,6 +222,7 @@ public:
 
 // CS TODO this is a temporary alias -- at some point the SM should have its
 // own generic Logger template argument
+// using Logger = UndoOnlyLogger;
 using Logger = XctLogger;
 
 #endif

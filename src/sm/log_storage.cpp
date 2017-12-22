@@ -96,9 +96,6 @@ log_storage::log_storage(const sm_options& options)
     psize = (psize / log_core::SEGMENT_SIZE) * log_core::SEGMENT_SIZE;
     _partition_size = psize;
 
-    // maximum number of partitions on the filesystem
-    _max_partitions = options.get_int_option("sm_log_max_partitions", 0);
-
     _delete_old_partitions = options.get_bool_option("sm_log_delete_old_partitions", true);
 
     partition_number_t  last_partition = 1;
@@ -204,8 +201,6 @@ shared_ptr<partition_t> log_storage::create_partition(partition_number_t pnum)
     w_assert3(_partitions.find(pnum) == _partitions.end());
 
     {
-        // Add partition to map but only exit function once it has been
-        // reduced to _max_partitions
         spinlock_write_critical_section cs(&_partition_map_latch);
         w_assert1(!_curr_partition || _curr_partition->num() == pnum - 1);
         _partitions[pnum] = p;
@@ -213,12 +208,6 @@ shared_ptr<partition_t> log_storage::create_partition(partition_number_t pnum)
     }
 
     wakeup_recycler();
-
-    // The check below does not require the mutex
-    if (_max_partitions > 0 && _partitions.size() > _max_partitions) {
-        // Log full! Try to clean-up old partitions.
-        try_delete(pnum);
-    }
 
     return p;
 }
@@ -305,58 +294,6 @@ string log_storage::make_log_name(partition_number_t pnum) const
 fs::path log_storage::make_log_path(partition_number_t pnum) const
 {
     return _logpath / fs::path(log_prefix + to_string(pnum));
-}
-
-void log_storage::try_delete(partition_number_t pnum)
-{
-    /*
-     * Log full -- we must delete a partition before continuing.  But we can't
-     * invoke normal checkpoint & cleaner because they will attempt to generate
-     * log records and block as well.  First we check if the oldest active
-     * transaction (as known by the last checkpoint) has its begin in the
-     * oldest partition file. If that's true, then no partition can be deleted
-     * and we are stuck -- in other words, the log is "wedged". To avoid this,
-     * a log space reservations scheme is required, but since we removed the
-     * old and messy scheme, we must fail here. Since this is a research
-     * prototype and this is quite a corner case, we don't worry too much about
-     * it.
-     */
-    lsn_t min_xct_lsn = smlevel_0::log->get_oldest_active_lsn();
-    if (min_xct_lsn.hi() == pnum - _max_partitions) {
-        throw runtime_error("Log wedged! Cannot recycle partitions due to \
-                old active transaction");
-    }
-
-    /*
-     * Now check if any dirty page rec_lsn is in the oldest partition. If
-     * that's true, then we're also stuck like above, because our cleaning
-     * & checkpoint mechanisms require generating log records. We could simply
-     * force all dirty pages from the buffer pool without generating log
-     * records -- that would mean that those older log records would not be
-     * required for recovery. However, the log analysis logic would not know
-     * that without page_write log records. Again, it seems like the solution
-     * is to have a reservation scheme, where enough log space is always reserved
-     * for a full page cleaner round (e.g., one logrec for each frame)
-     */
-    lsn_t min_rec_lsn = lsn_t(smlevel_0::bf->get_archived_run() + 1, 0);
-    if (min_rec_lsn.hi() == pnum - _max_partitions) {
-        throw runtime_error("Log wedged! Cannot recycle partitions due to \
-                old dirty pages");
-    }
-
-    /*
-     * Once we get here, we must be able to delete at least one partition
-     * CS-TODO: there's potentially a deadlock here, since
-     * delete_old_partitions will wait until the partition's shared_ptr has no
-     * other references -- if a thread is holding a reference but waiting to
-     * insert something in the full log, we get stuck.
-     */
-    unsigned deleted = delete_old_partitions();
-    if (deleted == 0) {
-        throw runtime_error("Log wedged! Cannot recycle partitions with \
-                the available checkpoint information. Try increasing \
-                max_partitions or partition_size.");
-    }
 }
 
 size_t log_storage::get_byte_distance(lsn_t a, lsn_t b) const

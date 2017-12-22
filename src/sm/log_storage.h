@@ -118,7 +118,6 @@ private:
 
     logrec_t* _skip_log;
 
-    unsigned _max_partitions;
     bool _delete_old_partitions;
 
     // forbid copy

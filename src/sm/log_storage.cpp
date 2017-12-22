@@ -250,7 +250,7 @@ unsigned log_storage::delete_old_partitions(partition_number_t older_than)
 
         partition_map_t::iterator it = _partitions.begin();
         while (it != _partitions.end()) {
-            if (it->first < older_than) {
+            if (!it->second->is_used() && it->first < older_than) {
                 if (it->first > highest_deleted) {
                     highest_deleted = it->first;
                 }

@@ -93,6 +93,11 @@ public:
         return (_fhdl != invalid_fhdl);
     }
 
+    bool is_used() const
+    {
+        return _open_count > 0;
+    }
+
     void set_size(size_t size) { _size = size; }
 
     void destroy(bool delete_file);
@@ -111,7 +116,7 @@ private:
 
     void             fsync_delayed(int fd);
 
-    // Serialize open and close
+    // Serialize open calls
     mutex _mutex;
 };
 

@@ -230,23 +230,21 @@ size_t partition_t::read_block(void* buf, size_t count, off_t offset)
 
 void partition_t::open()
 {
-    if(_open_count == 0) {
-        lock_guard<mutex> lck(_mutex);
+    if (!is_open()) {
+        unique_lock<mutex> lck(_mutex);
         // Other thread might have opened already
-        if (_open_count > 0) {
-            _open_count++;
-            return;
+        if (!is_open()) {
+            string fname = _owner->make_log_name(_num);
+            int fd, flags = O_RDWR | O_CREAT;
+            fd = ::open(fname.c_str(), flags, 0744 /*mode*/);
+            CHECK_ERRNO(fd);
+            auto res = ::ftruncate(fd, _max_partition_size);
+            w_assert3(_fhdl == invalid_fhdl);
+            _fhdl = fd;
+            _readbuf = reinterpret_cast<char*>(
+                    mmap(nullptr, _max_partition_size, PROT_READ, MAP_SHARED, _fhdl, 0));
+            CHECK_ERRNO((long) _readbuf);
         }
-        string fname = _owner->make_log_name(_num);
-        int fd, flags = O_RDWR | O_CREAT;
-        fd = ::open(fname.c_str(), flags, 0744 /*mode*/);
-        CHECK_ERRNO(fd);
-        auto res = ::ftruncate(fd, _max_partition_size);
-        w_assert3(_fhdl == invalid_fhdl);
-        _fhdl = fd;
-        _readbuf = reinterpret_cast<char*>(
-                mmap(nullptr, _max_partition_size, PROT_READ, MAP_SHARED, _fhdl, 0));
-        CHECK_ERRNO((long) _readbuf);
     }
     _open_count++;
 }
@@ -296,21 +294,20 @@ void partition_t::fsync_delayed(int fd)
 void partition_t::close()
 {
     --_open_count;
-    if (_open_count == 0)  {
-        auto ret = munmap(_readbuf, _max_partition_size);
-        CHECK_ERRNO(ret);
-        _readbuf = nullptr;
-        ret = ::close(_fhdl);
-        CHECK_ERRNO(ret);
-        _fhdl = invalid_fhdl;
-    }
 }
 
 void partition_t::destroy(bool delete_file)
 {
-    w_assert0(!is_open());
+    unique_lock<mutex> lck(_mutex);
+
+    w_assert0(_open_count == 0);
     // Caller must guarantee thread safety (log_storage::delete_old_partitions)
-    close();
+    auto ret = munmap(_readbuf, _max_partition_size);
+    CHECK_ERRNO(ret);
+    _readbuf = nullptr;
+    ret = ::close(_fhdl);
+    CHECK_ERRNO(ret);
+    _fhdl = invalid_fhdl;
 
     if (delete_file) {
 	fs::path f = _owner->make_log_name(_num);

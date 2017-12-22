@@ -25,36 +25,19 @@
 const string log_storage::log_prefix = "log.";
 const string log_storage::log_regex = "log\\.[1-9][0-9]*";
 
-class partition_recycler_t : public thread_wrapper_t
+class partition_recycler_t : public worker_thread_t
 {
 public:
     partition_recycler_t(log_storage* storage)
-        : storage(storage), retire(false)
+        : storage(storage)
     {}
 
-    virtual ~partition_recycler_t() {}
-
-    void run()
+    void do_work()
     {
-        while (!retire) {
-            unique_lock<mutex> lck(_recycler_mutex);
-            _recycler_condvar.wait(lck);
-            if (retire) { break; }
-            storage->delete_old_partitions();
-        }
-    }
-
-    void wakeup()
-    {
-        unique_lock<mutex> lck(_recycler_mutex);
-        _recycler_condvar.notify_one();
+	storage->delete_old_partitions();
     }
 
     log_storage* storage;
-
-    std::atomic<bool> retire;
-    std::condition_variable _recycler_condvar;
-    std::mutex _recycler_mutex;
 };
 
 /*
@@ -133,10 +116,7 @@ log_storage::log_storage(const sm_options& options)
 log_storage::~log_storage()
 {
     if (_recycler_thread) {
-        _recycler_thread->retire = true;
-        _recycler_thread->wakeup();
-        _recycler_thread->join();
-        _recycler_thread = nullptr;
+        _recycler_thread->stop();
     }
 
     spinlock_write_critical_section cs(&_partition_map_latch);
@@ -214,8 +194,6 @@ shared_ptr<partition_t> log_storage::create_partition(partition_number_t pnum)
 
 void log_storage::wakeup_recycler()
 {
-    if (!_delete_old_partitions) { return; }
-
     if (!_recycler_thread) {
         _recycler_thread.reset(new partition_recycler_t(this));
         _recycler_thread->fork();

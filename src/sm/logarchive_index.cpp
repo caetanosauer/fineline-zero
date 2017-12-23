@@ -94,6 +94,7 @@ ArchiveIndex::ArchiveIndex(const sm_options& options)
     bool reformat = options.get_bool_option("sm_format", false);
 
     directIO = options.get_bool_option("sm_arch_o_direct", false);
+    _max_open_files = options.get_int_option("sm_arch_max_open_files", 20);
 
     if (archdir.empty()) {
         W_FATAL_MSG(fcINTERNAL,
@@ -359,24 +360,38 @@ RunFile* ArchiveIndex::openForScan(const RunId& runid)
 
     auto& file = _open_files[runid];
 
-    if (file.refcount == 0) {
+    if (!file.data) {
         fs::path fpath = make_run_path(runid.begin, runid.end, runid.level);
         int flags = O_RDONLY;
         if (directIO) { flags |= O_DIRECT; }
         file.fd = ::open(fpath.string().c_str(), flags, 0744 /*mode*/);
         CHECK_ERRNO(file.fd);
         file.length = ArchiveIndex::getFileSize(file.fd);
-#ifdef USE_MMAP
         if (file.length > 0) {
             file.data = (char*) mmap(nullptr, file.length, PROT_READ, MAP_SHARED, file.fd, 0);
             CHECK_ERRNO((long) file.data);
         }
-#endif
         file.refcount = 0;
         file.runid = runid;
     }
 
     file.refcount++;
+
+    // Close oldest open file without references
+    if (_open_files.size() > _max_open_files) {
+	for (auto it = _open_files.cbegin(); it != _open_files.cend();) {
+            if (it->second.refcount == 0) {
+                w_assert0(it->second.data);
+                auto ret = munmap(it->second.data, it->second.length);
+                CHECK_ERRNO(ret);
+                ret = ::close(it->second.fd);
+                CHECK_ERRNO(ret);
+                it = _open_files.erase(it);
+                break;
+            }
+	    ++it;
+	}
+    }
 
     INC_TSTAT(la_open_count);
 
@@ -429,20 +444,7 @@ void ArchiveIndex::closeScan(const RunId& runid)
     auto it = _open_files.find(runid);
     w_assert1(it != _open_files.end());
 
-    auto& count = it->second.refcount;
-    // count--;
-
-    if (count == 0) {
-#ifdef USE_MMAP
-        // if (it->second.data) {
-        //     auto ret = munmap(it->second.data, it->second.length);
-        //     CHECK_ERRNO(ret);
-        // }
-#endif
-        // auto ret = ::close(it->second.fd);
-        // CHECK_ERRNO(ret);
-        // _open_files.erase(it);
-    }
+    it->second.refcount--;
 }
 
 void ArchiveIndex::deleteRuns(unsigned replicationFactor)
@@ -680,10 +682,6 @@ void ArchiveIndex::loadRunInfo(RunFile* runFile, const RunId& fstats)
 {
     RunInfo run;
     {
-#ifndef USE_MMAP
-        memalign_allocator<char, IO_ALIGN> alloc;
-        char* readBuffer = alloc.allocate(blockSize);
-#endif
 
         size_t indexBlockCount = 0;
         size_t dataBlockCount = 0;
@@ -694,13 +692,7 @@ void ArchiveIndex::loadRunInfo(RunFile* runFile, const RunId& fstats)
         size_t lastOffset = 0;
 
         while (indexBlockCount > 0) {
-#ifndef USE_MMAP
-            auto bytesRead = ::pread(runFile->fd, readBuffer, blockSize, offset);
-            CHECK_ERRNO(bytesRead);
-            if (bytesRead != (int) blockSize) { W_FATAL(stSHORTIO); }
-#else
             char* readBuffer = runFile->getOffset(offset);
-#endif
 
             BlockHeader* h = (BlockHeader*) readBuffer;
 
@@ -724,9 +716,6 @@ void ArchiveIndex::loadRunInfo(RunFile* runFile, const RunId& fstats)
             offset += blockSize;
         }
 
-#ifndef USE_MMAP
-        alloc.deallocate(readBuffer);
-#endif
     }
 
     run.begin = fstats.begin;
@@ -752,21 +741,7 @@ void ArchiveIndex::getBlockCounts(RunFile* runFile, size_t* indexBlocks,
         return;
     }
 
-#ifndef USE_MMAP
-    // read header of last block in file -- its number is the block count
-    // Using direct I/O -- must read whole align block
-    char* buffer;
-    int res = posix_memalign((void**) &buffer, IO_ALIGN, IO_ALIGN);
-    w_assert0(res == 0);
-
-    auto bytesRead = ::pread(runFile->fd, buffer, IO_ALIGN, runFile->length - blockSize);
-    CHECK_ERRNO(bytesRead);
-    if (bytesRead != IO_ALIGN) { W_FATAL(stSHORTIO); }
-
-    BlockHeader* header = (BlockHeader*) buffer;
-#else
     BlockHeader* header = (BlockHeader*) runFile->getOffset(runFile->length - blockSize);
-#endif
 
     if (indexBlocks) {
         *indexBlocks = header->blockNumber + 1;
@@ -775,9 +750,6 @@ void ArchiveIndex::getBlockCounts(RunFile* runFile, size_t* indexBlocks,
         *dataBlocks = (runFile->length / blockSize) - (header->blockNumber + 1);
         w_assert1(*dataBlocks > 0);
     }
-#ifndef USE_MMAP
-    free(buffer);
-#endif
 }
 
 size_t ArchiveIndex::findRun(run_number_t run, unsigned level)

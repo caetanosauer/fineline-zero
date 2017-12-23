@@ -62,6 +62,15 @@ namespace std
     };
 }
 
+// Comparator for map of open files
+struct CmpOpenFiles {
+    bool operator()(const RunId& a, const RunId& b) const
+    {
+	if (a.level != b.level) { return a.level < b.level; }
+	return a.begin < b.begin;
+    }
+};
+
 /** \brief Encapsulates all file and I/O operations on the log archive
  *
  * The directory object serves the following purposes:
@@ -228,8 +237,9 @@ private:
     mutable srwlock_t _mutex;
 
     /// Cache for open files (for scans only)
-    std::unordered_map<RunId, RunFile> _open_files;
+    std::map<RunId, RunFile, CmpOpenFiles> _open_files;
     mutable srwlock_t _open_file_mutex;
+    size_t _max_open_files;
 
     bool directIO;
 

@@ -291,6 +291,8 @@ void Command::setupSMOptions(po::options_description& options)
         "Generate fetch_page log records for every page fetched (and recovered) into the buffer pool")
     ("sm_archiver_workspace_size", po::value<int>(),
         "Workspace size archiver")
+    ("sm_arch_max_open_files", po::value<int>(),
+        "Max. number of open files in log archive")
     // CS TODO: archiver currently only works with 1MB blocks
     // ("sm_archiver_block_size", po::value<int>()->default_value(1024*1024),
     //     "Archiver Block size")

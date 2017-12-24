@@ -93,7 +93,7 @@ public:
 
     ~LogFetch()
     {
-        if (ptr) { partition->close(); }
+        partition->close();
     }
 
     logrec_t* ptr;

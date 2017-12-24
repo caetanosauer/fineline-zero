@@ -213,7 +213,8 @@ rc_t partition_t::flush(
 void partition_t::read(logrec_t *&rp, lsn_t &ll)
 {
     w_assert1(ll.hi() == num());
-    w_assert3(is_open());
+    w_assert1(is_open());
+    w_assert1(is_used());
 
     size_t pos = ll.lo();
     rp = reinterpret_cast<logrec_t*>(_readbuf + pos);

@@ -164,6 +164,7 @@ shared_ptr<partition_t> log_storage::get_partition(partition_number_t n) const
     spinlock_read_critical_section cs(&_partition_map_latch);
     partition_map_t::const_iterator it = _partitions.find(n);
     if (it == _partitions.end()) { return nullptr; }
+    it->second->open();
     return it->second;
 }
 

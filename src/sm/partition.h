@@ -116,7 +116,7 @@ private:
 
     void             fsync_delayed(int fd);
 
-    // Serialize open calls
+    // Serialize open and close calls
     mutex _mutex;
 };
 

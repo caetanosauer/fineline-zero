@@ -255,7 +255,6 @@ LogFetch log_core::fetch_direct(lsn_t lsn)
     LogFetch res(p);
     if(!p) { return res; }
 
-    p->open();
     p->read(res.ptr, lsn);
     w_assert0(res.ptr->valid_header());
     return res;

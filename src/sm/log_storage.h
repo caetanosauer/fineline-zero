@@ -73,13 +73,9 @@ typedef std::map<partition_number_t, shared_ptr<partition_t>> partition_map_t;
 #include <boost/filesystem.hpp>
 namespace fs = boost::filesystem;
 
-class partition_recycler_t;
-
 class log_storage {
-
     // use friend mechanism until better interface is implemented
     friend class partition_t;
-    friend class partition_recycler_t;
 
 public:
     log_storage(const sm_options&);
@@ -105,7 +101,6 @@ public:
     string make_log_name(partition_number_t pnum) const;
     fs::path make_log_path(partition_number_t pnum) const;
 
-    void wakeup_recycler();
     unsigned delete_old_partitions(partition_number_t older_than = 0);
 
 private:
@@ -128,8 +123,6 @@ private:
 
     // Latch to protect access to partition map
     mutable mcs_rwlock _partition_map_latch;
-
-    unique_ptr<partition_recycler_t> _recycler_thread;
 
 public:
     enum { BLOCK_SIZE = partition_t::XFERSIZE };

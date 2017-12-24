@@ -25,21 +25,6 @@
 const string log_storage::log_prefix = "log.";
 const string log_storage::log_regex = "log\\.[1-9][0-9]*";
 
-class partition_recycler_t : public worker_thread_t
-{
-public:
-    partition_recycler_t(log_storage* storage)
-        : storage(storage)
-    {}
-
-    void do_work()
-    {
-	storage->delete_old_partitions();
-    }
-
-    log_storage* storage;
-};
-
 /*
  * Opens log files in logdir and initializes partitions as well as the
  * given LSN's. The buffer given in prime_buf is primed with the contents
@@ -115,10 +100,6 @@ log_storage::log_storage(const sm_options& options)
 
 log_storage::~log_storage()
 {
-    if (_recycler_thread) {
-        _recycler_thread->stop();
-    }
-
     spinlock_write_critical_section cs(&_partition_map_latch);
 
     partition_map_t::iterator it = _partitions.begin();
@@ -188,18 +169,9 @@ shared_ptr<partition_t> log_storage::create_partition(partition_number_t pnum)
         _curr_partition = p;
     }
 
-    wakeup_recycler();
+    delete_old_partitions();
 
     return p;
-}
-
-void log_storage::wakeup_recycler()
-{
-    if (!_recycler_thread) {
-        _recycler_thread.reset(new partition_recycler_t(this));
-        _recycler_thread->fork();
-    }
-    _recycler_thread->wakeup();
 }
 
 unsigned log_storage::delete_old_partitions(partition_number_t older_than)

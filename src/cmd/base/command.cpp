@@ -293,6 +293,8 @@ void Command::setupSMOptions(po::options_description& options)
         "Workspace size archiver")
     ("sm_arch_max_open_files", po::value<int>(),
         "Max. number of open files in log archive")
+    ("sm_arch_fsync_frequency", po::value<int>(),
+        "Frequency at which fsync is called on archive writer (once very N bocks)")
     // CS TODO: archiver currently only works with 1MB blocks
     // ("sm_archiver_block_size", po::value<int>()->default_value(1024*1024),
     //     "Archiver Block size")

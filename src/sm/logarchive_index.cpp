@@ -92,7 +92,7 @@ ArchiveIndex::ArchiveIndex(const sm_options& options)
     w_assert0(bucketSize > 0);
 
     bool reformat = options.get_bool_option("sm_format", false);
-
+    fsyncFrequency = options.get_bool_option("sm_arch_fsync_frequency", 32);
     directIO = options.get_bool_option("sm_arch_o_direct", false);
     _max_open_files = options.get_int_option("sm_arch_max_open_files", 20);
 
@@ -346,7 +346,7 @@ rc_t ArchiveIndex::append(char* data, size_t length, unsigned level)
     appendPos[level] += length;
 
     // Hack to achieve constant and high bandwidth: fsync every N blocks
-    if (++appendBlockCount % 16 == 0) {
+    if (++appendBlockCount % fsyncFrequency == 0) {
         ret = ::fsync(appendFd[level]);
         CHECK_ERRNO(ret);
     }

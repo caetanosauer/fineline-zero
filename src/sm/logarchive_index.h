@@ -240,8 +240,8 @@ private:
     std::map<RunId, RunFile, CmpOpenFiles> _open_files;
     mutable srwlock_t _open_file_mutex;
     size_t _max_open_files;
-
     bool directIO;
+    unsigned fsyncFrequency;
 
     fs::path make_run_path(run_number_t begin, run_number_t end, unsigned level = 1) const;
     fs::path make_current_run_path(unsigned level) const;

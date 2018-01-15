@@ -42,8 +42,7 @@ LogArchiver::LogArchiver(const sm_options& options)
     }
 
     heap = new ArchiverHeap(workspaceSize);
-    unsigned fsyncFrequency = options.get_bool_option("sm_arch_fsync_frequency", 1);
-    blkAssemb = new BlockAssembly(index.get(), archBlockSize, 1 /*level*/, compression, fsyncFrequency);
+    blkAssemb = new BlockAssembly(index.get(), archBlockSize, 1 /*level*/, compression);
 
     merger = nullptr;
     if (options.get_bool_option("sm_archiver_merging", false)) {
@@ -95,13 +94,11 @@ LogArchiver::~LogArchiver()
 }
 
 /**
- * Selection part of replacement-selection algorithm. Takes the smallest
- * record from the heap and copies it to the write buffer, one IO block
- * at a time. The block header contains the run number (1 byte) and the
- * logical size of the block (4 bytes). The former is required so that
- * the asynchronous writer thread knows when to start a new run file.
- * The latter simplifies the write process by not allowing records to
- * be split in the middle by block boundaries.
+ * Selection part of replacement-selection algorithm. Takes the smallest record
+ * from the heap and copies it to the write buffer, one IO block at a time. The
+ * block header contains logical size of the block (4 bytes), which simplifies
+ * the write process by not allowing records to be split in the middle by block
+ * boundaries.
  */
 bool LogArchiver::selection()
 {
@@ -357,9 +354,6 @@ void LogArchiver::run()
             while (selection()) {}
             // Heap empty: Wait for all blocks to be consumed and writen out
             w_assert0(heap->size() == 0);
-            while (blkAssemb->hasPendingBlocks()) {
-                ::usleep(10000); // 10ms
-            }
 
             DBGTHRD(<< "processFlushRequest forcing closure of run "
                     << flushReqLSN.hi());

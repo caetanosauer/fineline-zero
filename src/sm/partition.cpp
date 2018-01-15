@@ -63,6 +63,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 
 #include "sm_base.h"
 #include "log_storage.h"
+#include "xct_logger.h"
 
 // files and stuff
 #include <sys/types.h>
@@ -245,6 +246,8 @@ void partition_t::open()
             _readbuf = reinterpret_cast<char*>(
                     mmap(nullptr, _max_partition_size, PROT_READ, MAP_SHARED, _fhdl, 0));
             CHECK_ERRNO((long) _readbuf);
+
+            // Logger::log_sys<comment_log>("opened_log_file " + to_string(_num));
         }
     }
     _open_count++;
@@ -309,6 +312,8 @@ void partition_t::destroy(bool delete_file)
     ret = ::close(_fhdl);
     CHECK_ERRNO(ret);
     _fhdl = invalid_fhdl;
+
+    Logger::log_sys<comment_log>("closed_log_file " + to_string(_num));
 
     if (delete_file) {
 	fs::path f = _owner->make_log_name(_num);

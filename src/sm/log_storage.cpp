@@ -235,7 +235,7 @@ unsigned log_storage::delete_old_partitions(partition_number_t older_than)
         auto p = to_be_deleted.front();
         to_be_deleted.pop_front();
         while (!p.unique()) {
-            std::this_thread::sleep_for(chrono::milliseconds(1));
+            std::this_thread::sleep_for(chrono::milliseconds(100));
         }
         // Now this partition is owned exclusively by me.  Other threads cannot
         // increment reference counters because objects were removed from map,

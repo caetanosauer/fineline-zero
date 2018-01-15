@@ -16,6 +16,7 @@
 #include "worker_thread.h"
 #include "restart.h"
 #include "bf_tree.h"
+#include "xct_logger.h"
 
 class RunRecycler : public worker_thread_t
 {
@@ -346,7 +347,7 @@ rc_t ArchiveIndex::append(char* data, size_t length, unsigned level)
     appendPos[level] += length;
 
     // Hack to achieve constant and high bandwidth: fsync every N blocks
-    if (++appendBlockCount % fsyncFrequency == 0) {
+    if (fsyncFrequency > 0 && (++appendBlockCount % fsyncFrequency == 0)) {
         ret = ::fsync(appendFd[level]);
         CHECK_ERRNO(ret);
     }
@@ -387,6 +388,8 @@ RunFile* ArchiveIndex::openForScan(const RunId& runid)
                 ret = ::close(it->second.fd);
                 CHECK_ERRNO(ret);
                 it = _open_files.erase(it);
+                Logger::log_sys<comment_log>("closed_run " + to_string(runid.level) +
+                        " " + to_string(runid.begin) + " " + to_string(runid.end));
                 break;
             }
 	    ++it;

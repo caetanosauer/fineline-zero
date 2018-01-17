@@ -26,7 +26,7 @@ LogArchiver::LogArchiver(const sm_options& options)
     size_t workspaceSize = 1024 * 1024 * // convert MB -> B
         options.get_int_option("sm_archiver_workspace_size", defaultWorkspaceSize);
     size_t archBlockSize = options.get_int_option("sm_archiver_block_size", DFT_BLOCK_SIZE);
-    bool compression = options.get_int_option("sm_page_img_compression", 0);
+    bool compression = options.get_int_option("sm_page_img_compression", 0) > 0;
 
     index = std::make_shared<ArchiveIndex>(options);
     nextLSN = lsn_t(index->getLastRun() + 1, 0);

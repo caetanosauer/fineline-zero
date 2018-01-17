@@ -115,22 +115,15 @@ private:
     size_t fpos;
 
     run_number_t lastRun;
-
     PageID currentPID;
     size_t currentPIDpos;
     size_t currentPIDfpos;
     bool enableCompression;
 
-    // if using a variable-bucket index, this is the number of page IDs
-    // that will be stored within a bucket (aka restore's segment)
-    size_t bucketSize;
-    // list of buckets beginning in the current block
-    std::vector<pair<PageID, size_t> > buckets;
-    // number of the nex bucket to be indexed
-    size_t nextBucket;
+    PageID maxPIDInRun;
+    std::vector<pair<PageID, size_t>> buckets;
 
     unsigned level;
-
     PageID maxPID;
 public:
     struct BlockHeader {

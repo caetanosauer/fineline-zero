@@ -83,20 +83,6 @@ class flush_daemon_thread_t;
 #include "log_storage.h"
 #include "stopwatch.h"
 
-// Handle object to keep track of a partition shared_ptr when fetching log records.
-// This means that the partition will not be destroyed as long as an instance
-// of LogFetch pointing to it exists.
-class LogFetch final
-{
-public:
-    LogFetch(std::shared_ptr<partition_t> p) : ptr(nullptr), partition(p)
-    {}
-
-    logrec_t* ptr;
-private:
-    std::shared_ptr<partition_t> partition;
-};
-
 class log_core
 {
 public:
@@ -110,10 +96,9 @@ public:
     rc_t            insert(logrec_t &r, lsn_t* l = NULL);
     rc_t insert_raw(const char* src, size_t length, lsn_t* rlsn = nullptr);
     rc_t            flush(const lsn_t &lsn, bool block=true, bool signal=true, bool *ret_flushed=NULL);
-    rc_t    flush_all(bool block=true) {
-                          return flush(curr_lsn().advance(-1), block); }
-    rc_t            fetch(lsn_t &lsn, void* buf, lsn_t* nxt);
-    LogFetch fetch_direct(lsn_t lsn);
+    rc_t    flush_all(bool block=true) { return flush(curr_lsn().advance(-1), block); }
+
+    logrec_t* fetch_direct(shared_ptr<partition_t> partition, lsn_t lsn);
 
     void            shutdown();
     rc_t            truncate();
@@ -334,43 +319,4 @@ protected:
 
 }; // log_core
 
-
-/**
- * \brief Log-scan iterator
- * \ingroup SSMLOG
- * \details
- * Used in restart to scan the log.
- */
-class log_i {
-public:
-    /// start a scan of the given log a the given log sequence number.
-    log_i(log_core& l, const lsn_t& lsn) ;
-    ~log_i();
-
-    /// Get the next log record for transaction, put its sequence number in argument \a lsn
-    bool                         xct_next(lsn_t& lsn, logrec_t*& r);
-    bool                         xct_next(lsn_t& lsn, logrec_t& r);
-
-    /// Get the return code from the last next() call.
-    w_rc_t&                      get_last_rc();
-private:
-    log_core&                       log;
-    lsn_t                        cursor;
-    w_rc_t                       last_rc;
-}; // log_i
-
-inline NORET
-log_i::log_i(log_core& l, const lsn_t& lsn)  // Default: true for forward scan
-    : log(l), cursor(lsn)
-{ }
-
-inline
-log_i::~log_i()
-{ last_rc.verify(); }
-
-inline w_rc_t&
-log_i::get_last_rc()
-{ return last_rc; }
-/*<std-footer incl-file-exclusion='LOG_H'>  -- do not edit anything below this line -- */
-
-#endif          /*</std-footer>*/
+#endif

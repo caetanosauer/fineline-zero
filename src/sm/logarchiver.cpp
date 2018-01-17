@@ -19,21 +19,8 @@ typedef fixed_lists_mem_t::slot_t slot_t;
 
 const static int DFT_BLOCK_SIZE = 1024 * 1024; // 1MB = 128 pages
 
-LogArchiver::LogArchiver(
-        ArchiveIndex* d, ArchiverHeap* h, BlockAssembly* b)
-    :
-    heap(h), blkAssemb(b),
-    shutdownFlag(false), selfManaged(false),
-    flushReqLSN(lsn_t::null)
-{
-    index.reset(d);
-    nextLSN = lsn_t(index->getLastRun() + 1, 0);
-}
-
 LogArchiver::LogArchiver(const sm_options& options)
-    :
-    shutdownFlag(false), selfManaged(true),
-    flushReqLSN(lsn_t::null)
+    : shutdownFlag(false), flushReqLSN(lsn_t::null)
 {
     constexpr size_t defaultWorkspaceSize = 1600;
     size_t workspaceSize = 1024 * 1024 * // convert MB -> B
@@ -63,6 +50,8 @@ LogArchiver::LogArchiver(const sm_options& options)
         merger->fork();
         merger->wakeup();
     }
+
+    currPartition = smlevel_0::log->get_storage()->get_partition(nextLSN.hi());
 }
 
 /*
@@ -101,12 +90,6 @@ LogArchiver::~LogArchiver()
 {
     if (!shutdownFlag) {
         shutdown();
-    }
-    if (selfManaged) {
-        delete blkAssemb;
-        delete heap;
-        index = nullptr;
-        if (merger) { delete merger; }
     }
 }
 
@@ -312,10 +295,11 @@ void LogArchiver::replacement()
             nextLSN = endRoundLSN;
             break;
         }
+        if (nextLSN.hi() != currPartition->num()) {
+            currPartition = smlevel_0::log->get_storage()->get_partition(nextLSN.hi());
+        }
 
-        auto logFetch = smlevel_0::log->fetch_direct(nextLSN);
-        logrec_t* lr = logFetch.ptr;
-        w_assert0(lr);
+        auto lr = smlevel_0::log->fetch_direct(currPartition, nextLSN);
 
         if (lr->type() == skip_log) {
             nextLSN = lsn_t(nextLSN.hi() + 1, 0);

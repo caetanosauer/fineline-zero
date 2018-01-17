@@ -93,14 +93,11 @@ public:
         return (_fhdl != invalid_fhdl);
     }
 
-    void set_size(size_t size) { _size = size; }
-
     void mark_for_deletion() { _delete_after_close = true; }
 
 private:
     partition_number_t    _num;
     log_storage*          _owner;
-    long                  _size;
     int                   _fhdl;
     static int            _artificial_flush_delay;  // in microseconds
     char*                 _readbuf;

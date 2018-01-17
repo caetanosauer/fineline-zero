@@ -154,7 +154,6 @@ shared_ptr<partition_t> log_storage::create_partition(partition_number_t pnum)
     }
 
     p = make_shared<partition_t>(this, pnum);
-    p->set_size(0);
     p->open();
 
     w_assert3(_partitions.find(pnum) == _partitions.end());

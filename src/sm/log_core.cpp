@@ -181,78 +181,13 @@ void log_core::start_flush_daemon()
     _flush_daemon->fork();
 }
 
-/*********************************************************************
- *
- *  log_core::fetch(lsn, rec, nxt, forward)
- *
- *  used in rollback and log_i
- *
- *  Fetch a record at lsn, and return it in rec. Optionally, return
- *  the lsn of the next/previous record in nxt.  The lsn parameter also returns
- *  the lsn of the log record actually fetched.  This is necessary
- *  since it is possible while scanning to specify an lsn
- *  that points to the end of a log file and therefore is actually
- *  the first log record in the next file.
- *
- * NOTE: caller must call release()
- *********************************************************************/
-
-rc_t
-log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
+logrec_t* log_core::fetch_direct(shared_ptr<partition_t> p, lsn_t lsn)
 {
-    INC_TSTAT(log_fetches);
-
-    if (ll >= durable_lsn()) {
-        w_assert1(ll == durable_lsn());
-        // reading the durable_lsn during recovery yields a skip log record,
-        return RC(eEOF);
-    }
-
-    auto p = _storage->get_partition(ll.hi());
-    if(!p) { return RC(eEOF); }
-
-    logrec_t* rp;
-    lsn_t prev_lsn = lsn_t::null;
-    DBGOUT3(<< "fetch @ lsn: " << ll);
-    p->read(rp, ll);
-    w_assert1(rp->valid_header());
-
-    // handle skip log record
-    if (rp->type() == skip_log)
-    {
-        DBGTHRD(<<"seeked to skip" << ll );
-        DBGTHRD(<<"getting next partition.");
-        ll = lsn_t(ll.hi() + 1, 0);
-
-        p = _storage->get_partition(ll.hi());
-        if(!p) { return RC(eEOF); }
-
-        // re-read
-        DBGOUT3(<< "fetch @ lsn: " << ll);
-        p->read(rp, ll);
-        w_assert1(rp->valid_header());
-    }
-
-    // set nxt pointer accordingly
-    if (nxt) {
-        *nxt = ll;
-        nxt->advance(rp->length());
-    }
-
-    memcpy(buf, rp, rp->length());
-    w_assert1(((logrec_t*) buf)->valid_header());
-
-    return RCOK;
-}
-
-LogFetch log_core::fetch_direct(lsn_t lsn)
-{
-    auto p = _storage->get_partition(lsn.hi());
-    LogFetch res(p);
-    if(!p) { return res; }
-
-    p->read(res.ptr, lsn);
-    w_assert0(res.ptr->valid_header());
+    logrec_t* res;
+    w_assert1(p);
+    w_assert1(p->num() == lsn.hi());
+    p->read(res, lsn);
+    w_assert1(res->valid_header());
     return res;
 }
 
@@ -1114,7 +1049,6 @@ lsn_t log_core::flush_daemon_work(lsn_t old_mark)
     // Flush the log buffer
     W_COERCE(p->flush(start_lsn, _buf, start1, end1, start2, end2));
     write_size = (end2 - start2) + (end1 - start1);
-    p->set_size(start_lsn.lo() + write_size);
 
     _durable_lsn = end_lsn;
     _start = new_start;
@@ -1128,42 +1062,4 @@ lsn_t log_core::flush_daemon_work(lsn_t old_mark)
 lsn_t log_core::get_oldest_active_lsn()
 {
     return _oldest_lsn_tracker->get_oldest_active_lsn(curr_lsn());
-}
-
-/*********************************************************************
- *
- *  log_i::xct_next(lsn, r)
- *
- *  Read the next record into r and return its lsn in lsn.
- *  Return false if EOF reached. true otherwise.
- *
- *********************************************************************/
-bool log_i::xct_next(lsn_t& lsn, logrec_t& r)
-{
-    // Initially (before the first xct_next call,
-    // 'cursor' is set to the starting point of the scan
-    // After each xct_next call,
-    // 'cursor' is set to the lsn of the next log record if forward scan
-    // or the lsn of the fetched log record if backward scan
-    // log.fetch() returns eEOF when it reaches the end of the scan
-
-    bool eof = (cursor == lsn_t::null);
-
-    if (! eof) {
-        lsn = cursor;
-        rc_t rc = log.fetch(lsn, &r, &cursor);  // Either forward or backward scan
-
-        if (rc.is_error())  {
-            last_rc = RC_AUGMENT(rc);
-            RC_APPEND_MSG(last_rc, << "trying to fetch lsn " << cursor);
-
-            if (last_rc.err_num() == eEOF)
-                eof = true;
-            else  {
-                cerr << "Fatal error : " << last_rc << endl;
-            }
-        }
-    }
-
-    return ! eof;
 }

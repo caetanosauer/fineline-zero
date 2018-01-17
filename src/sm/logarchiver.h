@@ -199,12 +199,6 @@ private:
 class LogArchiver : public thread_wrapper_t {
 public:
     LogArchiver(const sm_options& options);
-    LogArchiver(
-            ArchiveIndex*,
-            ArchiverHeap*,
-            BlockAssembly*
-    );
-
     virtual ~LogArchiver();
 
     virtual void run();
@@ -232,10 +226,10 @@ private:
     MergerDaemon* merger;
 
     std::atomic<bool> shutdownFlag;
-    bool selfManaged;
     lsn_t flushReqLSN;
     lsn_t nextLSN;
     lsn_t endRoundLSN;
+    shared_ptr<partition_t> currPartition;
 
     void replacement();
     bool selection();

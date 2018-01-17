@@ -81,7 +81,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 
 partition_t::partition_t(log_storage *owner, partition_number_t num)
     : _num(num), _owner(owner), _size(-1),
-      _fhdl(invalid_fhdl), _open_count(0)
+      _fhdl(invalid_fhdl), _skip_logrec{skip_log}, _delete_after_close(false)
 {
     _max_partition_size = owner->get_partition_size();
     _readbuf = nullptr;
@@ -162,9 +162,8 @@ rc_t partition_t::flush(
     } // end sync log
 
     { // Copy a skip record to the end of the buffer.
-        logrec_t* s = _owner->get_skip_log();
         // CS TODO FINELINE: fix log priming
-        // s->set_lsn_ck(lsn+size);
+        // _skip_logrec.set_lsn_ck(lsn+size);
 
         // Hopefully the OS is smart enough to coalesce the writes
         // before sending them to disk. If not, and it's a problem
@@ -172,7 +171,7 @@ rc_t partition_t::flush(
         // block by copying data out of the buffer so we can append the
         // skiplog without messing up concurrent inserts. However, that
         // could mean copying up to BLOCK_SIZE bytes.
-        long total = write_size + s->length();
+        long total = write_size + _skip_logrec.length();
 
         // works because BLOCK_SIZE is always a power of 2
         long grand_total = ceil2(total, log_storage::BLOCK_SIZE);
@@ -190,14 +189,14 @@ rc_t partition_t::flush(
         // CS FINELINE TODO: this is a temporary solution for the log priming problem.
         // For now, we set the PID of the skip log record as the file offset and
         // look for that when initializing the log.
-        s->set_pid(file_offset + write_size);
+        _skip_logrec.set_pid(file_offset + write_size);
 
         struct iovec iov[] = {
             // iovec_t expects void* not const void *
             { (char*)buf+start1,                end1-start1 },
             // iovec_t expects void* not const void *
             { (char*)buf+start2,                end2-start2},
-            { s,                        s->length()},
+            { &_skip_logrec,                    _skip_logrec.length()},
             { block_of_zeros(),         grand_total-total},
         };
 
@@ -215,7 +214,6 @@ void partition_t::read(logrec_t *&rp, lsn_t &ll)
 {
     w_assert1(ll.hi() == num());
     w_assert1(is_open());
-    w_assert1(is_used());
 
     size_t pos = ll.lo();
     rp = reinterpret_cast<logrec_t*>(_readbuf + pos);
@@ -232,25 +230,19 @@ size_t partition_t::read_block(void* buf, size_t count, off_t offset)
 
 void partition_t::open()
 {
-    if (!is_open()) {
-        unique_lock<mutex> lck(_mutex);
-        // Other thread might have opened already
-        if (!is_open()) {
-            string fname = _owner->make_log_name(_num);
-            int fd, flags = O_RDWR | O_CREAT;
-            fd = ::open(fname.c_str(), flags, 0744 /*mode*/);
-            CHECK_ERRNO(fd);
-            auto res = ::ftruncate(fd, _max_partition_size);
-            w_assert3(_fhdl == invalid_fhdl);
-            _fhdl = fd;
-            _readbuf = reinterpret_cast<char*>(
-                    mmap(nullptr, _max_partition_size, PROT_READ, MAP_SHARED, _fhdl, 0));
-            CHECK_ERRNO((long) _readbuf);
-
-            // Logger::log_sys<comment_log>("opened_log_file " + to_string(_num));
-        }
-    }
-    _open_count++;
+    unique_lock<mutex> lck(_mutex);
+    if (is_open()) { return; }
+    string fname = _owner->make_log_name(_num);
+    int fd, flags = O_RDWR | O_CREAT;
+    fd = ::open(fname.c_str(), flags, 0744 /*mode*/);
+    CHECK_ERRNO(fd);
+    auto res = ::ftruncate(fd, _max_partition_size);
+    w_assert3(_fhdl == invalid_fhdl);
+    _fhdl = fd;
+    _readbuf = reinterpret_cast<char*>(
+            mmap(nullptr, _max_partition_size, PROT_READ, MAP_SHARED, _fhdl, 0));
+    CHECK_ERRNO((long) _readbuf);
+    DBG(<< "opened_log_file " << _num);
 }
 
 // CS TODO: why is this definition here?
@@ -297,26 +289,25 @@ void partition_t::fsync_delayed(int fd)
 
 void partition_t::close()
 {
-    --_open_count;
-}
-
-void partition_t::destroy(bool delete_file)
-{
     unique_lock<mutex> lck(_mutex);
 
-    w_assert0(_open_count == 0);
-    // Caller must guarantee thread safety (log_storage::delete_old_partitions)
-    auto ret = munmap(_readbuf, _max_partition_size);
-    CHECK_ERRNO(ret);
-    _readbuf = nullptr;
-    ret = ::close(_fhdl);
-    CHECK_ERRNO(ret);
-    _fhdl = invalid_fhdl;
+    if (is_open()) {
+        // Caller must guarantee thread safety (log_storage::delete_old_partitions)
+        auto ret = munmap(_readbuf, _max_partition_size);
+        CHECK_ERRNO(ret);
+        _readbuf = nullptr;
+        ret = ::close(_fhdl);
+        CHECK_ERRNO(ret);
+        _fhdl = invalid_fhdl;
 
-    Logger::log_sys<comment_log>("closed_log_file " + to_string(_num));
+        Logger::log_sys<comment_log>("closed_log_file " + to_string(_num));
+        DBG(<< "closed_log_file " << _num);
+    }
 
-    if (delete_file) {
+    if (_delete_after_close) {
 	fs::path f = _owner->make_log_name(_num);
 	fs::remove(f);
+        Logger::log_sys<comment_log>("deleted_log_file " + to_string(_num));
+        DBG(<< "deleted_log_file " << _num);
     }
 }

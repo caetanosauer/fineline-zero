@@ -49,11 +49,6 @@ public:
 log_storage::log_storage(const sm_options& options)
     : _curr_partition(nullptr)
 {
-    // CS TODO: log record refactoring
-    _skip_log = new logrec_t;
-    _skip_log->init_header(skip_log);
-    // _skip_log->construct();
-
     std::string logdir = options.get_string_option("sm_logdir", "log");
     if (logdir.empty()) {
         cerr << "ERROR: sm_logdir must be set to enable logging." << endl;
@@ -97,6 +92,7 @@ log_storage::log_storage(const sm_options& options)
 
             long pnum = std::stoi(fname.substr(log_prefix.length()));
             _partitions[pnum] = make_shared<partition_t>(this, pnum);
+            _partitions[pnum]->open();
 
             if (pnum >= last_partition) {
                 last_partition = pnum;
@@ -118,19 +114,6 @@ log_storage::~log_storage()
     if (_recycler_thread) {
         _recycler_thread->stop();
     }
-
-    spinlock_write_critical_section cs(&_partition_map_latch);
-
-    partition_map_t::iterator it = _partitions.begin();
-    while (it != _partitions.end()) {
-        auto p = it->second;
-        p->close();
-        it++;
-    }
-
-    _partitions.clear();
-
-    delete _skip_log;
 }
 
 shared_ptr<partition_t> log_storage::get_partition_for_flush(lsn_t start_lsn,
@@ -148,12 +131,7 @@ shared_ptr<partition_t> log_storage::get_partition_for_flush(lsn_t start_lsn,
         partition_number_t n = p->num();
         w_assert3(start_lsn.file() == n+1);
         w_assert3(n != 0);
-
-        {
-            p->close();
-            p = create_partition(n+1);
-            p->open();
-        }
+        p = create_partition(n+1);
     }
 
     return p;
@@ -164,7 +142,6 @@ shared_ptr<partition_t> log_storage::get_partition(partition_number_t n) const
     spinlock_read_critical_section cs(&_partition_map_latch);
     partition_map_t::const_iterator it = _partitions.find(n);
     if (it == _partitions.end()) { return nullptr; }
-    it->second->open();
     return it->second;
 }
 
@@ -178,6 +155,7 @@ shared_ptr<partition_t> log_storage::create_partition(partition_number_t pnum)
 
     p = make_shared<partition_t>(this, pnum);
     p->set_size(0);
+    p->open();
 
     w_assert3(_partitions.find(pnum) == _partitions.end());
 
@@ -210,40 +188,25 @@ unsigned log_storage::delete_old_partitions(partition_number_t older_than)
         older_than = smlevel_0::bf->get_archived_run();
     }
 
-    list<shared_ptr<partition_t>> to_be_deleted;
     partition_number_t highest_deleted = 0;
-
+    unsigned count = 0;
     {
         spinlock_write_critical_section cs(&_partition_map_latch);
 
         partition_map_t::iterator it = _partitions.begin();
         while (it != _partitions.end()) {
-            if (!it->second->is_used() && it->first < older_than) {
-                if (it->first > highest_deleted) {
-                    highest_deleted = it->first;
-                }
-                to_be_deleted.push_front(it->second);
+            if (it->first < older_than) {
+                if (it->first > highest_deleted) { highest_deleted = it->first; }
+                if (_delete_old_partitions) { it->second->mark_for_deletion(); }
                 it = _partitions.erase(it);
+                count++;
             }
             else { it++; }
         }
 
     }
 
-    // Waint until the partitions to be deleted are not referenced anymore
-    while (to_be_deleted.size() > 0) {
-        auto p = to_be_deleted.front();
-        to_be_deleted.pop_front();
-        while (!p.unique()) {
-            std::this_thread::sleep_for(chrono::milliseconds(100));
-        }
-        // Now this partition is owned exclusively by me.  Other threads cannot
-        // increment reference counters because objects were removed from map,
-        // and the critical section above guarantees visibility.
-        p->destroy(_delete_old_partitions);
-    }
-
-    return to_be_deleted.size();
+    return count;
 }
 
 shared_ptr<partition_t> log_storage::curr_partition() const

@@ -210,7 +210,6 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
 
     auto p = _storage->get_partition(ll.hi());
     if(!p) { return RC(eEOF); }
-    p->open();
 
     logrec_t* rp;
     lsn_t prev_lsn = lsn_t::null;
@@ -221,7 +220,6 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
     // handle skip log record
     if (rp->type() == skip_log)
     {
-        p->close();
         DBGTHRD(<<"seeked to skip" << ll );
         DBGTHRD(<<"getting next partition.");
         ll = lsn_t(ll.hi() + 1, 0);
@@ -231,7 +229,6 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
 
         // re-read
         DBGOUT3(<< "fetch @ lsn: " << ll);
-        p->open();
         p->read(rp, ll);
         w_assert1(rp->valid_header());
     }
@@ -243,7 +240,6 @@ log_core::fetch(lsn_t& ll, void* buf, lsn_t* nxt)
     }
 
     memcpy(buf, rp, rp->length());
-    p->close();
     w_assert1(((logrec_t*) buf)->valid_header());
 
     return RCOK;
@@ -323,7 +319,6 @@ log_core::log_core(const sm_options& options)
     auto curr_p = _storage->curr_partition();
     auto pnum = (curr_p ? curr_p->num() : 0) + 1;
     auto p = _storage->create_partition(pnum);
-    p->open();
     _curr_lsn = _durable_lsn = _flush_lsn = lsn_t(pnum, 0);
     cerr << "Initialized curr_lsn to " << _curr_lsn << endl;
 

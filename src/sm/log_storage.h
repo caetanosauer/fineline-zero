@@ -95,9 +95,6 @@ public:
 
     shared_ptr<partition_t> create_partition(partition_number_t pnum);
 
-    // used by partition_t
-    logrec_t*       get_skip_log()  { return _skip_log; }
-
     off_t get_partition_size() const { return _partition_size; }
 
     size_t get_byte_distance(lsn_t a, lsn_t b) const;
@@ -115,8 +112,6 @@ private:
 
     partition_map_t _partitions;
     shared_ptr<partition_t> _curr_partition;
-
-    logrec_t* _skip_log;
 
     bool _delete_old_partitions;
 

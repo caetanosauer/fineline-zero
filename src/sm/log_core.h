@@ -83,18 +83,14 @@ class flush_daemon_thread_t;
 #include "log_storage.h"
 #include "stopwatch.h"
 
-// This is returned by fetch_direct to make sure that close() is invoked on
-// partition_t after every fetch
-class LogFetch
+// Handle object to keep track of a partition shared_ptr when fetching log records.
+// This means that the partition will not be destroyed as long as an instance
+// of LogFetch pointing to it exists.
+class LogFetch final
 {
 public:
     LogFetch(std::shared_ptr<partition_t> p) : ptr(nullptr), partition(p)
     {}
-
-    ~LogFetch()
-    {
-        partition->close();
-    }
 
     logrec_t* ptr;
 private:

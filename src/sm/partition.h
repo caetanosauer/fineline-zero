@@ -74,7 +74,7 @@ public:
     enum { invalid_fhdl = -1 };
 
     partition_t(log_storage*, partition_number_t);
-    virtual ~partition_t() { }
+    virtual ~partition_t() { close(); }
 
     partition_number_t num() const   { return _num; }
 
@@ -93,14 +93,9 @@ public:
         return (_fhdl != invalid_fhdl);
     }
 
-    bool is_used() const
-    {
-        return _open_count > 0;
-    }
-
     void set_size(size_t size) { _size = size; }
 
-    void destroy(bool delete_file);
+    void mark_for_deletion() { _delete_after_close = true; }
 
 private:
     partition_number_t    _num;
@@ -109,7 +104,7 @@ private:
     int                   _fhdl;
     static int            _artificial_flush_delay;  // in microseconds
     char*                 _readbuf;
-    std::atomic<size_t> _open_count;
+    bool _delete_after_close;
 
     size_t _max_partition_size;
     char* _mmap_buffer;
@@ -118,6 +113,8 @@ private:
 
     // Serialize open and close calls
     mutex _mutex;
+
+    logrec_t _skip_logrec;
 };
 
 #endif

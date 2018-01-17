@@ -49,8 +49,6 @@ const size_t IO_ALIGN = 512;
 // CS TODO
 const static int DFT_BLOCK_SIZE = 1024 * 1024; // 1MB = 128 pages
 
-logrec_t SKIP_LOGREC;
-
 // TODO proper exception mechanism
 #define CHECK_ERRNO(n) \
     if (n == -1) { \
@@ -86,9 +84,7 @@ size_t ArchiveIndex::getFileSize(int fd)
 ArchiveIndex::ArchiveIndex(const sm_options& options)
 {
     archdir = options.get_string_option("sm_archdir", "archive");
-    // CS TODO: archiver currently only works with 1MB blocks
-    blockSize = DFT_BLOCK_SIZE;
-        // options.get_int_option("sm_archiver_block_size", DFT_BLOCK_SIZE);
+    // CS TODO: should always be 1
     bucketSize = options.get_int_option("sm_archiver_bucket_size", 1);
     w_assert0(bucketSize > 0);
 
@@ -172,9 +168,6 @@ ArchiveIndex::ArchiveIndex(const sm_options& options)
             }
         }
     }
-
-    SKIP_LOGREC.init_header(skip_log);
-    // SKIP_LOGREC.construct();
 
     unsigned replFactor = options.get_int_option("sm_archiver_replication_factor", 0);
     if (replFactor > 0) {
@@ -290,10 +283,7 @@ rc_t ArchiveIndex::closeCurrentRun(run_number_t currentRun, unsigned level,
                 // register index information and write it on end of file
                 if (appendPos[level] > 0) {
                     // take into account space for skip log record
-                    appendPos[level] += SKIP_LOGREC.length();
-                    // and make sure data is written aligned to block boundary
-                    appendPos[level] -= appendPos[level] % blockSize;
-                    appendPos[level] += blockSize;
+                    appendPos[level] += logrec_t::get_skip_log().length();
                 }
             }
 
@@ -333,15 +323,14 @@ rc_t ArchiveIndex::closeCurrentRun(run_number_t currentRun, unsigned level,
 
 rc_t ArchiveIndex::append(char* data, size_t length, unsigned level)
 {
-    // make sure there is always a skip log record at the end
-    w_assert1(length + SKIP_LOGREC.length() <= blockSize);
-    memcpy(data + length, &SKIP_LOGREC, SKIP_LOGREC.length());
+    // Precondition: there is always space for a skip log record at the end (see BlockAssembly::spaceToReserve)
+    memcpy(data + length, &logrec_t::get_skip_log(), logrec_t::get_skip_log().length());
 
     // beginning of block must be a valid log record
     w_assert1(reinterpret_cast<logrec_t*>(data)->valid_header());
 
     INC_TSTAT(la_block_writes);
-    auto ret = ::pwrite(appendFd[level], data, length + SKIP_LOGREC.length(),
+    auto ret = ::pwrite(appendFd[level], data, length + logrec_t::get_skip_log().length(),
                 appendPos[level]);
     CHECK_ERRNO(ret);
     appendPos[level] += length;
@@ -399,45 +388,6 @@ RunFile* ArchiveIndex::openForScan(const RunId& runid)
     INC_TSTAT(la_open_count);
 
     return &file;
-}
-
-/** Note: buffer must be allocated for at least readSize + IO_ALIGN bytes,
- * otherwise direct I/O with alignment will corrupt memory.
- */
-rc_t ArchiveIndex::readBlock(int fd, char* buf,
-        size_t& offset, size_t readSize)
-{
-    stopwatch_t timer;
-
-    if (readSize == 0) { readSize = blockSize; }
-    size_t actualOffset = IO_ALIGN * (offset / IO_ALIGN);
-    size_t diff = offset - actualOffset;
-    w_assert1(actualOffset <= offset);
-    w_assert1(diff < IO_ALIGN);
-
-    size_t actualReadSize = readSize + diff;
-    if (actualReadSize % IO_ALIGN != 0) {
-        actualReadSize = (1 + actualReadSize / IO_ALIGN) * IO_ALIGN;
-    }
-
-    int howMuchRead = ::pread(fd, buf, actualReadSize, actualOffset);
-    CHECK_ERRNO(howMuchRead);
-    if (howMuchRead == 0) {
-        // EOF is signalized by setting offset to zero
-        offset = 0;
-        return RCOK;
-    }
-
-    if (diff > 0) {
-        memmove(buf, buf + diff, readSize);
-    }
-
-    ADD_TSTAT(la_read_time, timer.time_us());
-    ADD_TSTAT(la_read_volume, howMuchRead);
-    INC_TSTAT(la_read_count);
-
-    offset += readSize;
-    return RCOK;
 }
 
 void ArchiveIndex::closeScan(const RunId& runid)
@@ -518,11 +468,6 @@ void ArchiveIndex::deleteRuns(unsigned replicationFactor)
     }
 }
 
-size_t ArchiveIndex::getSkipLogrecSize() const
-{
-    return SKIP_LOGREC.length();
-}
-
 void ArchiveIndex::newBlock(const vector<pair<PageID, size_t> >&
         buckets, unsigned level)
 {
@@ -552,7 +497,6 @@ rc_t ArchiveIndex::finishRun(run_number_t begin, run_number_t end,
             // at least one entry is required for empty runs
             appendNewRun(level);
         }
-        w_assert1(offset % blockSize == 0);
 
         lf = lastFinished[level] + 1;
         w_assert1(lf == 0 || begin == runs[level][lf-1].end + 1);
@@ -564,7 +508,7 @@ rc_t ArchiveIndex::finishRun(run_number_t begin, run_number_t end,
     }
 
     if (offset > 0 && lf < (int) runs[level].size()) {
-        W_DO(serializeRunInfo(runs[level][lf], fd, offset));
+        serializeRunInfo(runs[level][lf], fd, offset);
     }
 
     if (level > 1 && runRecycler) { runRecycler->wakeup(); }
@@ -572,53 +516,16 @@ rc_t ArchiveIndex::finishRun(run_number_t begin, run_number_t end,
     return RCOK;
 }
 
-rc_t ArchiveIndex::serializeRunInfo(RunInfo& run, int fd,
-        off_t offset)
+void ArchiveIndex::serializeRunInfo(RunInfo& run, int fd, off_t offset)
 {
     spinlock_read_critical_section cs(&_mutex);
-
-    int entriesPerBlock =
-        (blockSize - sizeof(BlockHeader) - sizeof(PageID)) / sizeof(BlockEntry);
-    int remaining = run.entries.size();
-    int i = 0;
-    size_t currEntry = 0;
-
-    // CS TODO RAII
-    char * writeBuffer = new char[blockSize];
-
-    while (remaining > 0) {
-        int j = 0;
-        size_t bpos = sizeof(BlockHeader);
-
-        // CS TODO: max pid is replicated in every index block because that
-        // was quicker to implement. In the future, we should have "meta blocks"
-        // in addition to data and index blocks to store such run information.
-        memcpy(writeBuffer + bpos, &run.maxPID, sizeof(PageID));
-        bpos += sizeof(PageID);
-
-        while (j < entriesPerBlock && remaining > 0)
-        {
-            memcpy(writeBuffer + bpos, &run.entries[currEntry],
-                        sizeof(BlockEntry));
-            j++;
-            currEntry++;
-            remaining--;
-            bpos += sizeof(BlockEntry);
-        }
-        BlockHeader* h = (BlockHeader*) writeBuffer;
-        h->entries = j;
-        h->blockNumber = i;
-
-
-        auto ret = ::pwrite(fd, writeBuffer, blockSize, offset);
-        CHECK_ERRNO(ret);
-        offset += blockSize;
-        i++;
-    }
-
-    delete[] writeBuffer;
-
-    return RCOK;
+    // Write whole vector at once
+    auto index_size = sizeof(BlockEntry) * run.entries.size();
+    auto ret = ::pwrite(fd, &run.entries[0], index_size, offset);
+    CHECK_ERRNO(ret);
+    // Write run footer
+    RunFooter footer {offset, index_size};
+    ret = ::pwrite(fd, &footer, sizeof(RunFooter), offset + index_size);
 }
 
 void ArchiveIndex::appendNewRun(unsigned level)
@@ -684,41 +591,28 @@ run_number_t ArchiveIndex::getFirstRun(unsigned level)
 void ArchiveIndex::loadRunInfo(RunFile* runFile, const RunId& fstats)
 {
     RunInfo run;
-    {
-
-        size_t indexBlockCount = 0;
-        size_t dataBlockCount = 0;
-        getBlockCounts(runFile, &indexBlockCount, &dataBlockCount);
-
-        off_t offset = dataBlockCount * blockSize;
-        w_assert1(dataBlockCount == 0 || offset > 0);
-        size_t lastOffset = 0;
-
-        while (indexBlockCount > 0) {
-            char* readBuffer = runFile->getOffset(offset);
-
-            BlockHeader* h = (BlockHeader*) readBuffer;
-
-            unsigned j = 0;
-            size_t bpos = sizeof(BlockHeader);
-
-            run.maxPID = *((PageID*) (readBuffer + bpos));
-            bpos += sizeof(PageID);
-
-            while(j < h->entries)
-            {
-                BlockEntry* e = (BlockEntry*)(readBuffer + bpos);
-                w_assert1(lastOffset == 0 || e->offset > lastOffset);
-                run.entries.push_back(*e);
-
-                lastOffset = e->offset;
-                bpos += sizeof(BlockEntry);
-                j++;
-            }
-            indexBlockCount--;
-            offset += blockSize;
+    if (runFile->length > 0) {
+        // Read footer from end of file
+        w_assert0(runFile->length > sizeof(RunFooter));
+        off_t footer_offset = runFile->length - sizeof(RunFooter);
+        RunFooter footer = *(reinterpret_cast<RunFooter*>(runFile->getOffset(footer_offset)));
+        // Get offset of first index entry
+        w_assert0(runFile->length > footer.index_begin);
+        w_assert0(runFile->length > sizeof(RunFooter) + footer.index_size);
+        off_t index_offset = footer.index_begin;
+        // Initialize entry array with read size
+        w_assert0(footer.index_size % sizeof(BlockEntry) == 0);
+        run.entries.resize(footer.index_size / sizeof(BlockEntry));
+        // Copy entries into initialized vector
+        BlockEntry* entry = reinterpret_cast<BlockEntry*>(runFile->getOffset(index_offset));
+        for (size_t i = 0; i < run.entries.size(); i++) {
+            run.entries[i] = *entry;
+            entry++;
         }
-
+        // Assert that skip log record is right before the index
+        off_t skip_offset = index_offset - logrec_t::get_skip_log().length();
+        w_assert0(skip_offset < index_offset);
+        w_assert0(memcmp(runFile->getOffset(skip_offset), &logrec_t::get_skip_log(), logrec_t::get_skip_log().length()) == 0);
     }
 
     run.begin = fstats.begin;
@@ -732,27 +626,6 @@ void ArchiveIndex::loadRunInfo(RunFile* runFile, const RunId& fstats)
     }
     runs[fstats.level].push_back(run);
     lastFinished[fstats.level] = runs[fstats.level].size() - 1;
-}
-
-void ArchiveIndex::getBlockCounts(RunFile* runFile, size_t* indexBlocks,
-        size_t* dataBlocks)
-{
-    // skip emtpy runs
-    if (runFile->length == 0) {
-        if(indexBlocks) { *indexBlocks = 0; };
-        if(dataBlocks) { *dataBlocks = 0; };
-        return;
-    }
-
-    BlockHeader* header = (BlockHeader*) runFile->getOffset(runFile->length - blockSize);
-
-    if (indexBlocks) {
-        *indexBlocks = header->blockNumber + 1;
-    }
-    if (dataBlocks) {
-        *dataBlocks = (runFile->length / blockSize) - (header->blockNumber + 1);
-        w_assert1(*dataBlocks > 0);
-    }
 }
 
 size_t ArchiveIndex::findRun(run_number_t run, unsigned level)

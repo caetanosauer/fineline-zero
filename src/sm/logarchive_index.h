@@ -102,9 +102,9 @@ public:
         PageID pid;
     };
 
-    struct BlockHeader {
-        uint32_t entries;
-        uint32_t blockNumber;
+    struct RunFooter {
+        uint64_t index_begin;
+        uint64_t index_size;
     };
 
     struct RunInfo {
@@ -122,7 +122,6 @@ public:
         }
     };
 
-    size_t getBlockSize() const { return blockSize; }
     std::string getArchDir() const { return archdir; }
 
     run_number_t getLastRun();
@@ -137,13 +136,10 @@ public:
     // run scanning methods
     RunFile* openForScan(const RunId& runid);
     void closeScan(const RunId& runid);
-    rc_t readBlock(int fd, char* buf, size_t& offset, size_t readSize = 0);
 
     void listFiles(std::vector<std::string>& list, int level = -1);
     void listFileStats(std::list<RunId>& list, int level = -1);
     void deleteRuns(unsigned replicationFactor = 0);
-
-    size_t getSkipLogrecSize() const;
 
     static bool parseRunFileName(string fname, RunId& fstats);
     static size_t getFileSize(int fd);
@@ -157,7 +153,6 @@ public:
     void probe(std::vector<Input>&, PageID, PageID, run_number_t runBegin,
             run_number_t runEnd = 0);
 
-    void getBlockCounts(RunFile*, size_t* indexBlocks, size_t* dataBlocks);
     void loadRunInfo(RunFile*, const RunId&);
     void startNewRun(unsigned level);
 
@@ -200,14 +195,13 @@ private:
     // binary search
     size_t findEntry(RunInfo* run, PageID pid,
             int from = -1, int to = -1);
-    rc_t serializeRunInfo(RunInfo&, int fd, off_t);
+    void serializeRunInfo(RunInfo&, int fd, off_t);
 
 private:
     std::string archdir;
     std::vector<int> appendFd;
     std::vector<off_t> appendPos;
     size_t appendBlockCount;
-    size_t blockSize;
 
     fs::path archpath;
 

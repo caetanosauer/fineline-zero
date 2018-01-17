@@ -24,14 +24,14 @@ void ArchStats::setupOptions()
 void ArchStats::printRunInfo(const RunId& runid)
 {
     auto runFile = archIndex->openForScan(runid);
-    size_t indexBlockCount = 0, dataBlockCount = 0;
-    archIndex->getBlockCounts(runFile, &indexBlockCount, &dataBlockCount);
+    // size_t indexBlockCount = 0, dataBlockCount = 0;
+    // archIndex->getBlockCounts(runFile, &indexBlockCount, &dataBlockCount);
     std::cout << "level " << runid.level
         << " begin " << runid.begin
         << " end " << runid.end
-        << " data " << dataBlockCount
-        << " index " << indexBlockCount
-        << " index_percent " << (double) indexBlockCount / dataBlockCount
+        // << " data " << dataBlockCount
+        // << " index " << indexBlockCount
+        // << " index_percent " << (double) indexBlockCount / dataBlockCount
         << std::endl;
 }
 

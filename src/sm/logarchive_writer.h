@@ -85,7 +85,7 @@ public:
  */
 class BlockAssembly {
 public:
-    BlockAssembly(ArchiveIndex* index, unsigned level = 1, bool compression = true);
+    BlockAssembly(ArchiveIndex* index, size_t blockSize, unsigned level = 1, bool compression = true);
     virtual ~BlockAssembly();
 
     bool start(run_number_t run);
@@ -132,9 +132,6 @@ private:
     unsigned level;
 
     PageID maxPID;
-
-    // Amount of space to reserve in each block (e.g., for skip log record)
-    size_t spaceToReserve;
 public:
     struct BlockHeader {
         uint32_t end;

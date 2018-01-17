@@ -221,11 +221,17 @@ public:
         max_data_sz = max_sz - hdr_sz
     };
 
-       tid_t   tid() const;
-       StoreID        stid() const;
-       PageID         pid() const;
-       PageID         pid2() const;
+    tid_t   tid() const;
+    StoreID        stid() const;
+    PageID         pid() const;
+    PageID         pid2() const;
 
+    // Gives an initialized skip log record
+    static const logrec_t& get_skip_log();
+
+    logrec_t() = default;
+    // constructor used for data-less (i.e., system) log records
+    logrec_t(kind_t kind);
 
 public:
     smsize_t             length() const;

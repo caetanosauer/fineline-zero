@@ -41,6 +41,12 @@ void sm_tls_allocator::release(logrec_t* p, size_t)
 
 DEFINE_SM_ALLOC(logrec_t);
 
+const logrec_t& logrec_t::get_skip_log()
+{
+    static logrec_t skip{skip_log};
+    return skip;
+}
+
 /*********************************************************************
  *
  *  logrec_t::type_str()
@@ -139,6 +145,14 @@ logrec_t::get_type_str(kind_t type)
      */
     W_FATAL(eINTERNAL);
     return 0;
+}
+
+logrec_t::logrec_t(kind_t kind)
+{
+    header._type = kind;
+    header._pid = 0;
+    header._page_version = 0;
+    set_size(sizeof(baseLogHeader));
 }
 
 void logrec_t::init_header(kind_t type, PageID pid)

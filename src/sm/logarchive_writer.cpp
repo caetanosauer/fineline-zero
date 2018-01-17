@@ -6,19 +6,17 @@
 // CS TODO: use option
 const static int IO_BLOCK_COUNT = 8; // total buffer = 8MB
 
-BlockAssembly::BlockAssembly(ArchiveIndex* index, unsigned level, bool compression)
-    : dest(NULL), lastRun(0), currentPID(0), bucketSize(0), nextBucket(0), level(level),
+BlockAssembly::BlockAssembly(ArchiveIndex* index, size_t blockSize, unsigned level, bool compression)
+    : dest(NULL), lastRun(0), currentPID(0), blockSize(blockSize), bucketSize(0), nextBucket(0), level(level),
     maxPID(std::numeric_limits<PageID>::min())
 {
     archIndex = index;
-    blockSize = archIndex->getBlockSize();
     bucketSize = archIndex->getBucketSize();
     writebuf = new AsyncRingBuffer(blockSize, IO_BLOCK_COUNT);
     writer = new WriterThread(writebuf, index, level);
     writer->fork();
 
     index->openNewRun(level);
-    spaceToReserve = index->getSkipLogrecSize();
 
     enableCompression = compression;
 }
@@ -93,12 +91,12 @@ bool BlockAssembly::add(logrec_t* lr)
     w_assert1(lr->valid_header());
 
     // Verify if we still have space for this log record
-    size_t available = blockSize - (pos + spaceToReserve);
+    size_t available = blockSize - (pos + logrec_t::get_skip_log().length());
     if (lr->length() > available) {
         // If this is a page_img logrec, we might still have space for it because
         // the preceding log records of the same PID will be dropped
         if (enableCompression && lr->type() == page_img_format_log) {
-            size_t imgAvailable = blockSize - (currentPIDpos + spaceToReserve);
+            size_t imgAvailable = blockSize - (currentPIDpos + logrec_t::get_skip_log().length());
             bool hasSpaceForPageImg = lr->pid() == currentPID && lr->length() < imgAvailable;
             if (!hasSpaceForPageImg) { return false; }
         }

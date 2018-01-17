@@ -38,7 +38,7 @@ LogArchiver::LogArchiver(const sm_options& options)
     constexpr size_t defaultWorkspaceSize = 1600;
     size_t workspaceSize = 1024 * 1024 * // convert MB -> B
         options.get_int_option("sm_archiver_workspace_size", defaultWorkspaceSize);
-
+    size_t archBlockSize = options.get_int_option("sm_archiver_block_size", DFT_BLOCK_SIZE);
     bool compression = options.get_int_option("sm_page_img_compression", 0);
 
     index = std::make_shared<ArchiveIndex>(options);
@@ -55,7 +55,7 @@ LogArchiver::LogArchiver(const sm_options& options)
     }
 
     heap = new ArchiverHeap(workspaceSize);
-    blkAssemb = new BlockAssembly(index.get(), 1 /*level*/, compression);
+    blkAssemb = new BlockAssembly(index.get(), archBlockSize, 1 /*level*/, compression);
 
     merger = nullptr;
     if (options.get_bool_option("sm_archiver_merging", false)) {

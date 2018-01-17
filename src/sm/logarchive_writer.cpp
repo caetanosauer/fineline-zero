@@ -7,18 +7,15 @@
 const static int IO_BLOCK_COUNT = 8; // total buffer = 8MB
 
 BlockAssembly::BlockAssembly(ArchiveIndex* index, size_t blockSize, unsigned level, bool compression)
-    : dest(NULL), lastRun(0), currentPID(0), blockSize(blockSize), bucketSize(0), nextBucket(0), level(level),
+    : dest(nullptr), lastRun(0), currentPID(0), blockSize(blockSize), level(level),
     maxPID(std::numeric_limits<PageID>::min())
 {
     archIndex = index;
-    bucketSize = archIndex->getBucketSize();
     writebuf = new AsyncRingBuffer(blockSize, IO_BLOCK_COUNT);
     writer = new WriterThread(writebuf, index, level);
     writer->fork();
 
     index->openNewRun(level);
-
-    enableCompression = compression;
 }
 
 BlockAssembly::~BlockAssembly()
@@ -69,7 +66,6 @@ bool BlockAssembly::start(run_number_t run)
 
     if (run != lastRun) {
         archIndex->startNewRun(level);
-        nextBucket = 0;
         fpos = 0;
         lastRun = run;
     }
@@ -108,13 +104,7 @@ bool BlockAssembly::add(logrec_t* lr)
         currentPID = lr->pid();
         currentPIDpos = pos;
         currentPIDfpos = fpos;
-
-        if (lr->pid() / bucketSize >= nextBucket) {
-            PageID shpid = (lr->pid() / bucketSize) * bucketSize;
-            buckets.emplace_back(shpid, fpos);
-            nextBucket = shpid / bucketSize + 1;
-        }
-
+        buckets.emplace_back(currentPID, fpos);
         if (currentPID > maxPID) { maxPID = currentPID; }
     }
 

@@ -41,13 +41,11 @@ const string ArchiveIndex::run_regex =
     "^archive_([1-9][0-9]*)_([1-9][0-9]*)-([1-9][0-9]*)$";
 const string ArchiveIndex::current_regex = "^current_run_[1-9][0-9]*$";
 
-// CS TODO: Aligning with the Linux standard FS block size
-// We could try using 512 (typical hard drive sector) at some point,
-// but none of this is actually standardized or portable
-const size_t IO_ALIGN = 512;
-
-// CS TODO
-const static int DFT_BLOCK_SIZE = 1024 * 1024; // 1MB = 128 pages
+struct RunFooter {
+    uint64_t index_begin;
+    uint64_t index_size;
+    PageID maxPID;
+};
 
 // TODO proper exception mechanism
 #define CHECK_ERRNO(n) \
@@ -260,8 +258,7 @@ fs::path ArchiveIndex::make_current_run_path(unsigned level) const
     return archpath / fs::path(CURR_RUN_PREFIX + std::to_string(level));
 }
 
-rc_t ArchiveIndex::closeCurrentRun(run_number_t currentRun, unsigned level,
-        PageID maxPID)
+rc_t ArchiveIndex::closeCurrentRun(run_number_t currentRun, unsigned level, PageID maxPID)
 {
     auto lastRun = getLastRun(level);
     if (lastRun == 0) {
@@ -524,7 +521,7 @@ void ArchiveIndex::serializeRunInfo(RunInfo& run, int fd, off_t offset)
     auto ret = ::pwrite(fd, &run.entries[0], index_size, offset);
     CHECK_ERRNO(ret);
     // Write run footer
-    RunFooter footer {offset, index_size};
+    RunFooter footer {offset, index_size, run.maxPID};
     ret = ::pwrite(fd, &footer, sizeof(RunFooter), offset + index_size);
 }
 
@@ -596,6 +593,7 @@ void ArchiveIndex::loadRunInfo(RunFile* runFile, const RunId& fstats)
         w_assert0(runFile->length > sizeof(RunFooter));
         off_t footer_offset = runFile->length - sizeof(RunFooter);
         RunFooter footer = *(reinterpret_cast<RunFooter*>(runFile->getOffset(footer_offset)));
+        run.maxPID = footer.maxPID;
         // Get offset of first index entry
         w_assert0(runFile->length > footer.index_begin);
         w_assert0(runFile->length > sizeof(RunFooter) + footer.index_size);

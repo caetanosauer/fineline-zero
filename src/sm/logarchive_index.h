@@ -102,11 +102,6 @@ public:
         PageID pid;
     };
 
-    struct RunFooter {
-        uint64_t index_begin;
-        uint64_t index_size;
-    };
-
     struct RunInfo {
         run_number_t begin;
         run_number_t end;

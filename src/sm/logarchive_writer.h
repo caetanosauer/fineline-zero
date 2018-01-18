@@ -25,9 +25,11 @@ private:
 
     AsyncRingBuffer* buf;
     ArchiveIndex* index;
+    unsigned fsyncFrequency;
     run_number_t currentRun;
     unsigned level;
     PageID maxPIDInRun;
+    unsigned appendBlockCount;
 
 public:
     virtual void run();
@@ -43,11 +45,11 @@ public:
         maxPIDInRun = std::numeric_limits<PageID>::min();
     }
 
-    WriterThread(AsyncRingBuffer* writebuf, ArchiveIndex* index, unsigned level)
+    WriterThread(AsyncRingBuffer* writebuf, ArchiveIndex* index, unsigned level, unsigned fsyncFrequency)
         :
-            buf(writebuf), index(index),
+            buf(writebuf), index(index), fsyncFrequency(fsyncFrequency),
             currentRun(0), level(level),
-            maxPIDInRun(std::numeric_limits<PageID>::min())
+            maxPIDInRun(std::numeric_limits<PageID>::min()), appendBlockCount(0)
     {
     }
 
@@ -85,7 +87,8 @@ public:
  */
 class BlockAssembly {
 public:
-    BlockAssembly(ArchiveIndex* index, size_t blockSize, unsigned level = 1, bool compression = true);
+    BlockAssembly(ArchiveIndex* index, size_t blockSize, unsigned level = 1, bool compression = true,
+            unsigned fsyncFrequency = 1);
     virtual ~BlockAssembly();
 
     bool start(run_number_t run);

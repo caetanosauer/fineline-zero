@@ -17,7 +17,7 @@
 
 typedef fixed_lists_mem_t::slot_t slot_t;
 
-const static int DFT_BLOCK_SIZE = 1024 * 1024; // 1MB = 128 pages
+const static int DFT_BLOCK_SIZE = 8 * 1024 * 1024;
 
 LogArchiver::LogArchiver(const sm_options& options)
     : shutdownFlag(false), flushReqLSN(lsn_t::null)
@@ -42,7 +42,8 @@ LogArchiver::LogArchiver(const sm_options& options)
     }
 
     heap = new ArchiverHeap(workspaceSize);
-    blkAssemb = new BlockAssembly(index.get(), archBlockSize, 1 /*level*/, compression);
+    unsigned fsyncFrequency = options.get_bool_option("sm_arch_fsync_frequency", 1);
+    blkAssemb = new BlockAssembly(index.get(), archBlockSize, 1 /*level*/, compression, fsyncFrequency);
 
     merger = nullptr;
     if (options.get_bool_option("sm_archiver_merging", false)) {

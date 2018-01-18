@@ -87,7 +87,6 @@ ArchiveIndex::ArchiveIndex(const sm_options& options)
     w_assert0(bucketSize > 0);
 
     bool reformat = options.get_bool_option("sm_format", false);
-    fsyncFrequency = options.get_bool_option("sm_arch_fsync_frequency", 32);
     directIO = options.get_bool_option("sm_arch_o_direct", false);
     _max_open_files = options.get_int_option("sm_arch_max_open_files", 20);
 
@@ -173,8 +172,6 @@ ArchiveIndex::ArchiveIndex(const sm_options& options)
         // runRecycler.reset(new RunRecycler {replFactor, this});
         // runRecycler->fork();
     }
-
-    appendBlockCount = 0;
 }
 
 ArchiveIndex::~ArchiveIndex()
@@ -318,7 +315,7 @@ rc_t ArchiveIndex::closeCurrentRun(run_number_t currentRun, unsigned level, Page
     return RCOK;
 }
 
-rc_t ArchiveIndex::append(char* data, size_t length, unsigned level)
+void ArchiveIndex::append(char* data, size_t length, unsigned level)
 {
     // Precondition: there is always space for a skip log record at the end (see BlockAssembly::spaceToReserve)
     memcpy(data + length, &logrec_t::get_skip_log(), logrec_t::get_skip_log().length());
@@ -331,14 +328,12 @@ rc_t ArchiveIndex::append(char* data, size_t length, unsigned level)
                 appendPos[level]);
     CHECK_ERRNO(ret);
     appendPos[level] += length;
+}
 
-    // Hack to achieve constant and high bandwidth: fsync every N blocks
-    if (fsyncFrequency > 0 && (++appendBlockCount % fsyncFrequency == 0)) {
-        ret = ::fsync(appendFd[level]);
-        CHECK_ERRNO(ret);
-    }
-
-    return RCOK;
+void ArchiveIndex::fsync(unsigned level)
+{
+    auto ret = ::fsync(appendFd[level]);
+    CHECK_ERRNO(ret);
 }
 
 RunFile* ArchiveIndex::openForScan(const RunId& runid)

@@ -6,13 +6,14 @@
 // CS TODO: use option
 const static int IO_BLOCK_COUNT = 8; // total buffer = 8MB
 
-BlockAssembly::BlockAssembly(ArchiveIndex* index, size_t blockSize, unsigned level, bool compression)
+BlockAssembly::BlockAssembly(ArchiveIndex* index, size_t blockSize, unsigned level, bool compression,
+        unsigned fsyncFrequency)
     : dest(nullptr), lastRun(0), currentPID(0), blockSize(blockSize), level(level), enableCompression(compression),
     maxPID(std::numeric_limits<PageID>::min())
 {
     archIndex = index;
     writebuf = new AsyncRingBuffer(blockSize, IO_BLOCK_COUNT);
-    writer = new WriterThread(writebuf, index, level);
+    writer = new WriterThread(writebuf, index, level, fsyncFrequency);
     writer->fork();
 
     index->openNewRun(level);
@@ -216,11 +217,16 @@ void WriterThread::run()
         size_t actualBlockSize= blockEnd - sizeof(BlockAssembly::BlockHeader);
         memmove(src, src + sizeof(BlockAssembly::BlockHeader), actualBlockSize);
 
-        W_COERCE(index->append(src, actualBlockSize, level));
+        index->append(src, actualBlockSize, level);
 
         DBGTHRD(<< "Wrote out block " << (void*) src
                 << " in run " << run);
 
         buf->consumerRelease();
+
+        if (fsyncFrequency > 0 && (++appendBlockCount % fsyncFrequency == 0)) {
+            index->fsync(level);
+        }
     }
+    index->fsync(level);
 }

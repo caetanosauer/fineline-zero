@@ -125,7 +125,8 @@ public:
 
     // run generation methods
     rc_t openNewRun(unsigned level);
-    rc_t append(char* data, size_t length, unsigned level);
+    void append(char* data, size_t length, unsigned level);
+    void fsync(unsigned level);
     rc_t closeCurrentRun(run_number_t currentRun, unsigned level, PageID maxPID = 0);
 
     // run scanning methods
@@ -196,7 +197,6 @@ private:
     std::string archdir;
     std::vector<int> appendFd;
     std::vector<off_t> appendPos;
-    size_t appendBlockCount;
 
     fs::path archpath;
 
@@ -230,7 +230,6 @@ private:
     mutable srwlock_t _open_file_mutex;
     size_t _max_open_files;
     bool directIO;
-    unsigned fsyncFrequency;
 
     fs::path make_run_path(run_number_t begin, run_number_t end, unsigned level = 1) const;
     fs::path make_current_run_path(unsigned level) const;

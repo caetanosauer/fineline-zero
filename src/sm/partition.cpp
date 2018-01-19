@@ -237,6 +237,7 @@ void partition_t::open()
     fd = ::open(fname.c_str(), flags, 0744 /*mode*/);
     CHECK_ERRNO(fd);
     auto res = ::ftruncate(fd, _max_partition_size);
+    CHECK_ERRNO(res);
     w_assert3(_fhdl == invalid_fhdl);
     _fhdl = fd;
     _readbuf = reinterpret_cast<char*>(

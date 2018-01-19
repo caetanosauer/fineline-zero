@@ -147,7 +147,6 @@ shared_ptr<partition_t> log_storage::get_partition(partition_number_t n) const
 
 shared_ptr<partition_t> log_storage::create_partition(partition_number_t pnum)
 {
-    // we should also free up if necessary, as done in close_min
     auto p = get_partition(pnum);
     if (p) {
         W_FATAL_MSG(eINTERNAL, << "Partition " << pnum << " already exists");

@@ -1,10 +1,11 @@
 #include "genarchive.h"
 #include "log_core.h"
+#include "xct_logger.h"
 
 #include <fstream>
 
 // CS TODO: LA metadata -- should be serialized on run files
-const size_t BLOCK_SIZE = 1048576;
+const size_t BLOCK_SIZE = 8*1024*1024;
 
 void GenArchive::setupOptions()
 {
@@ -32,6 +33,10 @@ void GenArchive::run()
     log_core* log = new log_core(opt);
     W_COERCE(log->init());
     smlevel_0::log = log;
+    // CS TODO: little hack -- empty log causes file not found in archiveUntilLSN
+    Logger::log_sys<comment_log>("o hi there");
+    W_COERCE(log->flush_all());
+
     LogArchiver* la = new LogArchiver(opt);;
 
     lsn_t durableLSN = log->durable_lsn();

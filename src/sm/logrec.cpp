@@ -152,7 +152,7 @@ logrec_t::logrec_t(kind_t kind)
     header._type = kind;
     header._pid = 0;
     header._page_version = 0;
-    set_size(sizeof(baseLogHeader));
+    set_size(0);
 }
 
 void logrec_t::init_header(kind_t type, PageID pid)

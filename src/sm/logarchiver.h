@@ -53,7 +53,7 @@ class ArchiverHeap {
         ArchiverHeap(size_t workspaceSize);
         virtual ~ArchiverHeap();
 
-        bool push(logrec_t* lr, run_number_t run, bool duplicate);
+        bool push(logrec_t* lr, run_number_t run);
         logrec_t* top();
         void pop();
 
@@ -233,7 +233,7 @@ private:
 
     void replacement();
     bool selection();
-    void pushIntoHeap(logrec_t*, run_number_t run, bool duplicate);
+    void pushIntoHeap(logrec_t*, run_number_t run);
     bool processFlushRequest();
 
 };

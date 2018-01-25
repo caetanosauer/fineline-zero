@@ -62,7 +62,6 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 /*  -- do not edit anything above this line --   </std-header>*/
 
 class rangeset_t;
-struct multi_page_log_t;
 class RestoreBitmap;
 class xct_t;
 
@@ -127,11 +126,11 @@ enum kind_t {
     btree_ghost_reclaim_log = 36,
     btree_ghost_reserve_log = 37,
     btree_foster_adopt_log = 38,
-    // t_btree_foster_merge = 39,
+    btree_unset_foster_log = 39,
     // t_btree_foster_rebalance = 40,
     // t_btree_foster_rebalance_norec = 41,
     // t_btree_foster_deadopt = 42,
-    btree_split_log = 43,
+    btree_bulk_delete_log = 43,
     btree_compress_page_log = 44,
     tick_sec_log = 45,
     tick_msec_log = 46,
@@ -139,30 +138,6 @@ enum kind_t {
     page_write_log = 48,
     page_read_log = 49,
     t_max_logrec = 50
-};
-
-/**
- * \brief Base struct for log records that touch multi-pages.
- * \ingroup SSMLOG
- * \details
- * Such log records are so far _always_ single-log system transaction that touches 2 pages.
- * If possible, such log record should contain everything we physically need to recover
- * either page without the other page. This is an important property
- * because otherwise it imposes write-order-dependency and a careful recovery.
- * In such a case "page2" is the data source page while "page" is the data destination page.
- * \NOTE a REDO operation of multi-page log must expect _either_ of page/page2 are given.
- * It must first check if which page is requested to recover, then apply right changes
- * to the page.
- */
-struct multi_page_log_t {
-
-    /** Page ID of another page touched by the operation. */
-    PageID     _page2_pid; // +4
-
-    uint32_t _page2_version;
-
-    multi_page_log_t(PageID page2_pid) : _page2_pid(page2_pid) {
-    }
 };
 
 /**
@@ -191,9 +166,7 @@ public:
     bool             is_skip() const;
     bool             is_undo() const;
     bool             is_cpsn() const;
-    bool             is_multi_page() const;
     bool             is_system() const;
-    bool             is_single_sys_xct() const;
     bool             valid_header() const;
     smsize_t         header_size() const;
 
@@ -224,7 +197,6 @@ public:
     tid_t   tid() const;
     StoreID        stid() const;
     PageID         pid() const;
-    PageID         pid2() const;
 
     // Gives an initialized skip log record
     static const logrec_t& get_skip_log();
@@ -243,10 +215,6 @@ public:
     static const char*   get_type_str(kind_t);
     const char*          data() const;
     char*                data();
-    /** Returns the log record data as a multi-page SSX log. */
-    multi_page_log_t*           data_multi();
-    /** Const version */
-    const multi_page_log_t*     data_multi() const;
 
     uint32_t page_version() const
     {
@@ -258,27 +226,14 @@ public:
         header._page_version = version;
     }
 
-    uint32_t page2_version() const
-    {
-        return data_multi()->_page2_version;
-    }
-
-    void set_page2_version(uint32_t version)
-    {
-        data_multi()->_page2_version = version;
-    }
-
     void                 corrupt();
-
-    void remove_info_for_pid(PageID pid);
 
     // Tells whether this log record restores a full page image, meaning
     // that the previous history is not needed during log replay.
     bool has_page_img(PageID page_id)
     {
         return
-            (type() == btree_split_log && page_id == pid())
-            || (type() == page_img_format_log)
+             (type() == page_img_format_log)
             || (type() == stnode_format_log)
             || (type() == alloc_format_log)
             ;
@@ -295,11 +250,6 @@ public:
         t_undo      = 0x02,
         /** log with REDO action? */
         t_redo      = 0x04,
-        /** log for multi pages? */
-        t_multi     = 0x08,
-
-        /** log by system transaction which is fused with begin/commit record. */
-        t_single_sys_xct    = 0x80
     };
 
     u_char             cat() const;
@@ -487,14 +437,6 @@ logrec_t::pid() const
     return header._pid;
 }
 
-inline PageID logrec_t::pid2() const
-{
-    if (!is_multi_page()) { return 0; }
-
-    const multi_page_log_t* multi_log = reinterpret_cast<const multi_page_log_t*> (data());
-    return multi_log->_page2_pid;
-}
-
 inline smsize_t
 logrec_t::length() const
 {
@@ -525,11 +467,6 @@ logrec_t::is_redo() const
     return (cat() & t_redo) != 0;
 }
 
-inline bool logrec_t::is_multi_page() const {
-    return (cat() & t_multi) != 0;
-}
-
-
 inline bool
 logrec_t::is_skip() const
 {
@@ -549,21 +486,6 @@ logrec_t::is_page_update() const
     // page update. In fact every check of in_page_update() is or'ed with
     // is_cpsn()
     return is_redo() && !is_cpsn();
-}
-
-inline bool
-logrec_t::is_single_sys_xct() const
-{
-    return (cat() & t_single_sys_xct) != 0;
-}
-
-inline multi_page_log_t* logrec_t::data_multi() {
-    w_assert1(is_multi_page());
-    return reinterpret_cast<multi_page_log_t*>(data());
-}
-inline const multi_page_log_t* logrec_t::data_multi() const {
-    w_assert1(is_multi_page());
-    return reinterpret_cast<const multi_page_log_t*>(data());
 }
 
 constexpr u_char logrec_t::get_logrec_cat(kind_t type)
@@ -591,24 +513,25 @@ constexpr u_char logrec_t::get_logrec_cat(kind_t type)
 	case fetch_page_log : return t_system;
 	case xct_end_log : return t_system;
 
-	case alloc_page_log : return t_redo|t_single_sys_xct;
-	case stnode_format_log : return t_redo|t_single_sys_xct;
-	case alloc_format_log : return t_redo|t_single_sys_xct;
-	case dealloc_page_log : return t_redo|t_single_sys_xct;
-	case create_store_log : return t_redo|t_single_sys_xct;
-	case append_extent_log : return t_redo|t_single_sys_xct;
-	case page_img_format_log : return t_redo|t_single_sys_xct;
-	case update_emlsn_log : return t_redo|t_single_sys_xct;
+	case alloc_page_log : return t_redo;
+	case stnode_format_log : return t_redo;
+	case alloc_format_log : return t_redo;
+	case dealloc_page_log : return t_redo;
+	case create_store_log : return t_redo;
+	case append_extent_log : return t_redo;
+	case page_img_format_log : return t_redo;
+	case update_emlsn_log : return t_redo;
 	case btree_insert_log : return t_redo|t_undo;
 	case btree_insert_nonghost_log : return t_redo|t_undo;
 	case btree_update_log : return t_redo|t_undo;
 	case btree_overwrite_log : return t_redo|t_undo;
 	case btree_ghost_mark_log : return t_redo|t_undo;
-	case btree_ghost_reclaim_log : return t_redo|t_single_sys_xct;
-	case btree_ghost_reserve_log : return t_redo|t_single_sys_xct;
-	case btree_foster_adopt_log : return t_redo|t_multi|t_single_sys_xct;
-	case btree_split_log : return t_redo|t_multi|t_single_sys_xct;
-	case btree_compress_page_log : return t_redo|t_single_sys_xct;
+	case btree_ghost_reclaim_log : return t_redo;
+	case btree_ghost_reserve_log : return t_redo;
+	case btree_foster_adopt_log : return t_redo;
+	case btree_unset_foster_log : return t_redo;
+	case btree_bulk_delete_log : return t_redo;
+	case btree_compress_page_log : return t_redo;
 
         default: return t_bad_cat;
     }

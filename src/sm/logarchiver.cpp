@@ -171,7 +171,7 @@ slot_t ArchiverHeap::allocate(size_t length)
     return dest;
 }
 
-bool ArchiverHeap::push(logrec_t* lr, run_number_t run, bool duplicate)
+bool ArchiverHeap::push(logrec_t* lr, run_number_t run)
 {
     w_assert1(lr->valid_header());
     slot_t dest = allocate(lr->length());
@@ -184,39 +184,6 @@ bool ArchiverHeap::push(logrec_t* lr, run_number_t run, bool duplicate)
     PageID pid = lr->pid();
     auto version = lr->page_version();
     memcpy(dest.address, lr, lr->length());
-
-    // CS: Multi-page log records are replicated so that each page can be
-    // recovered from the log archive independently.  Note that this is not
-    // required for Restart or Single-page recovery because following the
-    // per-page log chain of both pages eventually lands on the same multi-page
-    // log record. For restore, it must be duplicated because log records are
-    // sorted and there is no chain.
-    if (duplicate) {
-        auto lr2 = reinterpret_cast<logrec_t*>(dest.address);
-        // If we have to duplciate the log record, make sure there is room by
-        // calling recursively without duplication. Note that the original
-        // contents were already saved with the memcpy operation above.
-        auto pid2 = lr->pid2();
-        auto version2 = lr->page2_version();
-        auto orig_len = lr->length();
-        lr2->remove_info_for_pid(lr->pid());
-        lr2->set_pid(pid2);
-        lr2->set_page_version(version2);
-        w_assert1(lr2->valid_header());
-        // w_assert1(lr->valid_header(lsn));
-        if (!push(lr2, run, false)) {
-            // If duplicated did not fit, then insertion of the original must
-            // also fail. We have to free its memory from the workspace. Since
-            // nothing was added to the heap yet, it stays untouched.
-            W_COERCE(workspace->free(dest));
-            return false;
-        }
-        // now that a compressed log record of pid2 has been pushed, compress
-        // this log record, i.e., of pid1. Must copy into scratch memory,
-        // because lr is coming from unmodifiable mmaped memory.
-        memcpy(dest.address, lr, lr->length());
-        lr2->remove_info_for_pid(lr2->pid2());
-    }
 
     //DBGTHRD(<< "Processing logrec " << lr->lsn_ck() << ", type " <<
     //        lr->type() << "(" << lr->type_str() << ") length " <<
@@ -315,13 +282,13 @@ void LogArchiver::replacement()
         w_assert1(lr->valid_header());
         w_assert1(lsn.hi() > 0);
         const run_number_t run = lsn.hi();
-        pushIntoHeap(lr, run, lr->is_multi_page());
+        pushIntoHeap(lr, run);
     }
 }
 
-void LogArchiver::pushIntoHeap(logrec_t* lr, run_number_t run, bool duplicate)
+void LogArchiver::pushIntoHeap(logrec_t* lr, run_number_t run)
 {
-    while (!heap->push(lr, run, duplicate)) {
+    while (!heap->push(lr, run)) {
         if (heap->size() == 0) {
             W_FATAL_MSG(fcINTERNAL,
                     << "Heap empty but push not possible!");

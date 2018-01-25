@@ -353,29 +353,30 @@ struct LogrecHandler<btree_ghost_reserve_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_split_log, PagePtr>
+struct LogrecHandler<btree_bulk_delete_log, PagePtr>
 {
     static void redo(logrec_t* lr, PagePtr p)
     {
         btree_bulk_delete_t* bulk = (btree_bulk_delete_t*) lr->data();
-        page_img_format_t* format = (page_img_format_t*)
-            (lr->data() + bulk->size());
 
-        if (p->pid() == bulk->new_foster_child) {
-            // redoing the foster child
-            format->apply(p->get_generic_page());
-        }
-        else {
-            // redoing the foster parent
-            borrowed_btree_page_h bp(p);
-            w_assert1(bp.nrecs() > bulk->move_count);
-            bp.delete_range(bp.nrecs() - bulk->move_count, bp.nrecs());
+        borrowed_btree_page_h bp(p);
+        w_assert1(bp.nrecs() > bulk->move_count);
+        bp.delete_range(bp.nrecs() - bulk->move_count, bp.nrecs());
 
-            w_keystr_t new_high_fence, new_chain;
-            bulk->get_keys(new_high_fence, new_chain);
+        w_keystr_t new_high_fence, new_chain;
+        bulk->get_keys(new_high_fence, new_chain);
 
-            bp.set_foster_child(bulk->new_foster_child, new_high_fence, new_chain);
-        }
+        bp.set_foster_child(bulk->new_foster_child, new_high_fence, new_chain);
+    }
+};
+
+template <class PagePtr>
+struct LogrecHandler<btree_unset_foster_log, PagePtr>
+{
+    static void redo(logrec_t* lr, PagePtr p)
+    {
+        borrowed_btree_page_h bp(p);
+        btree_impl::_ux_adopt_foster_apply_child(bp);
     }
 };
 
@@ -384,26 +385,15 @@ struct LogrecHandler<btree_foster_adopt_log, PagePtr>
 {
     static void redo(logrec_t* lr, PagePtr p)
     {
-        w_assert1(lr->is_single_sys_xct());
         borrowed_btree_page_h bp(p);
-        btree_foster_adopt_t *dp = reinterpret_cast<btree_foster_adopt_t*>(
-                lr->data());
+        btree_foster_adopt_t *dp = reinterpret_cast<btree_foster_adopt_t*>(lr->data());
 
+        PageID target_pid = p->pid();
         w_keystr_t new_child_key;
         new_child_key.construct_from_keystr(dp->_data, dp->_new_child_key_len);
 
-        PageID target_pid = p->pid();
-        DBGOUT3 (<< *lr << " target_pid=" << target_pid << ", new_child_pid="
-                << dp->_new_child_pid << ", new_child_key=" << new_child_key);
-        if (target_pid == dp->_page2_pid) {
-            // we are recovering "page2", which is real-child.
-            w_assert0(target_pid == dp->_page2_pid);
-            btree_impl::_ux_adopt_foster_apply_child(bp);
-        } else {
-            // we are recovering "page", which is real-parent.
-            btree_impl::_ux_adopt_foster_apply_parent(bp, dp->_new_child_pid,
-                    dp->_new_child_emlsn, new_child_key);
-        }
+        btree_impl::_ux_adopt_foster_apply_parent(bp, dp->_new_child_pid,
+                dp->_new_child_emlsn, new_child_key);
     }
 };
 

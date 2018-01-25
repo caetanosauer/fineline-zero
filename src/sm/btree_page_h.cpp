@@ -97,9 +97,6 @@ bool btree_page_h::set_foster_child(PageID foster_child_pid,
 }
 
 void btree_page_h::accept_empty_child(uint32_t new_version, PageID new_page_id, const bool f_redo) {
-    // If called from Recovery, i.e. btree_norec_alloc_log::redo, do not check for
-    // is_single_log_sys_xct(), the transaction flags are not setup properly
-
     // Base the checking on passed in parameter instead of system flag smlevel_0::in_recovery(),
     // because we will be doing on-demand redo/undo during recovery,
     // therefore the system flag itself is not sufficient to indicate the type of the caller

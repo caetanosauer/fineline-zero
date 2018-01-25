@@ -122,8 +122,10 @@ logrec_t::get_type_str(kind_t type)
 		return "btree_ghost_reserve";
 	case btree_foster_adopt_log :
 		return "btree_foster_adopt";
-	case btree_split_log :
-		return "btree_split";
+	case btree_unset_foster_log :
+		return "btree_unset_foster";
+	case btree_bulk_delete_log :
+		return "btree_bulk_delete";
 	case btree_compress_page_log :
 		return "btree_compress_page";
 	case tick_sec_log :
@@ -244,8 +246,11 @@ void logrec_t::redo(PagePtr page)
 	case btree_foster_adopt_log :
                 LogrecHandler<btree_foster_adopt_log, PagePtr>::redo(this, page);
 		break;
-	case btree_split_log :
-                LogrecHandler<btree_split_log, PagePtr>::redo(this, page);
+	case btree_unset_foster_log :
+                LogrecHandler<btree_unset_foster_log, PagePtr>::redo(this, page);
+		break;
+	case btree_bulk_delete_log :
+                LogrecHandler<btree_bulk_delete_log, PagePtr>::redo(this, page);
 		break;
 	case btree_compress_page_log :
                 LogrecHandler<btree_compress_page_log, PagePtr>::redo(this, page);
@@ -315,36 +320,6 @@ logrec_t::corrupt()
     memset(start_of_corruption, 0, bytes_to_corrupt);
 }
 
-void logrec_t::remove_info_for_pid(PageID pid)
-{
-    w_assert1(is_multi_page());
-    w_assert1(pid == this->pid() || pid == pid2());
-
-    if (type() == btree_split_log) {
-        size_t img_offset = reinterpret_cast<btree_bulk_delete_t*>(data())->size();
-        char* img = data() + img_offset;
-        size_t img_size = reinterpret_cast<page_img_format_t*>(img)->size();
-        char* end = reinterpret_cast<char*>(this) + length();
-
-        if (pid == this->pid()) {
-            // just cut off 2nd half of logrec (page_img)
-            set_size(img_offset);
-        }
-        else if (pid == pid2()) {
-            // Use empty bulk delete and move page img
-            // CS TODO: create a normal page_img_format log record
-            btree_bulk_delete_t* bulk = new (data()) btree_bulk_delete_t(pid2(),
-                    this->pid());
-            ::memmove(data() + bulk->size(), img, end - img);
-            set_size(bulk->size() + img_size);
-        }
-    }
-
-    w_assert1(valid_header());
-}
-
-
-
 /*********************************************************************
  *
  *  operator<<(ostream, logrec)
@@ -362,10 +337,6 @@ operator<<(ostream& o, logrec_t& l)
     o << " len=" << l.length();
     o << " pid=" << l.pid();
     o << " pversion=" << l.page_version();
-    if (l.is_multi_page()) {
-        o << " pid2=" << l.pid2();
-        o << " p2version=" << l.page2_version();
-    }
 
     switch(l.type()) {
         case comment_log :

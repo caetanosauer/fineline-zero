@@ -41,7 +41,7 @@ LogArchiver::LogArchiver(const sm_options& options)
         }
     }
 
-    heap = new ArchiverHeap(workspaceSize);
+    heap = new ArchiverHeapSimple();
     unsigned fsyncFrequency = options.get_bool_option("sm_arch_fsync_frequency", 1);
     blkAssemb = new BlockAssembly(index.get(), archBlockSize, 1 /*level*/, compression, fsyncFrequency);
 
@@ -219,6 +219,40 @@ void ArchiverHeap::pop()
 logrec_t* ArchiverHeap::top()
 {
     logrec_t* lr = (logrec_t*) w_heap.First().slot.address;
+    w_assert1(lr->valid_header());
+    return lr;
+}
+
+bool ArchiverHeapSimple::push(logrec_t* lr, run_number_t run)
+{
+    w_assert1(lr->valid_header());
+    // 10 million records (assuming avg 100B per record == 1GB heap) TODO: parametrize this
+    constexpr size_t maxHeapSize = 10 * 1000 * 1000;
+    if (w_heap.NumElements() >= maxHeapSize) {
+        return false;
+    }
+
+    //DBGTHRD(<< "Processing logrec " << lr->lsn_ck() << ", type " <<
+    //        lr->type() << "(" << lr->type_str() << ") length " <<
+    //        lr->length() << " into run " << (int) currentRun);
+
+    // insert key and pointer into w_heap
+    HeapEntry k(run, lr);
+
+    // CS: caution: AddElementDontHeapify does NOT work!!!
+    w_heap.AddElement(k);
+
+    return true;
+}
+
+void ArchiverHeapSimple::pop()
+{
+    w_heap.RemoveFirst();
+}
+
+logrec_t* ArchiverHeapSimple::top()
+{
+    logrec_t* lr = (logrec_t*) w_heap.First().lr;
     w_assert1(lr->valid_header());
     return lr;
 }

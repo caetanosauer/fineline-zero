@@ -97,6 +97,59 @@ class ArchiverHeap {
 };
 
 /**
+ * Version of ArchiverHeap that does not use an internal memory manager, instead storing the given
+ * logrec_t pointers directly. Works very well if the log is scanned with mmap.
+ * Only stores log records of a single run! (i.e., no run number in heap entries)
+ */
+class ArchiverHeapSimple
+{
+public:
+    ArchiverHeapSimple() : w_heap{heapCmp} {};
+
+    logrec_t* top();
+    void pop();
+    run_number_t topRun() { return w_heap.First().run; }
+    size_t size() { return w_heap.NumElements(); }
+    bool push(logrec_t* lr, run_number_t run);
+
+private:
+    struct HeapEntry {
+        logrec_t* lr;
+        // Normalized key -- TODO
+        // uint64_t key;
+        PageID pid;
+        uint32_t version;
+        run_number_t run;
+
+        HeapEntry() : lr{nullptr}, pid{0}, version{0}, run{0} {};
+
+        HeapEntry(run_number_t run, logrec_t* lr) : lr{lr}, pid{lr->pid()}, version{lr->page_version()}, run{run}
+        {
+            // // page version (4B)
+            // key = static_cast<uint64_t>(lr->version());
+            // // page id (4B)
+            // key &= (static_cast<uint64_t>(lr->pid()) << 32);
+        }
+
+        struct Cmp {
+            bool gt(const HeapEntry& a, const HeapEntry& b) const {
+                if (a.run != b.run) {
+                    return a.run < b.run;
+                }
+                if (a.pid != b.pid) {
+                    return a.pid< b.pid;
+                }
+                return a.version < b.version;
+            }
+        };
+    };
+
+    HeapEntry::Cmp heapCmp;
+    Heap<HeapEntry, HeapEntry::Cmp> w_heap;
+    // std::vector<HeapEntry> entries;
+};
+
+/**
  * Basic service to merge existing log archive runs into larger ones.
  * Currently, the merge logic only supports the *very limited* use case of
  * merging all N run files into a smaller n, depending on a given fan-in
@@ -221,7 +274,7 @@ public:
 
 private:
     std::shared_ptr<ArchiveIndex> index;
-    ArchiverHeap* heap;
+    ArchiverHeapSimple* heap;
     BlockAssembly* blkAssemb;
     MergerDaemon* merger;
 

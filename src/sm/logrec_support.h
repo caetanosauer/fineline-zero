@@ -206,63 +206,21 @@ struct btree_ghost_reserve_t {
     int size() { return sizeof(uint16_t) * 2 + klen; }
 };
 
-/**
- * A \b multi-page \b SSX log record for \b btree_norec_alloc.
- * This log is totally \b self-contained, so no WOD assumed.
- */
-template <class PagePtr>
-struct btree_norec_alloc_t : public multi_page_log_t {
-    btree_norec_alloc_t(const PagePtr p,
-        PageID new_page_id, const w_keystr_t& fence, const w_keystr_t& chain_fence_high)
-        : multi_page_log_t(new_page_id)
-    {
-        w_assert1 (smthread_t::xct()->is_sys_xct());
-        w_assert1 (new_page_id != p->btree_root());
-        w_assert1 (p->latch_mode() != LATCH_NL);
-
-        _root_pid       = p->btree_root();
-        _foster_pid     = p->get_foster();
-        _foster_emlsn   = p->get_foster_emlsn();
-        _fence_len      = (uint16_t) fence.get_length_as_keystr();
-        _chain_high_len = (uint16_t) chain_fence_high.get_length_as_keystr();
-        _btree_level    = (int16_t) p->level();
-        w_assert1(size() < logrec_t::max_data_sz);
-
-        fence.serialize_as_keystr(_data);
-        chain_fence_high.serialize_as_keystr(_data + _fence_len);
-    }
-    PageID     _root_pid, _foster_pid;       // +4+4 => 8
-    lsn_t       _foster_emlsn;                // +8   => 16
-    uint16_t    _fence_len, _chain_high_len;  // +2+2 => 20
-    int16_t     _btree_level;                 // +2   => 22
-    /** fence key and chain-high key. */
-    char        _data[logrec_t::max_data_sz - sizeof(multi_page_log_t) - 22];
-
-    int      size() const {
-        return sizeof(multi_page_log_t) + 22 + _fence_len + _chain_high_len;
-    }
-};
-
-/**
- * A \b multi-page \b SSX log record for \b btree_foster_adopt.
- * This log is totally \b self-contained, so no WOD assumed.
- */
-struct btree_foster_adopt_t : multi_page_log_t {
+struct btree_foster_adopt_t {
     lsn_t   _new_child_emlsn;   // +8
     PageID _new_child_pid;     // +4
     int16_t _new_child_key_len; // +2
-    char    _data[logrec_t::max_data_sz - sizeof(multi_page_log_t) - 14];
+    char    _data[logrec_t::max_data_sz - 14];
 
-    btree_foster_adopt_t(PageID page2_id, PageID new_child_pid,
+    btree_foster_adopt_t(PageID new_child_pid,
                          lsn_t new_child_emlsn, const w_keystr_t& new_child_key)
-    : multi_page_log_t(page2_id), _new_child_emlsn(new_child_emlsn),
-    _new_child_pid (new_child_pid)
+    : _new_child_emlsn(new_child_emlsn), _new_child_pid (new_child_pid)
     {
         _new_child_key_len = new_child_key.get_length_as_keystr();
         new_child_key.serialize_as_keystr(_data);
     }
 
-    int size() const { return sizeof(multi_page_log_t) + 14 + _new_child_key_len; }
+    int size() const { return 14 + _new_child_key_len; }
 };
 
 /**
@@ -270,7 +228,7 @@ struct btree_foster_adopt_t : multi_page_log_t {
  * foster parent). Deletes the last move_count slots on the page, updating
  * the foster child pointer and the high fence key to the given values.
  */
-struct btree_bulk_delete_t : public multi_page_log_t {
+struct btree_bulk_delete_t {
     uint16_t move_count;
     uint16_t new_high_fence_len;
     uint16_t new_chain_len;
@@ -279,17 +237,16 @@ struct btree_bulk_delete_t : public multi_page_log_t {
     PageID new_foster_child;
 
     enum {
-        fields_sz = sizeof(multi_page_log_t)
-            + sizeof(uint16_t) * 4 // 3 uints + fill
+        fields_sz =
+            sizeof(uint16_t) * 4 // 3 uints + fill
             + sizeof(PageID)
     };
     char _data[logrec_t::max_data_sz - fields_sz];
 
-    btree_bulk_delete_t(PageID foster_parent, PageID new_foster_child,
+    btree_bulk_delete_t(PageID new_foster_child,
             uint16_t move_count, const w_keystr_t& new_high_fence,
             const w_keystr_t& new_chain)
-        :   multi_page_log_t(foster_parent),
-            move_count(move_count), new_foster_child(new_foster_child)
+        :   move_count(move_count), new_foster_child(new_foster_child)
     {
         new_high_fence_len = new_high_fence.get_length_as_keystr();
         new_chain_len = new_chain.get_length_as_keystr();
@@ -299,8 +256,7 @@ struct btree_bulk_delete_t : public multi_page_log_t {
     }
 
     // Constructs empty logrec
-    btree_bulk_delete_t(PageID foster_parent, PageID foster_child) :
-        multi_page_log_t(foster_parent),
+    btree_bulk_delete_t(PageID foster_child) :
         move_count(0), new_high_fence_len(0), new_chain_len(0), new_foster_child(foster_child)
     {}
 

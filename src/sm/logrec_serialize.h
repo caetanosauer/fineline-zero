@@ -271,7 +271,6 @@ struct LogrecSerializer<btree_ghost_reclaim_log>
     {
         lr->set_size((new (lr->data()) btree_ghost_t<PagePtr>(p, slots,
                         false))->size());
-        w_assert0(lr->is_single_sys_xct());
     }
 
     template <typename PagePtr, typename... T>
@@ -289,7 +288,6 @@ struct LogrecSerializer<btree_ghost_reserve_log>
     {
         lr->set_size((new (lr->data()) btree_ghost_reserve_t(key,
                         element_length))->size());
-        w_assert0(lr->is_single_sys_xct());
     }
 
     template <typename PagePtr, typename... T>
@@ -300,32 +298,24 @@ struct LogrecSerializer<btree_ghost_reserve_log>
 };
 
 template <>
-struct LogrecSerializer<btree_split_log>
+struct LogrecSerializer<btree_bulk_delete_log>
 {
     template <typename PagePtr>
-    static void construct (logrec_t* lr, PagePtr child_p, PagePtr parent_p,
+    static void construct (logrec_t* lr, PagePtr p, PageID new_foster_child,
             uint16_t move_count, const w_keystr_t& new_high_fence,
             const w_keystr_t& new_chain)
     {
-        // If you change this, please make according adjustments in
-        // logrec_t::remove_info_for_pid
         btree_bulk_delete_t* bulk =
-            new (lr->data()) btree_bulk_delete_t(parent_p->pid(),
-                    child_p->pid(), move_count,
+            new (lr->data()) btree_bulk_delete_t(
+                    new_foster_child, move_count,
                     new_high_fence, new_chain);
-        page_img_format_t* format = new (lr->data() + bulk->size())
-            page_img_format_t(child_p->get_generic_page());
-
-        // Logrec will have the child pid as main pid (i.e., destination page).
-        // Parent pid is stored in btree_bulk_delete_t, which is a
-        // multi_page_log_t (i.e., source page)
-        lr->set_size(bulk->size() + format->size());
+        lr->set_size(bulk->size());
     }
 
     template <typename PagePtr, typename... T>
-    static void serialize(PagePtr p1, PagePtr p2, logrec_t* lr, const T&... fields)
+    static void serialize(PagePtr p, logrec_t* lr, const T&... fields)
     {
-        construct(lr, p1, p2, fields...);
+        construct(lr, p, fields...);
     }
 };
 
@@ -333,19 +323,19 @@ template <>
 struct LogrecSerializer<btree_foster_adopt_log>
 {
     template <typename PagePtr>
-    static void construct (logrec_t* lr, PagePtr /*unused*/, PagePtr p2,
+    static void construct (logrec_t* lr, PagePtr p,
             PageID new_child_pid, lsn_t new_child_emlsn, const w_keystr_t&
             new_child_key)
     {
-        lr->set_size((new (lr->data()) btree_foster_adopt_t( p2->pid(),
+        lr->set_size((new (lr->data()) btree_foster_adopt_t(
                         new_child_pid, new_child_emlsn,
                         new_child_key))->size());
     }
 
     template <typename PagePtr, typename... T>
-    static void serialize(PagePtr p1, PagePtr p2, logrec_t* lr, const T&... fields)
+    static void serialize(PagePtr p, logrec_t* lr, const T&... fields)
     {
-        construct(lr, p1, p2, fields...);
+        construct(lr, p, fields...);
     }
 };
 

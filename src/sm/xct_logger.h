@@ -34,15 +34,6 @@ public:
         }
     }
 
-    template <kind_t LR, class PagePtr, class... Args>
-    static void log_p(PagePtr p, PagePtr p2, const Args&... args)
-    {
-        p->incr_version();
-        p2->incr_version();
-        // w_assert1(!logrec->is_undo());
-        return;
-    }
-
     /// This Logger still generates system log records
     template <kind_t LR, class... Args>
     static lsn_t log_sys(const Args&... args)
@@ -130,32 +121,6 @@ public:
         }
     }
 
-    template <kind_t LR, class PagePtr, class... Args>
-    static void log_p(PagePtr p, PagePtr p2, const Args&... args)
-    {
-        xct_t* xd = smthread_t::xct();
-        auto redobuf = smthread_t::get_redo_buf();
-        char* dest = redobuf->acquire();
-        w_assert0(dest);
-        auto logrec = reinterpret_cast<logrec_t*>(dest);
-        logrec->init_header(LR, p->pid());
-        LogrecSerializer<LR>::serialize(p, p2, logrec, args...);
-        w_assert1(logrec->valid_header());
-
-        w_assert1(logrec->is_multi_page());
-        w_assert1(logrec->is_single_sys_xct());
-        multi_page_log_t *multi = logrec->data_multi();
-        w_assert1(multi->_page2_pid != 0);
-
-        _update_page_version(p, logrec);
-        _update_page_version(p2, logrec);
-        redobuf->release(logrec->length());
-
-        // CS TODO: so far, all multi-page logrecs are redo-only system txns
-        w_assert1(!logrec->is_undo());
-        return;
-    }
-
     /*
      * log_sys is used for system log records (e.g., checkpoints, clock
      * ticks, reads & writes, recovery events, debug stuff, stats, etc.)
@@ -188,12 +153,8 @@ public:
      {
          page->increment_log_volume(lr->length());
          page->incr_version();
-         if (lr->pid() == page->pid()) {
-             lr->set_page_version(page->version());
-         }
-         else { // multi-page logrec
-             lr->set_page2_version(page->version());
-         }
+         w_assert1 (lr->pid() == page->pid());
+         lr->set_page_version(page->version());
      }
 
     template <class PagePtr>

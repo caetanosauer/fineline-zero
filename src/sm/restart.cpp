@@ -40,7 +40,7 @@ void SprIterator::apply(fixable_page_h &p)
             DBGOUT1(<< "SPR page(" << p.pid()
                     << ") version=" << p.version() << ", log=" << *lr);
 
-            w_assert1(pid == lr->pid() || pid == lr->pid2());
+            w_assert1(pid == lr->pid());
             lr->redo(&p);
         }
     }

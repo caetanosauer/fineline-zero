@@ -102,7 +102,8 @@ rc_t btree_impl::_sx_split_foster(btree_page_h& page, PageID& new_page_id,
     /*
      * Step 5: Log bulk deletion and foster update on parent
      */
-    Logger::log_p<btree_split_log>(&new_page, &page, move_count, split_key, new_chain);
+    Logger::log_p<btree_bulk_delete_log>(&page, new_page_id, move_count, split_key, new_chain);
+    Logger::log_p<page_img_format_log>(&new_page);
 
     w_assert1(new_page.version() > 0);
 
@@ -210,7 +211,8 @@ rc_t btree_impl::_ux_adopt_foster_core (btree_page_h &parent, btree_page_h &chil
     w_assert1(!smlevel_0::bf->is_swizzled_pointer(new_child_pid));
 
     lsn_t child_emlsn = child.get_foster_emlsn();
-    Logger::log_p<btree_foster_adopt_log> (&parent, &child, new_child_pid, child_emlsn, new_child_key);
+    Logger::log_p<btree_foster_adopt_log>(&parent, new_child_pid, child_emlsn, new_child_key);
+    Logger::log_p<btree_unset_foster_log>(&child);
     _ux_adopt_foster_apply_parent (parent, new_child_pid, child_emlsn, new_child_key);
     _ux_adopt_foster_apply_child (child);
 

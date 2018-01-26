@@ -69,14 +69,13 @@ bool BlockAssembly::start(run_number_t run)
         archIndex->startNewRun(level);
         fpos = 0;
         lastRun = run;
+        currentPID = std::numeric_limits<PageID>::max();
     }
 
     pos = sizeof(BlockHeader);
-    currentPID = 0;
     currentPIDpos = pos;
     currentPIDfpos = fpos;
     maxPID = std::numeric_limits<PageID>::min();
-
     buckets.clear();
 
     return true;
@@ -101,7 +100,7 @@ bool BlockAssembly::add(logrec_t* lr)
     }
 
     // New PID coming in: reset current PID stuff and check if it's time to add new bucket
-    if (lr->pid() != currentPID || currentPIDfpos == 0) {
+    if (lr->pid() != currentPID) {
         currentPID = lr->pid();
         currentPIDpos = pos;
         currentPIDfpos = fpos;

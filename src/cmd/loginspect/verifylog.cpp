@@ -46,7 +46,7 @@ void VerifyLog::run()
 }
 
 VerifyHandler::VerifyHandler(bool merge)
-    : minLSN(lsn_t::null), maxLSN(lsn_t::null), lastLSN(lsn_t::null),
+    : minLSN(lsn_t::null), maxLSN(lsn_t::null), lastVersion(0),
     lastPID(0), count(0), merge(merge)
 {
 }
@@ -55,7 +55,7 @@ void VerifyHandler::newFile(const char* /*fname*/)
 {
     // minLSN = LogArchiver::ArchiveDirectory::parseLSN(fname, false);
     // maxLSN = LogArchiver::ArchiveDirectory::parseLSN(fname, true);
-    lastLSN = lsn_t::null;
+    lastVersion = 0;
     lastPID = 0;
 }
 
@@ -121,7 +121,7 @@ void VerifyHandler::invoke(logrec_t& r)
 {
     w_assert0(r.valid_header());
 
-    // lsn_t lsn = r.lsn();
+    auto version = r.page_version();
     PageID pid = r.pid();
 
     if (r.is_redo()) {
@@ -133,13 +133,13 @@ void VerifyHandler::invoke(logrec_t& r)
     if (merge) {
         w_assert0(pid >= lastPID);
         if (pid == lastPID) {
-            // w_assert0(lsn > lastLSN);
+            w_assert0(version > lastVersion);
         }
         // w_assert0(merge || lsn >= minLSN);
         // w_assert0(merge || lsn <= maxLSN);
     }
 
-    // lastLSN = lsn;
+    lastVersion = version;
     lastPID = pid;
 
     count++;

@@ -388,7 +388,6 @@ struct LogrecHandler<btree_foster_adopt_log, PagePtr>
         borrowed_btree_page_h bp(p);
         btree_foster_adopt_t *dp = reinterpret_cast<btree_foster_adopt_t*>(lr->data());
 
-        PageID target_pid = p->pid();
         w_keystr_t new_child_key;
         new_child_key.construct_from_keystr(dp->_data, dp->_new_child_key_len);
 

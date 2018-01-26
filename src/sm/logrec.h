@@ -230,7 +230,7 @@ public:
 
     // Tells whether this log record restores a full page image, meaning
     // that the previous history is not needed during log replay.
-    bool has_page_img(PageID page_id)
+    bool has_page_img()
     {
         return
              (type() == page_img_format_log)

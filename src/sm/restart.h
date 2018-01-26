@@ -55,14 +55,10 @@ public:
     ~SprIterator();
 
     void open(PageID pid);
-
-    bool next(logrec_t*& lr);
-
     void apply(fixable_page_h& page);
 
 private:
     ArchiveScan archive_scan;
-    unsigned replayed_count;
 };
 
 #endif

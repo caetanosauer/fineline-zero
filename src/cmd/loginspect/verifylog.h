@@ -31,7 +31,7 @@ private:
     std::unordered_set<PageID> allocatedPages;
     lsn_t minLSN;
     lsn_t maxLSN;
-    lsn_t lastLSN;
+    uint32_t lastVersion;
     PageID lastPID;
     long count;
     bool merge;

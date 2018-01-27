@@ -232,6 +232,8 @@ rc_t btree_page_h::format_steal(uint32_t            new_version,
     }
 
     // log as one record
+    // Note: this is the only exception of the rule "log before update" (see xct_logger.h),
+    // because we are logging the actual creation of a page with its contents already in place
     if (log_it) {
         Logger::log_p<page_img_format_log>(this);
     }
@@ -1841,6 +1843,10 @@ rc_t btree_page_h::compress(const w_keystr_t& low, const w_keystr_t& high,
 
     DBG(<< "BEFORE COMPRESSION " << *this);
 
+    if (!redo) {
+        Logger::log_p<btree_compress_page_log>(this, low, high, chain);
+    }
+
     size_t diff = prefix_len - old_prefix_len;
     // remove diff bytes from position pos of each key on the page
     // First bytes of data are the key length -- we don't want to
@@ -1869,10 +1875,6 @@ rc_t btree_page_h::compress(const w_keystr_t& low, const w_keystr_t& high,
     DBG(<< "AFTER COMPRESSION " << *this);
 
     w_assert3(is_consistent(true, true));
-
-    if (!redo) {
-        Logger::log_p<btree_compress_page_log>(this, low, high, chain);
-    }
     ssx.end_sys_xct(RCOK);
 
     return RCOK;

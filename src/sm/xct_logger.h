@@ -87,6 +87,7 @@ public:
     {
         xct_t* xd = smthread_t::xct();
         if (_should_apply_img_compression(LR, p)) {
+            // RULE: Always log before applying update, otherwise compression won't work!
             // log this page image as an SX to keep it out of the xct undo chain
             sys_xct_section_t sx;
             log_p<page_img_format_log>(p);

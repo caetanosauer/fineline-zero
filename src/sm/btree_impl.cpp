@@ -582,10 +582,6 @@ btree_impl::_ux_undo_ghost_mark(StoreID store, const w_keystr_t &key)
     smsize_t existing_element_len;
     const char *existing_element = leaf.element(slot, existing_element_len, ghost);
     cvec_t el (existing_element, existing_element_len);
-
-// TODO(Restart)...
-DBGOUT3( << "&&&& btree_impl::_ux_undo_ghost_mark - undo a remove, key: " << key);
-
     Logger::log_p<btree_insert_nonghost_log>(&leaf, key, el);
 
     leaf.unmark_ghost (slot);

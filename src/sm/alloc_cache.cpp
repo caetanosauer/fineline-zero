@@ -135,8 +135,8 @@ rc_t alloc_cache_t::sx_allocate_page(PageID& pid, StoreID stid)
     W_DO(p.fix_direct(alloc_pid, LATCH_EX, conditional, virgin));
     auto page = reinterpret_cast<alloc_page*>(p.get_generic_page());
     w_assert1(!page->get_bit(pid - alloc_pid));
-    page->set_bit(pid - alloc_pid);
     Logger::log_p<alloc_page_log>(&p, pid);
+    page->set_bit(pid - alloc_pid);
 
     W_DO(ssx.end_sys_xct(RCOK));
 
@@ -154,8 +154,8 @@ rc_t alloc_cache_t::sx_format_alloc_page(PageID alloc_pid)
     W_DO(p.fix_direct(alloc_pid, LATCH_EX, conditional, virgin));
 
     auto apage = reinterpret_cast<alloc_page*>(p.get_generic_page());
-    apage->format_empty();
     Logger::log_p<alloc_format_log>(&p);
+    apage->format_empty();
 
     W_DO(ssx.end_sys_xct(RCOK));
     return RCOK;
@@ -166,14 +166,15 @@ rc_t alloc_cache_t::sx_deallocate_page(PageID pid)
     w_assert1(pid % extent_size > 0);
     sys_xct_section_t ssx;
 
+
     // Just unset the corresponding bit in the alloc page
     fixable_page_h p;
     PageID alloc_pid = pid - (pid % extent_size);
     W_DO(p.fix_direct(alloc_pid, LATCH_EX, false, false));
     alloc_page* page = (alloc_page*) p.get_generic_page();
     w_assert1(page->get_bit(pid - alloc_pid));
-    page->unset_bit(pid - alloc_pid);
     Logger::log_p<dealloc_page_log>(&p, pid);
+    page->unset_bit(pid - alloc_pid);
 
     W_DO(ssx.end_sys_xct(RCOK));
     return RCOK;

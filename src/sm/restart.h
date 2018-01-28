@@ -59,6 +59,7 @@ public:
 
 private:
     ArchiveScan archive_scan;
+    bool img_consumed; // Workaround for page-img compression (see comments in cpp)
 };
 
 #endif

@@ -841,7 +841,7 @@ rc_t
 xct_t::commit_free_locks(bool read_lock_only, lsn_t commit_lsn)
 {
     // system transaction doesn't acquire locks
-    if (!is_sys_xct()) {
+    if (!is_sys_xct() && lm) {
         W_COERCE( lm->unlock_duration(read_lock_only, commit_lsn) );
     }
     return RCOK;

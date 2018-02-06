@@ -25,10 +25,8 @@ struct LogrecHandler<stnode_format_log, PagePtr>
 {
     static void redo(logrec_t*, PagePtr p)
     {
-        auto stpage = p->get_generic_page();
-        if (stpage->pid != stnode_page::stpid) {
-            stpage->pid = stnode_page::stpid;
-        }
+        auto stpage = reinterpret_cast<stnode_page*>(p->get_generic_page());
+        stpage->format_empty();
     }
 };
 

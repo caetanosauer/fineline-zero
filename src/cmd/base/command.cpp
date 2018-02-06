@@ -12,6 +12,7 @@
 #include "tracerestore.h"
 #include "archstats.h"
 #include "logrecinfo.h"
+#include "compressfl.h"
 
 #include <boost/foreach.hpp>
 
@@ -49,6 +50,7 @@ void Command::init()
     REGISTER_COMMAND("tracerestore", RestoreTrace);
     REGISTER_COMMAND("logrecinfo", LogrecInfo);
     REGISTER_COMMAND("archstats", ArchStats);
+    REGISTER_COMMAND("compressfl", CompressFl);
 }
 
 void Command::setupCommonOptions()

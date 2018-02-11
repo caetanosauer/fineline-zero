@@ -141,6 +141,18 @@ void fixable_page_h::set_version(uint32_t version)
     _pp->version = version;
 }
 
+uint64_t fixable_page_h::get_epoch() const
+{
+    w_assert1(_pp);
+    return _pp->epoch;
+}
+
+void fixable_page_h::set_epoch(uint64_t epoch)
+{
+    w_assert1(_pp);
+    _pp->epoch = epoch;
+}
+
 void fixable_page_h::set_check_recovery(bool chk)
 {
     w_assert1(_pp);

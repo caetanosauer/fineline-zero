@@ -142,10 +142,12 @@ public:
      */
     bool         is_dirty()  const;
 
-    /// Updates page_lsn field stored in CB of buffered page
     void incr_version();
     void set_version(uint32_t);
     uint32_t get_version() const;
+
+    void set_epoch(uint64_t);
+    uint64_t get_epoch() const;
 
     /// returns log volume in the CB
     uint32_t get_log_volume();

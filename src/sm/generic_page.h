@@ -67,8 +67,8 @@ protected:
     /// Page flags (an OR of page_flag_t's)
     uint16_t         page_flags;   //  +2 -> 24
 
-    /// Reserved for subclass usage
-    uint64_t         reserved;     //  +8 -> 32
+    /// Epoch of the last modification (required for page eviction)
+    uint64_t         epoch;     //  +8 -> 32
 
 public:
     /// Calculate the correct value of checksum for this page.

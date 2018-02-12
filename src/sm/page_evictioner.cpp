@@ -183,19 +183,9 @@ bf_idx page_evictioner_base::pick_victim()
             continue;
         }
 
-        // FINELINE: no-steal mode
-        auto archived_lsn = lsn_t(_bufferpool->get_archived_run() + 1, 0);
-        lsn_t evict_lsn = std::min(archived_lsn,
-                smlevel_0::log->get_oldest_active_lsn());
-        // CS TODO FINELINE: epoch-based eviction!
-        // if (cb.get_page_lsn().is_null() || cb.get_page_lsn() >= evict_lsn)
-        // {
-        //     ERROUT(<< "Eviction failed on LSN for pid " << cb._pid <<
-        //             " page_lsn=" << cb.get_page_lsn() <<
-        //             " evict_lsn=" << evict_lsn);
-        //     cb.latch().latch_release();
-        //     continue;
-        // }
+        // FL eviction: only evict pages whose last modification is older than
+        // the lowest currently active epoch
+        auto current_epoch = smlevel_0::log->get_epoch_tracker().get_lowest_active_epoch();
 
         // now we hold an EX latch -- check if page qualifies for eviction
         btree_page_h p;
@@ -217,6 +207,8 @@ bf_idx page_evictioner_base::pick_victim()
                 || !cb._used
                 // ... frames prefetched by restore but not yet restored
                 || cb.is_pinned_for_restore()
+                // ... pages that contain updates in a non-durable epoch
+                || p.get_epoch() >= current_epoch
         )
         {
             cb.latch().latch_release();

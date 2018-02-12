@@ -677,6 +677,11 @@ void xct_t::flush_redo_buffer(bool sys_xct, bool sync_log)
     if (sync_log) {
 	smlevel_0::log->flush(lsn);
     }
+    w_assert1(sys_xct || redobuf->get_size() == 0);
+    if (redobuf->get_size() == 0) {
+        smlevel_0::log->get_epoch_tracker().release(redobuf->get_epoch());
+        redobuf->set_epoch(0);
+    }
 }
 
 rc_t xct_t::commit(bool sync_log)

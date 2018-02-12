@@ -67,10 +67,11 @@ protected:
     /// Page flags (an OR of page_flag_t's)
     uint16_t         page_flags;   //  +2 -> 24
 
+public:
+
     /// Epoch of the last modification (required for page eviction)
     uint64_t         epoch;     //  +8 -> 32
 
-public:
     /// Calculate the correct value of checksum for this page.
     uint32_t    calculate_checksum () const;
 

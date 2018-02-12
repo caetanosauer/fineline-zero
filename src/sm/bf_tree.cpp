@@ -534,6 +534,7 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
             cb.init(pid);
             ::memset(page, 0, sizeof(generic_page));
             page->pid = pid;
+            page->epoch = 0;
 
             // When a page is first fetched from storage, we always check
             // if recovery is needed (we might not recover it right now,

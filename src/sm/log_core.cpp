@@ -231,8 +231,7 @@ log_core::log_core(const sm_options& options)
       _end(0),
       _waiting_for_flush(false),
       _shutting_down(false),
-      _flush_daemon_running(false),
-      _epoch_number(0)
+      _flush_daemon_running(false)
 {
     _segsize = SEGMENT_SIZE;
 
@@ -1052,7 +1051,7 @@ lsn_t log_core::flush_daemon_work(lsn_t old_mark)
 
     _durable_lsn = end_lsn;
     _start = new_start;
-    _epoch_number++;
+    _epoch_tracker.advance_epoch();
 
     _group_commit_timer.reset();
 

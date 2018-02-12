@@ -64,7 +64,7 @@ public:
     static void log(const Args&... args)
     {
         xct_t* xd = smthread_t::xct();
-        auto redobuf = smthread_t::get_redo_buf();
+        auto redobuf = _get_redo_buffer();
         char* dest = redobuf->acquire();
         w_assert0(dest);
         auto logrec = reinterpret_cast<logrec_t*>(dest);
@@ -100,15 +100,19 @@ public:
             p->reset_log_volume();
         }
 
-        auto redobuf = smthread_t::get_redo_buf();
+        auto redobuf = _get_redo_buffer();
         char* dest = redobuf->acquire();
         w_assert0(dest);
         auto logrec = reinterpret_cast<logrec_t*>(dest);
         logrec->init_header(LR, p->pid());
         LogrecSerializer<LR>::serialize(p, logrec, args...);
         w_assert1(logrec->valid_header());
-        _update_page_version(p, logrec);
 
+        p->increment_log_volume(logrec->length());
+        p->incr_version();
+        w_assert1 (logrec->pid() == p->pid());
+        logrec->set_page_version(p->version());
+        p->set_epoch(redobuf->get_epoch());
         redobuf->release(logrec->length());
 
         if (logrec->is_undo()) {
@@ -149,14 +153,16 @@ public:
         return lsn;
     }
 
-     template <class PagePtr>
-     static void _update_page_version(PagePtr page, logrec_t* lr)
-     {
-         page->increment_log_volume(lr->length());
-         page->incr_version();
-         w_assert1 (lr->pid() == page->pid());
-         lr->set_page_version(page->version());
-     }
+    static RedoBuffer* _get_redo_buffer()
+    {
+        auto redobuf = smthread_t::get_redo_buf();
+        // Initialize epoch, if not done yet
+        if (redobuf->get_size() == 0) {
+            auto epoch = smlevel_0::log->get_epoch_tracker().acquire();
+            redobuf->set_epoch(epoch);
+        }
+        return redobuf;
+    }
 
     template <class PagePtr>
     static bool _should_apply_img_compression(kind_t type, PagePtr page)

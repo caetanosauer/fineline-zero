@@ -361,12 +361,16 @@ class RedoBuffer
     static constexpr size_t BufferSize = 1024 * 1024;
     std::array<char, BufferSize> _buffer;
     size_t _size;
+    uint64_t _epoch;
 
 public:
     RedoBuffer()
-        : _size(0)
+        : _size(0), _epoch(0)
     {
     }
+
+    uint64_t get_epoch() const { return _epoch; }
+    void set_epoch(uint64_t e) { _epoch = e; }
 
     char* get_buffer_end()
     {

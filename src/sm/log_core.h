@@ -82,6 +82,7 @@ class flush_daemon_thread_t;
 #include "tatas.h"
 #include "log_storage.h"
 #include "stopwatch.h"
+#include "epoch_tracker.h"
 
 class log_core
 {
@@ -107,8 +108,6 @@ public:
 
     lsn_t durable_lsn() const { return _durable_lsn; }
 
-    uint64_t epoch_number() const { return _epoch_number; }
-
     void start_flush_daemon();
 
     long                 segsize() const { return _segsize; }
@@ -127,11 +126,8 @@ public:
     }
 
     log_storage* get_storage() { return _storage; }
-
-    PoorMansOldestLsnTracker* get_oldest_lsn_tracker()
-    {
-        return _oldest_lsn_tracker;
-    }
+    PoorMansOldestLsnTracker* get_oldest_lsn_tracker() { return _oldest_lsn_tracker; }
+    EpochTracker<>& get_epoch_tracker() { return _epoch_tracker; }
 
     lsn_t get_oldest_active_lsn();
 
@@ -148,7 +144,6 @@ protected:
 
     lsn_t           _curr_lsn;
     lsn_t           _durable_lsn;
-    std::atomic<uint64_t> _epoch_number;
 
     // Set of pointers into _buf (circular log buffer)
     // and associated lsns. See detailed comments at log_core::insert
@@ -191,6 +186,7 @@ protected:
 
     log_storage*    _storage;
     PoorMansOldestLsnTracker* _oldest_lsn_tracker;
+    EpochTracker<> _epoch_tracker;
 
     enum { invalid_fhdl = -1 };
 

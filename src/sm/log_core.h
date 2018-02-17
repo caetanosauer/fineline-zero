@@ -65,6 +65,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include <vector> // only for _collect_single_page_recovery_logs()
 #include <limits>
 #include <atomic>
+#include <unordered_map>
 
 // in sm_base for the purpose of log callback function argument type
 class      partition_t ; // forward
@@ -128,6 +129,12 @@ public:
     log_storage* get_storage() { return _storage; }
     PoorMansOldestLsnTracker* get_oldest_lsn_tracker() { return _oldest_lsn_tracker; }
     EpochTracker<>& get_epoch_tracker() { return _epoch_tracker; }
+    uint64_t get_log_file_epoch(uint16_t p)
+    {
+        auto it = _log_file_epochs.find(p);
+        if (it != _log_file_epochs.end()) { return it->second; }
+        return 0;
+    }
 
     lsn_t get_oldest_active_lsn();
 
@@ -187,6 +194,7 @@ protected:
     log_storage*    _storage;
     PoorMansOldestLsnTracker* _oldest_lsn_tracker;
     EpochTracker<> _epoch_tracker;
+    std::unordered_map<uint16_t, uint64_t> _log_file_epochs;
 
     enum { invalid_fhdl = -1 };
 

@@ -184,8 +184,8 @@ bf_idx page_evictioner_base::pick_victim()
         }
 
         // FL eviction: only evict pages whose last modification is older than
-        // the lowest currently active epoch
-        auto current_epoch = smlevel_0::log->get_epoch_tracker().get_lowest_active_epoch();
+        // the archived epoch
+        auto archived_epoch = _bufferpool->_archived_epoch.load();
 
         // now we hold an EX latch -- check if page qualifies for eviction
         btree_page_h p;
@@ -208,7 +208,7 @@ bf_idx page_evictioner_base::pick_victim()
                 // ... frames prefetched by restore but not yet restored
                 || cb.is_pinned_for_restore()
                 // ... pages that contain updates in a non-durable epoch
-                || p.get_epoch() >= current_epoch
+                || p.get_epoch() >= archived_epoch
         )
         {
             cb.latch().latch_release();

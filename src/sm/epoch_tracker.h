@@ -50,13 +50,14 @@ public:
         return first;
     }
 
-    void advance_epoch()
+    Epoch advance_epoch()
     {
         while (last - first >= ArraySize - 1) {
             std::this_thread::yield();
         }
-        last++;
+        auto ret = last++;
         try_recycle();
+        return ret;
     }
 
 private:

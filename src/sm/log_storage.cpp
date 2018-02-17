@@ -72,6 +72,7 @@ log_storage::log_storage(const sm_options& options)
     psize = psize * 1024 * 1024;
     // round to next multiple of the log buffer segment size
     psize = (psize / log_core::SEGMENT_SIZE) * log_core::SEGMENT_SIZE;
+    w_assert0(psize > 0);
     _partition_size = psize;
 
     _delete_old_partitions = options.get_bool_option("sm_log_delete_old_partitions", true);

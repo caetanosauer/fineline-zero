@@ -289,6 +289,7 @@ public:
     void notify_archived_run(run_number_t);
 
     run_number_t get_archived_run() const { return _archived_run; }
+    uint64_t get_archived_epoch() const { return _archived_epoch; }
 
     /**
      * Tries to unswizzle the given child page from the parent page.  If, for
@@ -457,6 +458,7 @@ private:
     bool _log_fetches;
 
     std::atomic<run_number_t> _archived_run;
+    std::atomic<uint64_t> _archived_epoch;
 
     static thread_local unsigned _fix_cnt;
     static thread_local unsigned _hit_cnt;

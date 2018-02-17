@@ -413,6 +413,8 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
 void bf_tree_m::notify_archived_run(run_number_t archived_run)
 {
     _archived_run = archived_run;
+    _archived_epoch = smlevel_0::log->get_log_file_epoch(archived_run);
+    cerr << "archived_epoch = " << _archived_epoch << endl;
 }
 
 ///////////////////////////////////   Page fix/unfix BEGIN         ///////////////////////////////////

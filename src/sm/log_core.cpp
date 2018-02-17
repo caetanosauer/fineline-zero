@@ -1051,7 +1051,8 @@ lsn_t log_core::flush_daemon_work(lsn_t old_mark)
 
     _durable_lsn = end_lsn;
     _start = new_start;
-    _epoch_tracker.advance_epoch();
+    auto epoch = _epoch_tracker.advance_epoch();
+    _log_file_epochs[p->num()] = epoch;
 
     _group_commit_timer.reset();
 

@@ -33,7 +33,7 @@ public:
     void pop();
     run_number_t topRun() { return w_heap.First().run; }
     size_t size() { return w_heap.NumElements(); }
-    bool push(logrec_t* lr, run_number_t run);
+    void push(logrec_t* lr, run_number_t run);
 
 private:
     struct HeapEntry {
@@ -69,7 +69,6 @@ private:
 
     HeapEntry::Cmp heapCmp;
     Heap<HeapEntry, HeapEntry::Cmp> w_heap;
-    // std::vector<HeapEntry> entries;
 };
 
 /**
@@ -206,10 +205,11 @@ private:
     lsn_t nextLSN;
     lsn_t endRoundLSN;
     shared_ptr<partition_t> currPartition;
+    run_number_t selectionRun = 0;
+    size_t bytesReadyForSelection = 0;
 
     void replacement();
     bool selection();
-    void pushIntoHeap(logrec_t*, run_number_t run);
     bool processFlushRequest();
 
 };

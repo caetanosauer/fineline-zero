@@ -97,11 +97,8 @@ public:
     void shutdown();
     bool hasPendingBlocks();
 
-    void resetWriter()
-    {
-        writer->resetCurrentRun();
-    }
-
+    void resetWriter() { writer->resetCurrentRun(); }
+    size_t getBlockSize() { return blockSize; }
     PageID getCurrentMaxPID() { return maxPID; }
 
     // methods that abstract block metadata

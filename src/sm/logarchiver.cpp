@@ -113,9 +113,9 @@ bool LogArchiver::selection()
     }
 
     run_number_t run = heap->topRun();
-    if (!blkAssemb->start(run)) {
-        return false;
-    }
+    // We may only remove records form heap that are in the selection run or beyond
+    if (run > selectionRun) { return false; }
+    if (!blkAssemb->start(run)) { return false; }
 
     DBGTHRD(<< "Producing block for selection on run " << run);
     while (true) {
@@ -139,14 +139,9 @@ bool LogArchiver::selection()
     return true;
 }
 
-bool ArchiverHeapSimple::push(logrec_t* lr, run_number_t run)
+void ArchiverHeapSimple::push(logrec_t* lr, run_number_t run)
 {
     w_assert1(lr->valid_header());
-    // 10 million records (assuming avg 100B per record == 1GB heap) TODO: parametrize this
-    constexpr size_t maxHeapSize = 10 * 1000 * 1000;
-    if (w_heap.NumElements() >= maxHeapSize) {
-        return false;
-    }
 
     //DBGTHRD(<< "Processing logrec " << lr->lsn_ck() << ", type " <<
     //        lr->type() << "(" << lr->type_str() << ") length " <<
@@ -157,8 +152,6 @@ bool ArchiverHeapSimple::push(logrec_t* lr, run_number_t run)
 
     // CS: caution: AddElementDontHeapify does NOT work!!!
     w_heap.AddElement(k);
-
-    return true;
 }
 
 void ArchiverHeapSimple::pop()
@@ -201,6 +194,7 @@ void LogArchiver::replacement()
             break;
         }
         if (nextLSN.hi() != currPartition->num()) {
+            selectionRun = currPartition->num();
             currPartition = smlevel_0::log->get_storage()->get_partition(nextLSN.hi());
         }
 
@@ -214,36 +208,19 @@ void LogArchiver::replacement()
         auto lsn = nextLSN;
         nextLSN += lr->length();
 
+        if (bytesReadyForSelection > blkAssemb->getBlockSize()  && heap->topRun() == selectionRun) {
+            bool success = selection();
+            if (success) { bytesReadyForSelection = 0; }
+        }
+
         if (!lr->is_redo()) { continue; }
 
         w_assert1(lr->valid_header());
         w_assert1(lsn.hi() > 0);
         const run_number_t run = lsn.hi();
-        pushIntoHeap(lr, run);
-    }
-}
+        heap->push(lr, run);
 
-void LogArchiver::pushIntoHeap(logrec_t* lr, run_number_t run)
-{
-    while (!heap->push(lr, run)) {
-        if (heap->size() == 0) {
-            W_FATAL_MSG(fcINTERNAL,
-                    << "Heap empty but push not possible!");
-        }
-
-        // heap full -- invoke selection and try again
-        if (heap->size() == 0) {
-            // CS TODO this happens sometimes for very large page_img_format
-            // logrecs. Inside this if, we should "reset" the heap and also
-            // makesure that the log record is smaller than the max block.
-            W_FATAL_MSG(fcINTERNAL,
-                    << "Heap empty but push not possible!");
-        }
-
-        DBGTHRD(<< "Heap full! Invoking selection");
-        bool success = selection();
-
-        w_assert0(success || heap->size() == 0);
+        bytesReadyForSelection += lr->length();
     }
 }
 
@@ -264,7 +241,8 @@ void LogArchiver::run()
     while(true) {
         endRoundLSN = smlevel_0::log->durable_lsn();
         while (nextLSN == endRoundLSN) {
-            // we're going faster than log, sleep a bit (1ms)
+            // we're going faster than log, call selection and sleep a bit (1ms)
+            selection(); // called to make sure we make progress on archiving if logging is slow or stuck
             ::usleep(1000);
             endRoundLSN = smlevel_0::log->durable_lsn();
 

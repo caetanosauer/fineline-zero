@@ -91,10 +91,8 @@ bool page_evictioner_base::evict_one(bf_idx victim)
     w_assert1(cb.latch().is_mine());
 
     if (_log_evictions) {
-        constexpr bool was_dirty = false;
-        // lsn_t page_lsn = cb.get_page_lsn();
-        // CS TODO FINELINE: no lsns on CB anymore
-        Logger::log_sys<evict_page_log>(cb._pid, was_dirty, lsn_t::null);
+        generic_page* p = &_bufferpool->_buffer[victim];
+        Logger::log_sys<evict_page_log>(cb._pid, p->version);
     }
 
     // remove it from hashtable.

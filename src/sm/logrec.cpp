@@ -355,20 +355,18 @@ operator<<(ostream& o, logrec_t& l)
         case evict_page_log:
             {
                 PageID pid;
-                bool was_dirty;
-                lsn_t page_lsn;
-                deserialize_log_fields(&l, pid, was_dirty, page_lsn);
-                o << " pid: " << pid << (was_dirty ? " dirty" : " clean") << " page_lsn: "
-                    << page_lsn;
+                uint32_t version;
+                deserialize_log_fields(&l, pid, version);
+                o << " pid: " << pid << " version: " << version;
                 break;
             }
         case fetch_page_log:
             {
                 PageID pid;
-                lsn_t plsn;
+                uint32_t version;
                 StoreID store;
-                deserialize_log_fields(&l, pid, plsn, store);
-                o << " pid: " << pid << " page_lsn: " << plsn << " store: " << store;
+                deserialize_log_fields(&l, pid, version, store);
+                o << " pid: " << pid << " version: " << version << " store: " << store;
                 break;
             }
         case alloc_page_log:

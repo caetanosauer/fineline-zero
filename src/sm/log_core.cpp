@@ -1051,8 +1051,9 @@ lsn_t log_core::flush_daemon_work(lsn_t old_mark)
 
     _durable_lsn = end_lsn;
     _start = new_start;
-    auto epoch = _epoch_tracker.advance_epoch();
-    _log_file_epochs[p->num()] = epoch;
+    _epoch_tracker.advance_epoch();
+    // For eviction purposes, epoch associated with the log file must be the lowest active, and not current!
+    _log_file_epochs[p->num()] = _epoch_tracker.get_lowest_active_epoch() - 1;
 
     _group_commit_timer.reset();
 

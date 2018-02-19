@@ -20,7 +20,9 @@ private:
 public:
     EpochTracker()
     {
-        first = last = 0;
+        // invariants: last > first && first > 0
+        first = 1;
+        last = 2;
         for (size_t i = 0; i < ArraySize; i++) {
             slots[i] = 0;
         }
@@ -47,6 +49,7 @@ public:
 
     Epoch get_lowest_active_epoch()
     {
+        w_assert1(first < last);
         return first;
     }
 
@@ -64,7 +67,7 @@ private:
 
     void try_recycle()
     {
-        while (first < last) {
+        while (first < last-1) {
             auto& slot = get_slot(first);
             if (slot > 0) { return; }
             size_t expected = 0;

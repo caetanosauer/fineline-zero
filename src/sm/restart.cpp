@@ -22,6 +22,7 @@ void SprIterator::apply(fixable_page_h &p)
 {
     PageID pid = p.pid();
     logrec_t* lr;
+    unsigned replayed = 0;
 
     while (archive_scan.next(lr)) {
         w_assert1(lr->valid_header());
@@ -45,6 +46,7 @@ void SprIterator::apply(fixable_page_h &p)
         }
 
         lr->redo(&p);
+        replayed++;
     }
 }
 

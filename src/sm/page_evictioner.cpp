@@ -20,6 +20,8 @@ page_evictioner_base::page_evictioner_base(bf_tree_m* bufferpool, const sm_optio
     _use_clock = options.get_bool_option("sm_evict_use_clock", true);
     _log_evictions = options.get_bool_option("sm_log_page_evictions", false);
     _write_elision = options.get_bool_option("sm_write_elision", false);
+    // _evict_unarchived is the FineLine-equivalent of write elision
+    _evict_unarchived = options.get_bool_option("sm_evict_unarchived", false);
 
     if (_use_clock) { _clock_ref_bits.resize(_bufferpool->get_block_cnt(), false); }
 
@@ -89,19 +91,24 @@ bool page_evictioner_base::evict_one(bf_idx victim)
     // We're passed the point of no return: eviction must happen no mather what
 
     w_assert1(cb.latch().is_mine());
+    auto pid = cb._pid;
 
+    generic_page* p = &_bufferpool->_buffer[victim];
     if (_log_evictions) {
-        generic_page* p = &_bufferpool->_buffer[victim];
-        Logger::log_sys<evict_page_log>(cb._pid, p->version);
+        Logger::log_sys<evict_page_log>(pid, p->version);
+    }
+    // Add to table of evicted pages (FineLine)
+    if (_evict_unarchived) {
+        _bufferpool->add_evicted_page(pid, p->version);
     }
 
     // remove it from hashtable.
     w_assert1(cb._pin_cnt < 0);
     w_assert1(!cb._used);
-    bool removed = _bufferpool->_hashtable->remove(cb._pid);
+    bool removed = _bufferpool->_hashtable->remove(pid);
     w_assert1(removed);
 
-    DBG2(<< "EVICTED " << victim << " pid " << cb._pid
+    DBG2(<< "EVICTED " << victim << " pid " << pid
             << " log-tail " << smlevel_0::log->curr_lsn());
 
     cb.latch().latch_release();
@@ -181,9 +188,11 @@ bf_idx page_evictioner_base::pick_victim()
             continue;
         }
 
-        // FL eviction: only evict pages whose last modification is older than
-        // the archived epoch
+        // FineLine eviction: only evict pages whose last modification is older than
+        // the archived epoch ...
         auto archived_epoch = _bufferpool->_archived_epoch.load();
+        // ... unless _evict_unarchived is set and we tried one round already
+        bool ignore_epoch = _evict_unarchived && (attempts > _bufferpool->_block_cnt);
 
         // now we hold an EX latch -- check if page qualifies for eviction
         btree_page_h p;
@@ -205,8 +214,8 @@ bf_idx page_evictioner_base::pick_victim()
                 || !cb._used
                 // ... frames prefetched by restore but not yet restored
                 || cb.is_pinned_for_restore()
-                // ... pages that contain updates in a non-durable epoch
-                || p.get_epoch() >= archived_epoch
+                // ... pages that contain updates in a non-durable epoch (FineLine)
+                || (!ignore_epoch && p.get_epoch() >= archived_epoch)
         )
         {
             cb.latch().latch_release();

@@ -67,6 +67,7 @@ const char* get_stat_name(sm_stat_id s)
         case sm_stat_id::bf_already_evicted: return "bf_already_evicted";
         case sm_stat_id::bf_eviction_attempts: return "bf_eviction_attempts";
         case sm_stat_id::bf_dirty_page_cleaned: return "bf_dirty_page_cleaned";
+        case sm_stat_id::bf_page_retry_replay: return "bf_page_retry_replay";
         case sm_stat_id::bf_flushed_OHD_page: return "bf_flushed_OHD_page";
         case sm_stat_id::bf_kick_full: return "bf_kick_full";
         case sm_stat_id::bf_kick_replacement: return "bf_kick_replacement";
@@ -308,6 +309,7 @@ const char* get_stat_expl(sm_stat_id s)
         case sm_stat_id::bf_already_evicted: return "Could not find page to copy for flushing (evicted)";
         case sm_stat_id::bf_eviction_attempts: return "Total number of frames inspected for eviction";
         case sm_stat_id::bf_dirty_page_cleaned: return "Found page already cleaned (hot)";
+        case sm_stat_id::bf_page_retry_replay: return "Log replay retry attempts in buffer pool";
         case sm_stat_id::bf_flushed_OHD_page: return "Non-cleaner thread had to flush an old-hot-dirty page synchronously";
         case sm_stat_id::bf_kick_full: return "Kicks because pool is full of dirty pages";
         case sm_stat_id::bf_kick_replacement: return "Kicks because doing page replacement";

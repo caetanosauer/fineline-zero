@@ -187,7 +187,6 @@ unsigned log_storage::delete_old_partitions(partition_number_t older_than)
         older_than = smlevel_0::bf->get_archived_run();
     }
 
-    partition_number_t highest_deleted = 0;
     unsigned count = 0;
     {
         spinlock_write_critical_section cs(&_partition_map_latch);
@@ -195,7 +194,6 @@ unsigned log_storage::delete_old_partitions(partition_number_t older_than)
         partition_map_t::iterator it = _partitions.begin();
         while (it != _partitions.end()) {
             if (it->first < older_than) {
-                if (it->first > highest_deleted) { highest_deleted = it->first; }
                 if (_delete_old_partitions) { it->second->mark_for_deletion(); }
                 it = _partitions.erase(it);
                 count++;

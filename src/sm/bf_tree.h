@@ -450,6 +450,8 @@ private:
     bool                 _maintain_emlsn;
 
     bool _write_elision;
+    // Whether to evict pages with updates not yet in the archived (FineLine equivalent of write elision)
+    bool _evict_unarchived;
 
     bool _batch_warmup;
     size_t _batch_segment_size;
@@ -466,6 +468,24 @@ private:
     /// Single-page-recovery iterator used for instant restart redo
     /// (see bf_tree_m::recover_if_needed)
     static thread_local SprIterator _localSprIter;
+
+    // Table of evicted pages and their versions (FineLine-equivalent of page recovery index for write elision)
+    std::unordered_map<PageID, uint32_t> _evicted_pages;
+    srwlock_t _evicted_pages_latch;
+
+    // Evicted-table methods (FineLine)
+    void add_evicted_page(PageID pid, uint32_t version)
+    {
+        spinlock_write_critical_section cs(&_evicted_pages_latch);
+        _evicted_pages[pid] = version;
+    }
+    uint32_t get_evicted_page_version(PageID pid)
+    {
+        spinlock_read_critical_section cs(&_evicted_pages_latch);
+        auto iter = _evicted_pages.find(pid);
+        if (iter == _evicted_pages.end()) { return 0; }
+        return iter->second;
+    }
 
     using RestoreCoord = RestoreCoordinator<
         std::function<decltype(SegmentRestorer::bf_restore)>>;

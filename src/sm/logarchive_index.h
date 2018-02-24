@@ -147,7 +147,7 @@ public:
 
     template <class Input>
     void probe(std::vector<Input>&, PageID, PageID, run_number_t runBegin,
-            run_number_t runEnd = 0);
+            run_number_t& runEnd);
 
     void loadRunInfo(RunFile*, const RunId&);
     void startNewRun(unsigned level);
@@ -243,7 +243,7 @@ public:
 
 template <class Input>
 void ArchiveIndex::probe(std::vector<Input>& inputs,
-        PageID startPID, PageID endPID, run_number_t runBegin, run_number_t runEnd)
+        PageID startPID, PageID endPID, run_number_t runBegin, run_number_t& runEnd)
 {
     spinlock_read_critical_section cs(&_mutex);
 
@@ -254,14 +254,13 @@ void ArchiveIndex::probe(std::vector<Input>& inputs,
     run_number_t nextRun = runBegin;
 
     while (level > 0) {
-        size_t index = findRun(nextRun, level);
+        if (runEnd > 0 && nextRun > runEnd) { break; }
 
+        size_t index = findRun(nextRun, level);
         while ((int) index <= lastFinished[level]) {
             auto& run = runs[level][index];
             index++;
             nextRun = run.end;
-
-            if (runEnd > 0 && nextRun > runEnd) { return; }
 
             if (startPID > run.maxPID) {
                 // INC_TSTAT(la_avoided_probes);
@@ -291,6 +290,9 @@ void ArchiveIndex::probe(std::vector<Input>& inputs,
 
         level--;
     }
+
+    // Return last probed run as out-parameter
+    runEnd = nextRun;
 }
 
 #endif

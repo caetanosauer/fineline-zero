@@ -43,9 +43,9 @@ public:
     bool next(logrec_t*&);
     bool finished();
 
-    template <class Iter>
-    void openForMerge(Iter begin, Iter end);
 
+    template <class Iter> void openForMerge(Iter begin, Iter end);
+    run_number_t getLastProbedRun() const { return lastProbedRun; }
     void dumpHeap();
 
 private:
@@ -59,6 +59,7 @@ private:
     uint32_t prevVersion;
     PageID prevPID;
     bool singlePage;
+    run_number_t lastProbedRun;
 
     void clear();
 };

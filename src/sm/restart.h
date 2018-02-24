@@ -56,6 +56,11 @@ public:
 
     void open(PageID pid);
     void apply(fixable_page_h& page);
+    void redo(fixable_page_h& p, logrec_t* lr);
+
+    // Required for eviction of pages with updates not yet archived (FineLine)
+    void reopen(PageID pid);
+    run_number_t getLastProbedRun() const { return archive_scan.getLastProbedRun(); }
 
 private:
     ArchiveScan archive_scan;

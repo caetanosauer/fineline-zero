@@ -160,6 +160,7 @@ enum class sm_stat_id : size_t
     bf_evict_failed_flags,
     bf_evict_failed_unswizzle,
     bf_dirty_page_cleaned,
+    bf_page_retry_replay,
     bf_flushed_OHD_page,
     bf_kick_full,
     bf_kick_replacement,

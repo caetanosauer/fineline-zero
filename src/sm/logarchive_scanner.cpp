@@ -20,7 +20,7 @@ bool mergeInputCmpGt(const MergeInput& a, const MergeInput& b)
 }
 
 ArchiveScan::ArchiveScan(std::shared_ptr<ArchiveIndex> archIndex)
-    : archIndex(archIndex), prevVersion(0), prevPID(0), singlePage(false)
+    : archIndex(archIndex), prevVersion(0), prevPID(0), singlePage(false), lastProbedRun(0)
 {
     clear();
 }
@@ -33,6 +33,7 @@ void ArchiveScan::open(PageID startPID, PageID endPID, run_number_t runBegin,
     auto& inputs = _mergeInputVector;
 
     archIndex->probe(inputs, startPID, endPID, runBegin, runEnd);
+    lastProbedRun = runEnd;
 
     singlePage = (endPID == startPID+1);
 

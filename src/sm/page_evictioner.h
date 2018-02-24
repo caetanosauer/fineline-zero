@@ -43,6 +43,7 @@ protected:
     bf_tree_m*                  _bufferpool;
     bool                        _swizzling_enabled;
     bool                        _write_elision;
+    bool                        _evict_unarchived;
     bool                        _no_db_mode;
     bool                        _maintain_emlsn;
     bool                        _log_evictions;

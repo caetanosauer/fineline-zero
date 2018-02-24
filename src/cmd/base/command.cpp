@@ -360,6 +360,8 @@ void Command::setupSMOptions(po::options_description& options)
         "Enable/Disable bufferpool swizzle")
     ("sm_write_elision", po::value<bool>(),
         "Enable/Disable write elision in buffer pool")
+    ("sm_evict_unarchived", po::value<bool>(),
+        "Evict pages with updates that have not reached the log archive yet")
     ("sm_archiver_eager", po::value<bool>(),
         "Enable/Disable eager archiving")
     ("sm_archiver_read_whole_blocks", po::value<bool>(),

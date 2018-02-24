@@ -104,6 +104,7 @@ bf_tree_m::bf_tree_m(const sm_options& options)
         options.get_string_option("sm_bufferpool_replacement_policy", "clock");
 
     _write_elision = options.get_bool_option("sm_write_elision", false);
+    _evict_unarchived = options.get_bool_option("sm_evict_unarchived", false);
 
     // No-DB options
     _batch_segment_size = options.get_int_option("sm_batch_segment_size", 1);
@@ -399,6 +400,34 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
     page->pid = pid;
     _localSprIter.open(pid);
     _localSprIter.apply(p);
+
+    // FineLine: replay log records on recovery log if needed
+    if (_evict_unarchived) {
+        const auto expected_version = get_evicted_page_version(p.pid());
+        auto curr_partition = _localSprIter.getLastProbedRun() + 1;
+        while (p.version() < expected_version) {
+            auto logp = smlevel_0::log->get_storage()->get_partition(curr_partition);
+            lsn_t nextLSN = lsn_t(curr_partition, 0);
+            logrec_t* lr = nullptr;
+            if (!logp) {
+                // Log partition already deleted, we got unlucky -- retry on archive
+                INC_TSTAT(bf_page_retry_replay);
+                _localSprIter.reopen(pid);
+                _localSprIter.apply(p);
+                continue;
+            }
+            while (p.version() < expected_version) {
+                lr = smlevel_0::log->fetch_direct(logp, nextLSN);
+                if (lr->type() == skip_log) { break; }
+                if (lr->pid() == p.pid()) {
+                    _localSprIter.redo(p, lr);
+                }
+                nextLSN += lr->length();
+            }
+            curr_partition++;
+        }
+        w_assert1(expected_version == 0 || p.version() == expected_version);
+    }
 
     w_assert0(page->pid == pid);
     w_assert0(cb._pid == pid);

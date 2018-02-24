@@ -55,11 +55,15 @@ public:
 
     Epoch advance_epoch()
     {
-        while (last - first >= ArraySize - 1) {
+        while (last - first >= ArraySize - 2) {
+            // epochs don't overlap and at least one is reserved for resetting below
             std::this_thread::yield();
         }
         auto ret = last++;
         try_recycle();
+        // Reset value of future epoch (from invalid_value to zero)
+        w_assert1(last+1 != first);
+        get_slot(last+1) = 0;
         return ret;
     }
 

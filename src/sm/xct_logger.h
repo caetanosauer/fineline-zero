@@ -136,6 +136,8 @@ public:
     template <kind_t LR, class... Args>
     static lsn_t log_sys(const Args&... args)
     {
+        if (!ss_m::log) { return lsn_t(0,0); }
+
         // this should use TLS allocator, so it's fast
         // (see macro DEFINE_SM_ALLOC in allocator.h and logrec.cpp)
         logrec_t* logrec = new logrec_t;

@@ -224,18 +224,6 @@ void LogArchiver::replacement()
     }
 }
 
-bool LogArchiver::processFlushRequest()
-{
-    if (flushReqLSN != lsn_t::null) {
-        DBGTHRD(<< "Archive flush requested until LSN " << flushReqLSN);
-        if (nextLSN < flushReqLSN) {
-        }
-        else {
-        }
-    }
-    return false;
-}
-
 void LogArchiver::run()
 {
     while(true) {
@@ -250,13 +238,13 @@ void LogArchiver::run()
 
             // Flushing requested (e.g., by restore manager)
             if (flushReqLSN != lsn_t::null) { break; }
+        }
 
-            if (endRoundLSN.lo() == 0) {
-                // If durable_lsn is at the beginning of a new log partition,
-                // it can happen that at this point the file was not created
-                // yet, which would cause the reader thread to fail.
-                continue;
-            }
+        if (endRoundLSN.lo() == 0) {
+            // If durable_lsn is at the beginning of a new log partition,
+            // it can happen that at this point the file was not created
+            // yet, which would cause the reader thread to fail.
+            continue;
         }
 
         if (shutdownFlag) { break; }
@@ -269,15 +257,13 @@ void LogArchiver::run()
         if (flushReqLSN != lsn_t::null) {
             w_assert0(endRoundLSN >= flushReqLSN);
             // consume whole heap
+            selectionRun = currPartition->num();
             while (selection()) {}
             // Heap empty: Wait for all blocks to be consumed and writen out
             w_assert0(heap->size() == 0);
             while (blkAssemb->hasPendingBlocks()) {
                 ::usleep(10000); // 10ms
             }
-
-            DBGTHRD(<< "processFlushRequest forcing closure of run "
-                    << flushReqLSN.hi());
 
             // Forcibly close current run to guarantee that LSN is persisted
             PageID maxPID = blkAssemb->getCurrentMaxPID();
@@ -315,6 +301,7 @@ void LogArchiver::run()
     // Perform selection until all remaining entries are flushed out of
     // the heap into runs. Last run boundary is also enqueued.
     DBGOUT(<< "Archiver exiting -- last round of selection to empty heap");
+    selectionRun = currPartition->num();
     while (selection()) {}
     DBGOUT(<< "Archiver done!");
 

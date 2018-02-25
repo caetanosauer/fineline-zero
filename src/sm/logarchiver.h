@@ -210,7 +210,6 @@ private:
 
     void replacement();
     bool selection();
-    bool processFlushRequest();
 
 };
 

@@ -192,7 +192,8 @@ bf_idx page_evictioner_base::pick_victim()
         // the archived epoch ...
         auto archived_epoch = _bufferpool->_archived_epoch.load();
         // ... unless _evict_unarchived is set and we tried one round already
-        bool ignore_epoch = _evict_unarchived && (attempts > _bufferpool->_block_cnt);
+        constexpr unsigned max_archived_attempts = 100;
+        bool ignore_epoch = _evict_unarchived && (attempts > max_archived_attempts);
 
         // now we hold an EX latch -- check if page qualifies for eviction
         btree_page_h p;

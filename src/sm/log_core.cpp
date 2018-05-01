@@ -504,7 +504,7 @@ void log_core::_acquire_buffer_space(CArraySlot* info, long recsize)
         _buf_epoch.end = new_end;
     }
     // next_lsn is first byte after the tail of the log.
-    else if(next_lsn.lo() <= _storage->get_usable_partition_size()) {
+    else if(next_lsn.lo() <= _storage->get_partition_size()) {
         // wrap within a partition
         _buf_epoch.base_lsn += _segsize;
         _buf_epoch.base += _segsize;
@@ -723,6 +723,7 @@ rc_t log_core::insert_raw(const char* src, size_t length, lsn_t* rlsn)
 
     W_DO(_leave_carray(info, length));
 
+    INC_TSTAT(log_inserts);
     ADD_TSTAT(log_bytes_generated,length);
     return RCOK;
 }
@@ -750,6 +751,7 @@ rc_t log_core::insert(logrec_t &rec, lsn_t* rlsn)
     }
     DBGOUT3(<< " insert @ lsn: " << rec_lsn << " type " << rec.type() << " length " << rec.length() );
 
+    INC_TSTAT(log_inserts);
     ADD_TSTAT(log_bytes_generated,size);
     return RCOK;
 }

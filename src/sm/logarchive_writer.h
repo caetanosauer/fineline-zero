@@ -110,7 +110,7 @@ private:
     AsyncRingBuffer* writebuf;
     WriterThread* writer;
     ArchiveIndex* archIndex;
-    size_t blockSize;
+    const size_t blockSize;
     size_t pos;
     size_t fpos;
 

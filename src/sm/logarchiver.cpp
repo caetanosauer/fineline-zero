@@ -373,6 +373,7 @@ MergerDaemon::MergerDaemon(const sm_options& options,
 {
     _fanin = options.get_int_option("sm_archiver_fanin", 5);
     _compression = options.get_int_option("sm_page_img_compression", 0) > 0;
+    _blockSize = options.get_int_option("sm_archiver_block_size", DFT_BLOCK_SIZE);
     if (!outdir) { outdir = indir; }
     w_assert0(indir && outdir);
 }
@@ -430,14 +431,10 @@ rc_t MergerDaemon::doMerge(unsigned level, unsigned fanin)
     {
         ArchiveScan scan {outdir};
         scan.openForMerge(begin, end);
-        // CS TODO: outdir may not have the same runs in the merged level,
-        // which will screw up the assignment of endLSN boundaries. Here,
-        // we should check that and, if needed, create an empty run from the
-        // boundaries of level in indir.
-        BlockAssembly blkAssemb(outdir.get(), level+1, _compression);
+        BlockAssembly blkAssemb(outdir.get(), _blockSize, level+1, _compression);
         outdir->openNewRun(level+1);
 
-        constexpr int runNumber = 0;
+        constexpr int runNumber = 1;
         if (!scan.finished()) {
             logrec_t* lr;
             blkAssemb.start(runNumber);

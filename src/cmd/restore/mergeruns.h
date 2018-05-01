@@ -13,8 +13,8 @@ private:
     string outdir;
     size_t level;
     size_t fanin;
-    size_t bucketSize;
     size_t replFactor;
+    size_t compression;
 };
 
 #endif

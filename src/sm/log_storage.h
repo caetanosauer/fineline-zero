@@ -96,8 +96,6 @@ public:
     shared_ptr<partition_t> create_partition(partition_number_t pnum);
 
     off_t get_partition_size() const { return _partition_size; }
-    // Saves space for skip log record
-    off_t get_usable_partition_size() const { return _partition_size - sizeof(baseLogHeader); }
 
     size_t get_byte_distance(lsn_t a, lsn_t b) const;
 

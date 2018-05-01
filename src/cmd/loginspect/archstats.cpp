@@ -57,9 +57,9 @@ void ArchStats::run()
     }
 
     if (dumpIndex) {
-        for (auto rid : runs) {
-            archIndex->dumpIndex(std::cout, rid);
-        }
+        // for (auto rid : runs) {
+            archIndex->dumpIndex(std::cout);
+        // }
     }
 
     if (scan) {

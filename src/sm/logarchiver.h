@@ -106,6 +106,7 @@ private:
     std::shared_ptr<ArchiveIndex> outdir;
     unsigned _fanin;
     bool _compression;
+    size_t _blockSize;
 };
 
 /** \brief Implementation of a log archiver using asynchronous reader and

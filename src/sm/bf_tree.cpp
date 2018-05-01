@@ -403,7 +403,7 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
 
     // FineLine: replay log records on recovery log if needed
     if (_evict_unarchived) {
-        const auto expected_version = get_evicted_page_version(p.pid());
+        const auto expected_version = get_evicted_page_version(pid);
         auto curr_partition = _localSprIter.getLastProbedRun() + 1;
         while (p.version() < expected_version) {
             auto logp = smlevel_0::log->get_storage()->get_partition(curr_partition);
@@ -414,6 +414,7 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
                 INC_TSTAT(bf_page_retry_replay);
                 _localSprIter.reopen(pid);
                 _localSprIter.apply(p);
+                curr_partition = _localSprIter.getLastProbedRun() + 1;
                 continue;
             }
             while (p.version() < expected_version) {

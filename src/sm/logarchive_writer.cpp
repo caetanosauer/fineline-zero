@@ -88,6 +88,7 @@ bool BlockAssembly::add(logrec_t* lr)
 
     // Verify if we still have space for this log record
     size_t available = blockSize - (pos + logrec_t::get_skip_log().length());
+    w_assert1(available <= blockSize);
     if (lr->length() > available) {
         // If this is a page_img logrec, we might still have space for it because
         // the preceding log records of the same PID will be dropped

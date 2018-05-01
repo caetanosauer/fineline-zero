@@ -254,17 +254,13 @@ fs::path ArchiveIndex::make_current_run_path(unsigned level) const
 
 rc_t ArchiveIndex::closeCurrentRun(run_number_t currentRun, unsigned level, PageID maxPID)
 {
-    auto lastRun = getLastRun(level);
-    if (lastRun == 0) {
-        if (level == 1) {
-            // run being created by archiver -- must be the last of all levels
-            lastRun = getLastRun();
-        }
-        else {
-            // run being created by merge -- previous-level runs must exist
-            W_FATAL_MSG(fcINTERNAL, << "Invalid archiver state, closing run "
-                    << currentRun << " on level " << level);
-        }
+    run_number_t lastRun = 0;
+    if (level == 1) {
+        // run being created by archiver -- must be the last of all levels
+        lastRun = getLastRun();
+    }
+    else {
+        lastRun = getLastRun(level);
     }
 
     if (appendFd[level] >= 0) {
@@ -558,9 +554,9 @@ run_number_t ArchiveIndex::getLastRun(unsigned level)
 
     if (lastFinished[level] < 0) {
         // No runs exist in the given level. If a previous level exists, it
-        // must be the first run in that level; otherwise, it's simply 1
+        // must be one before the first run in that level; otherwise, it's simply 1
         if (level == 0) { return 0; }
-        return getFirstRun(level - 1);
+        return getFirstRun(level - 1) - 1;
     }
 
     return runs[level][lastFinished[level]].end;
@@ -634,9 +630,9 @@ size_t ArchiveIndex::findRun(run_number_t run, unsigned level)
         return lf + 1;
     }
 
-    int result = lf;
-    while (result > 0 && runs[level][result].begin > run) {
-        result--;
+    int result = 0;
+    while (result <= lf && run > runs[level][result].end) {
+        result++;
     }
 
     // skip empty runs
@@ -721,16 +717,20 @@ void ArchiveIndex::dumpIndex(ostream& out)
     for (size_t l = 0; l <= maxLevel; l++) {
         for (int i = 0; i <= lastFinished[l]; i++) {
             size_t offset = 0, prevOffset = 0;
-            for (size_t j = 0; j < runs[l][i].entries.size(); j++) {
-                offset = runs[l][i].entries[j].offset;
-                out << "level " << l << " run " << i
-                    << " entry " << j <<
-                    " pid " << runs[l][i].entries[j].pid <<
-                    " offset " << offset <<
-                    " delta " << offset - prevOffset <<
-                    endl;
-                prevOffset = offset;
-            }
+            auto& run = runs[l][i];
+            out << "NEW_RUN level: " << l << " begin: " << run.begin
+                << " end: " << run.end << " maxPID: " << run.maxPID
+                << endl;
+            // for (size_t j = 0; j < run.entries.size(); j++) {
+            //     offset = run.entries[j].offset;
+            //     out << "level " << l << " run " << i
+            //         << " entry " << j <<
+            //         " pid " << run.entries[j].pid <<
+            //         " offset " << offset <<
+            //         " delta " << offset - prevOffset <<
+            //         endl;
+            //     prevOffset = offset;
+            // }
         }
     }
 }

@@ -58,6 +58,7 @@ public:
         while (last - first >= ArraySize - 2) {
             // epochs don't overlap and at least one is reserved for resetting below
             std::this_thread::yield();
+            try_recycle();
         }
         auto ret = last++;
         try_recycle();
@@ -71,7 +72,7 @@ private:
 
     void try_recycle()
     {
-        while (first < last-1) {
+        while (first < last-2) {
             auto& slot = get_slot(first);
             if (slot > 0) { return; }
             size_t expected = 0;

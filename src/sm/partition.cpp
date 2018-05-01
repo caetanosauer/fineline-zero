@@ -83,7 +83,8 @@ partition_t::partition_t(log_storage *owner, partition_number_t num)
     : _num(num), _owner(owner),
       _fhdl(invalid_fhdl), _skip_logrec{skip_log}, _delete_after_close(false)
 {
-    _max_partition_size = owner->get_partition_size();
+    // Add space for skip log record
+    _max_partition_size = owner->get_partition_size() + sizeof(baseLogHeader);
     _readbuf = nullptr;
 }
 

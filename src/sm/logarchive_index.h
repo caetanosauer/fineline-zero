@@ -153,7 +153,6 @@ public:
     void startNewRun(unsigned level);
 
     unsigned getMaxLevel() const { return maxLevel; }
-    size_t getBucketSize() { return bucketSize; }
     size_t getRunCount(unsigned level) {
         if (level > maxLevel) { return 0; }
         return runs[level].size();
@@ -209,16 +208,6 @@ private:
     // we cannot simply take the last run in the vector.
     std::vector<int> lastFinished;
 
-    /** Whether this index uses variable-sized buckets, i.e., entries in
-     * the index refer to fixed ranges of page ID for which the amount of
-     * log records is variable. The number gives the size of a bucket in
-     * terms of number of page ID's (or segment size in the restore case).
-     * If this is zero, then the index behaves like a B-tree, in which a
-     * bucket corresponds to a block, therefore having fixed sizes (but
-     * variable number of log records, obviously).
-     */
-    size_t bucketSize;
-
     unsigned maxLevel;
 
     std::unique_ptr<RunRecycler> runRecycler;
@@ -270,12 +259,7 @@ void ArchiveIndex::probe(std::vector<Input>& inputs,
             if (run.entries.size() > 0) {
                 size_t entryBegin = findEntry(&run, startPID);
 
-                // CS TODO this if could just be run.entris[entryBEgin].pid >= endPID
-                if (bucketSize == 1 && startPID == endPID-1 &&
-                        run.entries[entryBegin].pid != startPID)
-                {
-                    // With bucket size one, we know precisely which PIDs are contained
-                    // in this run, so what we have is a filter with 100% precision
+                if (run.entries[entryBegin].pid >= endPID) {
                     // INC_TSTAT(la_avoided_probes);
                     continue;
                 }

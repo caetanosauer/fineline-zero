@@ -82,9 +82,6 @@ size_t ArchiveIndex::getFileSize(int fd)
 ArchiveIndex::ArchiveIndex(const sm_options& options)
 {
     archdir = options.get_string_option("sm_archdir", "archive");
-    // CS TODO: should always be 1
-    bucketSize = options.get_int_option("sm_archiver_bucket_size", 1);
-    w_assert0(bucketSize > 0);
 
     bool reformat = options.get_bool_option("sm_format", false);
     directIO = options.get_bool_option("sm_arch_o_direct", false);
@@ -464,8 +461,6 @@ void ArchiveIndex::newBlock(const vector<pair<PageID, size_t> >&
         buckets, unsigned level)
 {
     spinlock_write_critical_section cs(&_mutex);
-
-    w_assert1(bucketSize > 0);
 
     size_t prevOffset = 0;
     for (size_t i = 0; i < buckets.size(); i++) {

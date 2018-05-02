@@ -390,7 +390,7 @@ struct VariadicEncodingHelper<0, FieldEncoder, Types...>
 {
     static size_t get_payload_length() { return 0; }
 
-    static size_t get_payload_length(void* ptr) { return ptr; }
+    static size_t get_payload_length(void* /*ptr*/) { return 0; }
 
     static char* encode(char* dest) { return dest; }
 

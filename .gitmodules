@@ -1,0 +1,3 @@
+[submodule "finelog"]
+	path = finelog
+	url = git@github.com:caetanosauer/finelog.git

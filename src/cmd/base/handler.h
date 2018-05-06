@@ -1,8 +1,8 @@
 #ifndef HANDLER_H
 #define HANDLER_H
 
-
 #include "logrec.h"
+#include "generic_page.h"
 
 #include <fstream>
 #include <sstream>

@@ -8,7 +8,7 @@
 #include "w_base.h"
 #include "basics.h"
 #include "bf_hashtable.h"
-#include "latch.h"
+#include "latches.h"
 #include <string.h>
 
 const size_t HASHBUCKET_INITIAL_CHUNK_SIZE = 4;

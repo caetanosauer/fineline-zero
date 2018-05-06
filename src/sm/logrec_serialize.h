@@ -2,8 +2,8 @@
 #define LOGREC_SERIALIZE_H
 
 #include "encoding.h"
-#include "logrec.h"
 #include "logrec_support.h"
+#include "logrec_types.h"
 
 template <typename... T>
 using LogEncoder = typename foster::VariadicEncoder<foster::InlineEncoder, T...>;
@@ -17,20 +17,20 @@ void serialize_log_fields(logrec_t* lr, const T&... fields)
 }
 
 template <typename... T>
-void deserialize_log_fields(logrec_t* lr, T&... fields)
+void deserialize_log_fields(const logrec_t* lr, T&... fields)
 {
     const char* offset = lr->data();
     LogEncoder<T...>::decode(offset, &fields...);
 }
 
-template <kind_t LR>
+template <LogRecordType LR>
 struct UndoLogrecSerializer
 {
     template <typename... T>
     static size_t serialize(const T&...) { return 0; }
 };
 
-template <kind_t LR>
+template <LogRecordType LR>
 struct LogrecSerializer
 {
     template <typename PagePtr, typename... T>
@@ -47,7 +47,7 @@ struct LogrecSerializer
 };
 
 template <>
-struct LogrecSerializer<page_img_format_log>
+struct LogrecSerializer<LogRecordType::page_img_format_log>
 {
     template <typename PagePtr, typename... T>
     static void serialize(PagePtr p, logrec_t* lr, const T&... fields)
@@ -59,7 +59,7 @@ struct LogrecSerializer<page_img_format_log>
 };
 
 template <>
-struct LogrecSerializer<btree_insert_log>
+struct LogrecSerializer<LogRecordType::btree_insert_log>
 {
     static void construct(logrec_t* lr, const w_keystr_t& key,
             const cvec_t& el)
@@ -76,7 +76,7 @@ struct LogrecSerializer<btree_insert_log>
 };
 
 template <>
-struct UndoLogrecSerializer<btree_insert_log>
+struct UndoLogrecSerializer<LogRecordType::btree_insert_log>
 {
     static size_t construct(char* dest, const w_keystr_t& key,
             const cvec_t& /*el*/)
@@ -94,7 +94,7 @@ struct UndoLogrecSerializer<btree_insert_log>
 };
 
 template <>
-struct LogrecSerializer<btree_compress_page_log>
+struct LogrecSerializer<LogRecordType::btree_compress_page_log>
 {
     static void construct(logrec_t* lr,
             const w_keystr_t& low, const w_keystr_t& high, const w_keystr_t& chain)
@@ -129,7 +129,7 @@ struct LogrecSerializer<btree_compress_page_log>
 };
 
 template <>
-struct LogrecSerializer<btree_insert_nonghost_log>
+struct LogrecSerializer<LogRecordType::btree_insert_nonghost_log>
 {
     static void construct(logrec_t* lr,
             const w_keystr_t &key, const cvec_t &el)
@@ -146,7 +146,7 @@ struct LogrecSerializer<btree_insert_nonghost_log>
 };
 
 template <>
-struct UndoLogrecSerializer<btree_insert_nonghost_log>
+struct UndoLogrecSerializer<LogRecordType::btree_insert_nonghost_log>
 {
     static size_t construct(char* dest, const w_keystr_t& key,
             const cvec_t& /*el*/)
@@ -164,7 +164,7 @@ struct UndoLogrecSerializer<btree_insert_nonghost_log>
 };
 
 template <>
-struct LogrecSerializer<btree_update_log>
+struct LogrecSerializer<LogRecordType::btree_update_log>
 {
     static void construct(logrec_t* lr,
         const w_keystr_t& key, const char* /*old_el*/, int /*old_elen*/,
@@ -183,7 +183,7 @@ struct LogrecSerializer<btree_update_log>
 };
 
 template <>
-struct UndoLogrecSerializer<btree_update_log>
+struct UndoLogrecSerializer<LogRecordType::btree_update_log>
 {
     static size_t construct(char* dest,
         const w_keystr_t& key, const char* old_el, int old_elen,
@@ -201,7 +201,7 @@ struct UndoLogrecSerializer<btree_update_log>
 };
 
 template <>
-struct LogrecSerializer<btree_overwrite_log>
+struct LogrecSerializer<LogRecordType::btree_overwrite_log>
 {
     static void construct(logrec_t* lr, const w_keystr_t&
             key, const char* /*old_el*/, const char *new_el, uint16_t offset,
@@ -223,7 +223,7 @@ struct LogrecSerializer<btree_overwrite_log>
 };
 
 template <>
-struct UndoLogrecSerializer<btree_overwrite_log>
+struct UndoLogrecSerializer<LogRecordType::btree_overwrite_log>
 {
     static size_t construct(char* dest, const w_keystr_t&
             key, const char* old_el, const char* /*new_el*/, uint16_t offset,
@@ -245,7 +245,7 @@ struct UndoLogrecSerializer<btree_overwrite_log>
 };
 
 template <>
-struct LogrecSerializer<btree_ghost_mark_log>
+struct LogrecSerializer<LogRecordType::btree_ghost_mark_log>
 {
     template <typename PagePtr>
     static void construct(logrec_t* lr, const PagePtr p, const
@@ -263,7 +263,7 @@ struct LogrecSerializer<btree_ghost_mark_log>
 };
 
 template <>
-struct LogrecSerializer<btree_ghost_reclaim_log>
+struct LogrecSerializer<LogRecordType::btree_ghost_reclaim_log>
 {
     template <typename PagePtr>
     static void construct(logrec_t* lr, const PagePtr p, const
@@ -281,7 +281,7 @@ struct LogrecSerializer<btree_ghost_reclaim_log>
 };
 
 template <>
-struct LogrecSerializer<btree_ghost_reserve_log>
+struct LogrecSerializer<LogRecordType::btree_ghost_reserve_log>
 {
     static void construct (logrec_t* lr,
         const w_keystr_t& key, int element_length)
@@ -298,7 +298,7 @@ struct LogrecSerializer<btree_ghost_reserve_log>
 };
 
 template <>
-struct LogrecSerializer<btree_bulk_delete_log>
+struct LogrecSerializer<LogRecordType::btree_bulk_delete_log>
 {
     template <typename PagePtr>
     static void construct (logrec_t* lr, PagePtr p, PageID new_foster_child,
@@ -320,7 +320,7 @@ struct LogrecSerializer<btree_bulk_delete_log>
 };
 
 template <>
-struct LogrecSerializer<btree_foster_adopt_log>
+struct LogrecSerializer<LogRecordType::btree_foster_adopt_log>
 {
     template <typename PagePtr>
     static void construct (logrec_t* lr, PagePtr p,

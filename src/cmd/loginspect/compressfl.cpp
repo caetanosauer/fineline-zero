@@ -19,13 +19,11 @@ void CompressFl::setupOptions()
 void CompressFl::run()
 {
     sm_options options;
-    options.set_string_option("sm_archdir", archdir);
-    options.set_string_option("sm_logdir", logdir);
 
-    auto log = std::make_unique<log_core>(options);
+    auto log = std::make_unique<LogManager>(logdir, false /*format*/);
     smlevel_0::log = log.get();
     log->init();
-    auto arch = std::make_unique<LogArchiver>(options);
+    auto arch = std::make_unique<LogArchiver>(archdir, log.get(), true /*format*/, false /*merge*/);
     smlevel_0::logArchiver = arch.get();
     arch->fork();
     auto bf = std::make_unique<bf_tree_m>(options);
@@ -40,7 +38,7 @@ void CompressFl::run()
         fixable_page_h p;
         p.fix_direct(pid, LATCH_SH);
         sys_xct_section_t ssx;
-        Logger::log_p<page_img_format_log>(&p);
+        Logger::log_p<LogRecordType::page_img_format_log>(&p);
         W_COERCE(ssx.end_sys_xct(RCOK));
     }
     W_COERCE(ss_m::commit_xct());

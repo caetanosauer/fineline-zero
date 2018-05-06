@@ -6,11 +6,12 @@
 #include <set>
 #include "w_okvl_inl.h"
 #include "w_debug.h"
-#include "critical_section.h"
+#include "latches.h"
 #include "sm_options.h"
 
 #include "sm_base.h"
-#include "log_core.h"
+// CS TODO: move oldest lsn tracker into zero/out of finelog
+#include "log.h"
 #include "log_lsn_tracker.h"
 
 // Following includes are to have the ability to handle on_demand UNDO for Restart operation

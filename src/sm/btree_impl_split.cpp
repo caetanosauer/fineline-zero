@@ -60,7 +60,7 @@ rc_t btree_impl::_sx_split_foster(btree_page_h& page, PageID& new_page_id,
     W_DO(new_page.format_foster_child(page, new_page_id, triggering_key, split_key,
             move_count));
     // Another special case (format) where log happens after update
-    Logger::log_p<page_img_format_log>(&new_page);
+    Logger::log_p<LogRecordType::page_img_format_log>(&new_page);
     w_assert0(move_count > 0);
     // DBG5(<< "NEW FOSTER CHILD " << new_page);
 
@@ -72,7 +72,7 @@ rc_t btree_impl::_sx_split_foster(btree_page_h& page, PageID& new_page_id,
      * fence on overflowing page. Foster parent is not recompressed after
      * moving records (CS TODO)
      */
-    Logger::log_p<btree_bulk_delete_log>(&page, new_page_id, move_count, split_key, new_chain);
+    Logger::log_p<LogRecordType::btree_bulk_delete_log>(&page, new_page_id, move_count, split_key, new_chain);
     page.delete_range(page.nrecs() - move_count, page.nrecs());
     // DBG5(<< "AFTER RANGE DELETE " << page);
 
@@ -210,9 +210,9 @@ rc_t btree_impl::_ux_adopt_foster_core (btree_page_h &parent, btree_page_h &chil
     w_assert1(!smlevel_0::bf->is_swizzled_pointer(new_child_pid));
 
     lsn_t child_emlsn = child.get_foster_emlsn();
-    Logger::log_p<btree_foster_adopt_log>(&parent, new_child_pid, child_emlsn, new_child_key);
+    Logger::log_p<LogRecordType::btree_foster_adopt_log>(&parent, new_child_pid, child_emlsn, new_child_key);
     _ux_adopt_foster_apply_parent (parent, new_child_pid, child_emlsn, new_child_key);
-    Logger::log_p<btree_unset_foster_log>(&child);
+    Logger::log_p<LogRecordType::btree_unset_foster_log>(&child);
     _ux_adopt_foster_apply_child (child);
 
     // Switch parent of newly adopted child

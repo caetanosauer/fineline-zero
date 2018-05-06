@@ -7,6 +7,7 @@
 #include "basethread.h"
 #include "handler.h"
 #include "scanner.h"
+#include "log_interface.h"
 #include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
@@ -51,7 +52,7 @@ public:
 
     virtual void setupOptions();
 protected:
-    BaseScanner* getScanner(bitset<t_max_logrec>* filter = NULL);
+    BaseScanner* getScanner(bitset<ZeroLogInterface::typeCount>* filter = NULL);
     BaseScanner* getMergeScanner();
     BaseScanner* getLogArchiveScanner();
 

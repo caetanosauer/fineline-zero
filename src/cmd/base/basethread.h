@@ -6,6 +6,7 @@
 #include "sm_base.h"
 #include "logarchiver.h"
 #include "xct.h"
+#include "sm_options.h"
 
 #include <stdexcept>
 #include <queue>

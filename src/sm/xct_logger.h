@@ -4,26 +4,26 @@
 #include "sm.h"
 #include "xct.h"
 #include "btree_page_h.h"
-#include "log_core.h"
 #include "logrec_support.h"
 #include "logrec_serialize.h"
+#include "log_interface.h"
 
 class UndoOnlyLogger
 {
 public:
 
-    template <kind_t LR, class... Args>
+    template <LogRecordType LR, class... Args>
     static void log(const Args&... args)
     {
         log_sys<LR>(args...);
     }
 
-    template <kind_t LR, class PagePtr, class... Args>
+    template <LogRecordType LR, class PagePtr, class... Args>
     static void log_p(PagePtr p, const Args&... args)
     {
         p->incr_version();
 
-        if (logrec_t::get_logrec_cat(LR) & logrec_t::t_undo) {
+        if (ZeroLogInterface::getFlags(LR) & logrec_t::t_undo) {
             auto undobuf = smthread_t::get_undo_buf();
             char* dest = undobuf->acquire();
             if (dest) {
@@ -35,17 +35,17 @@ public:
     }
 
     /// This Logger still generates system log records
-    template <kind_t LR, class... Args>
+    template <LogRecordType LR, class... Args>
     static lsn_t log_sys(const Args&... args)
     {
         // this should use TLS allocator, so it's fast
         // (see macro DEFINE_SM_ALLOC in allocator.h and logrec.cpp)
         logrec_t* logrec = new logrec_t;
 
-        logrec->init_header(LR);
+        logrec->init_header(enum_to_base(LR));
         LogrecSerializer<LR>::serialize(nullptr, logrec, args...);
         w_assert1(logrec->valid_header());
-        w_assert1(logrec_t::get_logrec_cat(LR) == logrec_t::t_system);
+        w_assert1(ZeroLogInterface::getFlags(LR) == logrec_t::t_system);
 
         lsn_t lsn;
         W_COERCE(ss_m::log->insert(*logrec, &lsn));
@@ -60,7 +60,7 @@ class XctLogger
 {
 public:
 
-    template <kind_t LR, class... Args>
+    template <LogRecordType LR, class... Args>
     static void log(const Args&... args)
     {
         xct_t* xd = smthread_t::xct();
@@ -68,21 +68,21 @@ public:
         char* dest = redobuf->acquire();
         w_assert0(dest);
         auto logrec = reinterpret_cast<logrec_t*>(dest);
-        logrec->init_header(LR);
+        logrec->init_header(enum_to_base(LR));
         LogrecSerializer<LR>::serialize(nullptr, logrec, args...);
         w_assert1(logrec->valid_header());
 
         // REDO log records always pertain to a page and must therefore use log_p
         w_assert1(!logrec->is_redo());
         // This method is only used for xct_end right now
-        w_assert1(logrec->type() == xct_end_log);
+        w_assert1(logrec->type() == enum_to_base(LogRecordType::xct_end_log));
         w_assert1(!xd->is_sys_xct());
         w_assert1(!logrec->is_undo());
 
         redobuf->release(logrec->length());
     }
 
-    template <kind_t LR, class PagePtr, class... Args>
+    template <LogRecordType LR, class PagePtr, class... Args>
     static void log_p(PagePtr p, const Args&... args)
     {
         xct_t* xd = smthread_t::xct();
@@ -90,7 +90,7 @@ public:
             // RULE: Always log before applying update, otherwise compression won't work!
             // log this page image as an SX to keep it out of the xct undo chain
             sys_xct_section_t sx;
-            log_p<page_img_format_log>(p);
+            log_p<LogRecordType::page_img_format_log>(p);
             W_COERCE(sx.end_sys_xct(RCOK));
 
             // Keep track of additional space created by page images on log
@@ -104,7 +104,7 @@ public:
         char* dest = redobuf->acquire();
         w_assert0(dest);
         auto logrec = reinterpret_cast<logrec_t*>(dest);
-        logrec->init_header(LR, p->pid());
+        logrec->init_header(enum_to_base(LR), p->pid());
         LogrecSerializer<LR>::serialize(p, logrec, args...);
         w_assert1(logrec->valid_header());
 
@@ -121,7 +121,7 @@ public:
             if (dest) {
                 auto len = UndoLogrecSerializer<LR>::serialize(dest, args...);
                 StoreID stid = p->store();
-                undobuf->release(len, stid, LR);
+                undobuf->release(len, stid, enum_to_base(LR));
             }
         }
     }
@@ -133,7 +133,7 @@ public:
      * The difference to the other logging methods is that no xct or page
      * is involved and the logrec buffer is obtained with the 'new' operator.
      */
-    template <kind_t LR, class... Args>
+    template <LogRecordType LR, class... Args>
     static lsn_t log_sys(const Args&... args)
     {
         if (!ss_m::log) { return lsn_t(0,0); }
@@ -142,13 +142,13 @@ public:
         // (see macro DEFINE_SM_ALLOC in allocator.h and logrec.cpp)
         logrec_t* logrec = new logrec_t;
 
-        logrec->init_header(LR);
+        logrec->init_header(enum_to_base(LR));
         LogrecSerializer<LR>::serialize(nullptr, logrec, args...);
         w_assert1(logrec->valid_header());
-        w_assert1(logrec_t::get_logrec_cat(LR) == logrec_t::t_system);
+        w_assert1(ZeroLogInterface::getFlags(LR) == logrec_t::t_system);
 
         lsn_t lsn;
-        W_COERCE(ss_m::log->insert(*logrec, &lsn));
+        ss_m::log->insert(*logrec, &lsn);
         // logrec->set_lsn(lsn);
 
         delete logrec;
@@ -167,9 +167,9 @@ public:
     }
 
     template <class PagePtr>
-    static bool _should_apply_img_compression(kind_t type, PagePtr page)
+    static bool _should_apply_img_compression(LogRecordType type, PagePtr page)
     {
-        if (type == page_img_format_log) { return false; }
+        if (type == LogRecordType::page_img_format_log) { return false; }
 
         auto comp = ss_m::log->get_page_img_compression();
         if (comp == 0) { return false; }

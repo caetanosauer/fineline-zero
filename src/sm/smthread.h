@@ -79,7 +79,6 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include <list>
 #include <array>
 
-#include "timeout.h"
 #include "latches.h"
 #include "logrec.h"
 #include "smstats.h"

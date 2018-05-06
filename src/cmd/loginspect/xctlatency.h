@@ -18,16 +18,16 @@ private:
 class LatencyHandler : public Handler {
 public:
     LatencyHandler(int interval = 1,
-            kind_t begin = t_max_logrec,
-            kind_t end = t_max_logrec);
+            uint8_t begin = ZeroLogInterface::typeCount,
+            uint8_t end = ZeroLogInterface::typeCount);
     virtual void invoke(logrec_t& r);
     virtual void finalize();
 protected:
     const int interval;
     int currentTick;
 
-    kind_t begin;
-    kind_t end;
+    uint8_t begin;
+    uint8_t end;
     bool seenBegin;
 
     unsigned long accum_latency;

@@ -37,8 +37,8 @@ void ArchStats::printRunInfo(const RunId& runid)
 
 void ArchStats::run()
 {
-    smopt.set_string_option("sm_archdir", logdir);
-    archIndex = make_shared<ArchiveIndex>(smopt);
+    // smopt.set_string_option("sm_archdir", logdir);
+    archIndex = make_shared<ArchiveIndex>(logdir, nullptr /*logStorage*/, false /*format*/);
 
     std::vector<RunId> runs;
     if (!filename.empty()) {
@@ -75,7 +75,7 @@ void ArchStats::run()
 void ArchStatsScanner::invoke(logrec_t& r)
 {
     auto pid = r.pid();
-    if ((pid != currentPID || !started) && r.type() != skip_log)
+    if ((pid != currentPID || !started) && r.is_eof())
     {
         started = true;
         std::cout << "pid " << pid

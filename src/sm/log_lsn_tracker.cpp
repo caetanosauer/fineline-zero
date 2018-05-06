@@ -63,12 +63,12 @@ void PoorMansOldestLsnTracker::leave(uint64_t xct_id) {
 
 
 lsn_t PoorMansOldestLsnTracker::get_oldest_active_lsn(lsn_t curr_lsn) {
-    lsndata_t smallest = lsndata_max;
+    lsn_t smallest = lsn_t::max;
     for (uint32_t i = 0; i < _buckets; ++i) {
-        if (_low_water_marks[i] != 0 && _low_water_marks[i] < smallest) {
+        if (_low_water_marks[i] != 0 && _low_water_marks[i] < smallest.data()) {
             smallest = _low_water_marks[i];
         }
     }
-    _cache = lsn_t(smallest == lsndata_max ? curr_lsn.data() : smallest);
+    _cache = (smallest == lsn_t::max) ? curr_lsn : smallest;
     return _cache;
 }

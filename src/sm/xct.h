@@ -86,7 +86,8 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include "w_key.h"
 #include "lsn.h"
 #include "allocator.h"
-#include "latch.h"
+#include "latches.h"
+#include "sm_base.h"
 
 struct okvl_mode;
 struct RawXct;

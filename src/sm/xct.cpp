@@ -25,7 +25,6 @@
 #include "bf_tree.h"
 #include "lock_raw.h"
 #include "log_lsn_tracker.h"
-#include "log_core.h"
 #include "xct_logger.h"
 
 #include "allocator.h"
@@ -59,12 +58,6 @@ void sm_tls_allocator::release(xct_t::xct_core* p, size_t)
 }
 
 #define DBGX(arg) DBG(<< "tid." << _tid  arg)
-
-// If we run into btree shrinking activity, we'll bump up the
-// fudge factor, b/c to undo a lot of btree removes (incremental
-// tree removes) takes about 4X the logging...
-extern double logfudge_factors[t_max_logrec]; // in logstub.cpp
-#define UNDO_FUDGE_FACTOR(t, nbytes) int((logfudge_factors[t])*(nbytes))
 
 #ifdef W_TRACE
 extern "C" void debugflags(const char *);
@@ -630,8 +623,8 @@ void
 xct_t::change_state(state_t new_state)
 {
     // Acquire a write latch, the traditional read latch is used by checkpoint
-    w_rc_t latch_rc = latch().latch_acquire(LATCH_EX, timeout_t::WAIT_FOREVER);
-    if (latch_rc.is_error())
+    auto latch_rc = latch().latch_acquire(LATCH_EX, timeout_t::WAIT_FOREVER);
+    if (latch_rc != AcquireResult::OK)
     {
         // Unable to the read acquire latch, cannot continue, raise an internal error
         DBGOUT2 (<< "Unable to acquire LATCH_EX for transaction object. tid = "
@@ -663,7 +656,7 @@ void xct_t::flush_redo_buffer(bool sys_xct, bool sync_log)
 {
     // CS FINELINE TODO: simplify this, by unifying all tcb, redobuf, xct,
     // and ss_m code
-    if (!sys_xct) { Logger::log<xct_end_log>(); }
+    if (!sys_xct) { Logger::log<LogRecordType::xct_end_log>(); }
     // FINELINE log insert of whole redo buffer
     auto redobuf = smthread_t::get_redo_buf();
     auto offset = _ssx_positions[_ssx_chain_len];
@@ -738,7 +731,7 @@ rc_t xct_t::commit(bool sync_log)
     _latency_count++;
     // dump average latency every 100 commits
     if (_latency_count % 100 == 0) {
-        Logger::log_sys<xct_latency_dump_log>(_accum_latency / _latency_count);
+        Logger::log_sys<LogRecordType::xct_latency_dump_log>(_accum_latency / _latency_count);
         _accum_latency = 0;
         _latency_count = 0;
     }
@@ -796,7 +789,7 @@ xct_t::_commit_read_only(lsn_t& inherited_read_watermark)
             timeval start, now, result;
             ::gettimeofday(&start,NULL);
             while (true) {
-                W_DO(log->flush(_read_watermark, false, true, &flushed));
+                log->flush(_read_watermark, false, true, &flushed);
                 if (flushed) {
                     break;
                 }
@@ -931,8 +924,8 @@ xct_t::rollback()
     for (int i = undo_buf->get_count() - 1; i >= 0; i--) {
         char* data = undo_buf->get_data(i);
         StoreID stid = undo_buf->get_store_id(i);
-        kind_t type = undo_buf->get_type(i);
-        logrec_t::undo(type, stid, data);
+        auto type = undo_buf->get_type(i);
+        ZeroLogInterface::undo(type, stid, data);
     }
 
     _read_watermark = lsn_t::null;

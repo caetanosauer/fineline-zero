@@ -1,5 +1,21 @@
 
+ # CS TODO: stuff moved to finelog, but no CMake project there yet
 set(sm_STAT_SRCS
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/log_carray.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/log.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/log_consumer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/log_storage.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/logarchiver.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/logarchive_writer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/logarchive_index.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/logarchive_scanner.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/logrec.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/lsn.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/mem_mgmt.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/latches.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/partition.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/worker_thread.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/basics.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/alloc_cache.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/alloc_page.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
@@ -19,27 +35,14 @@ set(sm_STAT_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/eventlog.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/fixable_page_h.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/generic_page.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/latch.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/latches.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/lock_core.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/lock.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/lock_dump.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/lock_lil.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/lock_raw.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/lock_x.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/log_carray.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/log_core.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/log_consumer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/log_storage.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/log_lsn_tracker.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/logarchiver.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/logarchive_writer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/logarchive_index.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/logarchive_scanner.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/mem_mgmt.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/logrec.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/page_evictioner.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/partition.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/restart.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/restore.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/sm.cpp

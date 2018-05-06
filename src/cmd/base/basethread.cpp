@@ -5,9 +5,8 @@
 #include <bf_tree.h>
 #include <lock.h>
 
-#include <log_lsn_tracker.h>
-#include <log_core.h>
-#include <log_carray.h>
+#include "log.h"
+#include "log_lsn_tracker.h"
 
 sm_options basethread_t::_options;
 
@@ -50,14 +49,13 @@ void basethread_t::start_log(string logdir)
 {
     if (!smlevel_0::log) {
         // instantiate log manager
-        log_core* log;
+        LogManager* log;
         cerr << "Initializing log manager ... " << flush;
         _options.set_string_option("sm_logdir", logdir);
-        _options.set_int_option("sm_logsize", 10000 * 1024);
-        log = new log_core(_options);
+        log = new LogManager(logdir);
         smlevel_0::log = log;
         cerr << "OK" << endl;
-        W_COERCE(log->init());
+        log->init();
     }
 }
 
@@ -66,10 +64,9 @@ void basethread_t::start_archiver(string archdir, size_t wsize, size_t bsize)
     LogArchiver* logArchiver;
 
     cerr << "Initializing log archiver ... " << flush;
-    _options.set_string_option("sm_archdir", archdir);
-    _options.set_int_option("sm_archiver_workspace_size", wsize);
-    _options.set_int_option("sm_archiver_block_size", bsize);
-    logArchiver = new LogArchiver(_options);
+    // _options.set_int_option("sm_archiver_workspace_size", wsize);
+    // _options.set_int_option("sm_archiver_block_size", bsize);
+    logArchiver = new LogArchiver(archdir, smlevel_0::log, false /*format*/, false /*merge*/);
     cerr << "OK" << endl;
 
     smlevel_0::logArchiver = logArchiver;

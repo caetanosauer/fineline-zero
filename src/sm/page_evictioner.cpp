@@ -1,7 +1,6 @@
 #include "page_evictioner.h"
 
 #include "bf_tree.h"
-#include "log_core.h"
 #include "xct_logger.h"
 #include "btree_page_h.h"
 
@@ -95,7 +94,7 @@ bool page_evictioner_base::evict_one(bf_idx victim)
 
     generic_page* p = &_bufferpool->_buffer[victim];
     if (_log_evictions) {
-        Logger::log_sys<evict_page_log>(pid, p->version);
+        Logger::log_sys<LogRecordType::evict_page_log>(pid, p->version);
     }
     // Add to table of evicted pages (FineLine)
     if (_evict_unarchived) {
@@ -171,9 +170,8 @@ bf_idx page_evictioner_base::pick_victim()
         }
 
         // Step 1: latch page in EX mode and check if eligible for eviction
-        rc_t latch_rc;
-        latch_rc = cb.latch().latch_acquire(LATCH_EX, timeout_t::WAIT_IMMEDIATE);
-        if (latch_rc.is_error()) {
+        auto latch_rc = cb.latch().latch_acquire(LATCH_EX, timeout_t::WAIT_IMMEDIATE);
+        if (latch_rc != AcquireResult::OK) {
             INC_TSTAT(bf_evict_failed_latch);
             DBG3(<< "Eviction failed on latch for " << idx);
             continue;
@@ -266,8 +264,8 @@ bool page_evictioner_base::unswizzle_and_update_emlsn(bf_idx idx)
     }
 
     bf_tree_cb_t& parent_cb = _bufferpool->get_cb(parent_idx);
-    rc_t r = parent_cb.latch().latch_acquire(LATCH_EX, timeout_t::WAIT_IMMEDIATE);
-    if (r.is_error()) {
+    auto r = parent_cb.latch().latch_acquire(LATCH_EX, timeout_t::WAIT_IMMEDIATE);
+    if (r != AcquireResult::OK) {
         /* Just give up. If we try to latch it unconditionally, we may deadlock,
          * because other threads are also waiting on the eviction mutex. */
         return false;

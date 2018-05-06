@@ -1,8 +1,10 @@
 #include "truncatelog.h"
 
 #include <fstream>
+#include <cstring>
 
 #include "sm.h"
+#include "logrec.h"
 
 #define BOOST_FILESYSTEM_NO_DEPRECATED
 #include <boost/filesystem.hpp>
@@ -34,7 +36,7 @@ void TruncateLog::run()
     size_t pos = 0;
 
     logrec_t* logrec = (logrec_t*) (buffer + pos);
-    logrec->init_header(skip_log);
+    ::memcpy(logrec, &logrec_t::get_eof_logrec(), logrec_t::get_eof_logrec().length());
     // reinterpret_cast<skip_log*>(logrec)->construct();
     // CS TODO FINELINE: new log priming
     // logrec->set_lsn_ck(lsn_t(partition, pos));

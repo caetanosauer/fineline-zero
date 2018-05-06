@@ -33,7 +33,7 @@
 
 // #include "k_defines.h"
 #include "sm_vas.h"
-#include "log_core.h"
+#include "log.h"
 
 #include <map>
 #include <atomic>

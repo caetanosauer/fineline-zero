@@ -69,7 +69,6 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include "alloc_cache.h"
 #include "btree_page.h"
 #include "allocator.h"
-#include "log_core.h"
 #include "logarchiver.h"
 #include "xct_logger.h"
 
@@ -101,7 +100,7 @@ bool        smlevel_0::statistics_enabled = true;
 static srwlock_t          _begin_xct_mutex;
 
 bf_tree_m* smlevel_0::bf = 0;
-log_core* smlevel_0::log = 0;
+LogManager* smlevel_0::log = 0;
 stnode_cache_t* smlevel_0::stnode = 0;
 alloc_cache_t* smlevel_0::alloc = 0;
 LogArchiver* smlevel_0::logArchiver = 0;
@@ -229,19 +228,26 @@ ss_m::_construct_once()
     /*
      *  Level 1
      */
-    log = new log_core(_options);
+    auto logdir = _options.get_string_option("sm_logdir", "log");
+    bool format = _options.get_bool_option("sm_format", false);
+    size_t partition_size = _options.get_int_option("sm_log_partition_size", 1024);
+    bool delete_old_partitions = _options.get_bool_option("sm_log_delete_old_partitions", true);
+    log = new LogManager(logdir, format, partition_size, delete_old_partitions);
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing log manager (part 2)");
-    W_COERCE(log->init());
+    log->init();
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing log archiver");
 
     // FineLine: log archiver always on; restart recovery consists of archiving
     // the unsorted portion of the log
-    logArchiver = new LogArchiver(_options);
+    auto archdir = _options.get_string_option("sm_archdir", "archive");
+    bool merge = _options.get_bool_option("sm_archiver_merging", false);
+    logArchiver = new LogArchiver(archdir, log, format, merge);
     logArchiver->fork();
     lsn_t durable_lsn = log->durable_lsn();
     if (durable_lsn > lsn_t(1,0)) {
+       // CS TODO: move this log/logarchiver orchestration into finelog
         // log_core always creates a new partition, so flush archive until end of previous one
         logArchiver->archiveUntil(durable_lsn.hi() - 1);
         ERROUT(<< "[" << timer.time_ms() << "] Log archiver reached durable_lsn: "
@@ -251,10 +257,8 @@ ss_m::_construct_once()
     ERROUT(<< "[" << timer.time_ms() << "] Initializing restart manager");
 
     if (_options.get_bool_option("sm_log_benchmark_start", false)) {
-            Logger::log_sys<benchmark_start_log>();
+            Logger::log_sys<LogRecordType::benchmark_start_log>();
     }
-
-    bool format = _options.get_bool_option("sm_format", false);
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing buffer manager");
 
@@ -341,7 +345,7 @@ ss_m::_destruct_once()
     if (shutdown_clean || truncate) {
         ERROUT(<< "SM performing clean shutdown");
 
-        W_COERCE(log->flush_all());
+        log->flush_all();
         smthread_t::check_actual_pin_count(0);
 
         if (truncate) { W_COERCE(_truncate_log()); }
@@ -395,7 +399,7 @@ rc_t ss_m::_truncate_log()
     DBGTHRD(<< "Truncating log on LSN " << log->durable_lsn());
 
     // Wait for cleaner to finish its current round
-    W_DO(log->flush_all());
+    log->flush_all();
 
     // CS this first archiveUntilLSN() is only needed if we want to truncate
     // the log archive. Since I never actually used this, it's commented out.
@@ -409,10 +413,10 @@ rc_t ss_m::_truncate_log()
     // }
 
     // create new, empty partition on log
-    W_DO(log->truncate());
+    log->truncate();
     // CS TODO: little hack -- empty log causes file not found in archiveUntilLSN
-    Logger::log_sys<comment_log>("o hi there");
-    W_DO(log->flush_all());
+    Logger::log_sys<LogRecordType::comment_log>("o hi there");
+    log->flush_all();
 
     // generate an empty log archive run to cover the new durable LSN
     if(logArchiver) {
@@ -642,7 +646,8 @@ ss_m::config_info(sm_config_info_t& info) {
 rc_t
 ss_m::sync_log(bool block)
 {
-    return log? log->flush_all(block) : RCOK;
+  log->flush_all(block);
+  return (RCOK);
 }
 
 /*--------------------------------------------------------------*
@@ -651,7 +656,8 @@ ss_m::sync_log(bool block)
 rc_t
 ss_m::flush_until(lsn_t& anlsn, bool block)
 {
-  return log->flush(anlsn, block);
+  log->flush(anlsn, block);
+  return (RCOK);
 }
 
 /*--------------------------------------------------------------*

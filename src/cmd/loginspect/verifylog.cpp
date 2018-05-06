@@ -90,7 +90,7 @@ void VerifyHandler::checkAlloc(logrec_t& r)
     // CS TODO FINELINE: pass lsn from log consumer into handlers
     lsn_t lsn = lsn_t::null;
     PageID pid = *((PageID*) (r.data()));
-    if (r.type() == alloc_page_log) {
+    if (r.type() == enum_to_base(LogRecordType::alloc_page_log)) {
         if (allocatedPages.find(pid) != allocatedPages.end()) {
             std::cout << "on " << lsn
                 << " alloc_page of pid " << pid
@@ -99,7 +99,7 @@ void VerifyHandler::checkAlloc(logrec_t& r)
         }
         allocatedPages.insert(pid);
     }
-    else if (r.type() == dealloc_page_log) {
+    else if (r.type() == enum_to_base(LogRecordType::dealloc_page_log)) {
         if (allocatedPages.find(pid) == allocatedPages.end()) {
             std::cout << "on " << lsn
                 << " dealloc_page of pid " << pid
@@ -111,7 +111,7 @@ void VerifyHandler::checkAlloc(logrec_t& r)
     else {
         std::cout << "on " << lsn
             << " update on alloc pid " << r.pid()
-            << " but invalid logrec type " << r.type_str()
+            << " but invalid logrec type " << ZeroLogInterface::getTypeString(r.type())
             << std::endl;
         w_assert0(false);
     }

@@ -5,6 +5,7 @@
 #include "sm_base.h"
 #include "lsn.h"
 #include "logarchiver.h"
+#include "log_interface.h"
 
 #include "basethread.h"
 #include "handler.h"
@@ -47,7 +48,7 @@ protected:
 class BlockScanner : public BaseScanner {
 public:
     BlockScanner(const po::variables_map& options,
-            bitset<t_max_logrec>* filter = NULL);
+            bitset<ZeroLogInterface::typeCount>* filter = NULL);
     virtual ~BlockScanner();
 
     virtual void run();

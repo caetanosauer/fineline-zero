@@ -4,7 +4,6 @@
 
 #include "restore.h"
 #include "logarchiver.h"
-#include "log_core.h"
 #include "bf_tree.h"
 #include "sm_options.h"
 #include "xct_logger.h"
@@ -37,7 +36,7 @@ void SegmentRestorer::bf_restore(unsigned segment_begin, unsigned segment_end,
         }
 
         // CS TODO:  use boolean template parameter to tell whether to log or not
-        Logger::log_sys<restore_segment_log>(s);
+        Logger::log_sys<LogRecordType::restore_segment_log>(s);
     }
 }
 
@@ -87,7 +86,7 @@ void LogReplayer::replay(LogScan logs, PageIter& pagesBegin, PageIter pagesEnd)
         }
 
         if (lr->page_version() > fixable.version()) {
-            lr->redo(&fixable);
+           ZeroLogInterface::redo(lr, &fixable);
         }
 
         w_assert0(p->pid == pid);

@@ -122,9 +122,8 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
  * transaction when making the call.
  */
 
-
 template<typename E>
-constexpr auto enum_to_base(E e) -> typename std::underlying_type<E>::type
+constexpr auto _enum_to_base(E e) -> typename std::underlying_type<E>::type
 {
        return static_cast<typename std::underlying_type<E>::type>(e);
 }
@@ -370,7 +369,7 @@ enum class sm_stat_id : size_t
     stat_max // Leave this one here to count the number of stats!
 };
 
-using sm_stats_t = std::array<long, enum_to_base(sm_stat_id::stat_max)>;
+using sm_stats_t = std::array<long, _enum_to_base(sm_stat_id::stat_max)>;
 
 // CS TODO: move this into some static class instead of global functions
 void print_sm_stats(sm_stats_t& stats, std::ostream& out);

@@ -6,7 +6,7 @@
 #define BF_TREE_CB_H
 
 #include "w_defines.h"
-#include "latch.h"
+#include "latches.h"
 #include "bf_tree.h"
 #include <string.h>
 #include <atomic>

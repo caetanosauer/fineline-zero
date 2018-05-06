@@ -2,7 +2,7 @@
 #include <random>
 #include "stopwatch.h"
 #include "sm_options.h"
-#include "log_core.h"
+#include "log.h"
 #include "thread_wrapper.h"
 
 #include <boost/program_options.hpp>
@@ -12,7 +12,7 @@ po::options_description options_desc;
 po::variables_map options;
 
 sm_options sm_opt;
-log_core* logcore;
+LogManager* logcore;
 
 size_t num_threads;
 size_t duration;
@@ -102,7 +102,7 @@ public:
     {
         sm_opt.set_string_option("sm_logdir", logdir);
         sm_opt.set_bool_option("sm_format", true);
-        logcore = new log_core(sm_opt);
+        logcore = new LogManager(sm_opt);
         smlevel_0::log = logcore;
         W_COERCE(logcore->init());
 

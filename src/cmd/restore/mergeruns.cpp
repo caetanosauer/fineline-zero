@@ -32,10 +32,11 @@ void MergeRuns::run()
         throw runtime_error("Invalid merge fan-in (must be > 1)");
     }
 
-    sm_options opt;
-    opt.set_string_option("sm_archdir", indir);
-    opt.set_int_option("sm_page_img_compression", compression);
-    auto in = std::make_shared<ArchiveIndex>(opt);
+    // CS TODO: sm_options is gone!
+    // sm_options opt;
+    // opt.set_string_option("sm_archdir", indir);
+    // opt.set_int_option("sm_page_img_compression", compression);
+    auto in = std::make_shared<ArchiveIndex>(indir, nullptr /*logStorage*/, false /*format*/);
 
     auto out = in;
     if (!outdir.empty() && outdir != indir) {
@@ -50,12 +51,12 @@ void MergeRuns::run()
             }
         }
 
-        opt.set_string_option("sm_archdir", outdir);
-        out = std::make_shared<ArchiveIndex>(opt);
+        // opt.set_string_option("sm_archdir", outdir);
+        out = std::make_shared<ArchiveIndex>(outdir, nullptr /*logStorage*/, false /*format*/);
     }
 
-    MergerDaemon merge(opt, in, out);
-    W_COERCE(merge.doMerge(level, fanin));
+    MergerDaemon merge(in, out);
+    merge.doMerge(level, fanin);
 
     if (replFactor > 0) {
         out->deleteRuns(replFactor);

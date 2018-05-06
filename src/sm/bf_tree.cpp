@@ -23,9 +23,8 @@
 #include <algorithm>
 
 #include "sm_options.h"
-#include "latch.h"
+#include "latches.h"
 #include "btree_page_h.h"
-#include "log_core.h"
 #include "xct.h"
 #include "logarchiver.h"
 #include "xct_logger.h"
@@ -349,7 +348,7 @@ void bf_tree_m::set_warmup_done()
     if (!_warmup_done) {
         _warmup_done = true;
         _restore_coord = nullptr;
-        Logger::log_sys<warmup_done_log>();
+        Logger::log_sys<LogRecordType::warmup_done_log>();
     }
 }
 
@@ -419,7 +418,7 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
             }
             while (p.version() < expected_version) {
                 lr = smlevel_0::log->fetch_direct(logp, nextLSN);
-                if (lr->type() == skip_log) { break; }
+                if (lr->is_eof()) { break; }
                 if (lr->pid() == p.pid()) {
                     _localSprIter.redo(p, lr);
                 }
@@ -436,7 +435,7 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
     cb.set_check_recovery(false);
 
     if (_log_fetches) {
-        Logger::log_sys<fetch_page_log>(pid, page->version, page->store);
+        Logger::log_sys<LogRecordType::fetch_page_log>(pid, page->version, page->store);
     }
 }
 
@@ -450,6 +449,16 @@ void bf_tree_m::notify_archived_run(run_number_t archived_run)
 ///////////////////////////////////   Page fix/unfix BEGIN         ///////////////////////////////////
 // NOTE most of the page fix/unfix functions are in bf_tree_inline.h.
 // These functions are here are because called less frequently.
+
+static rc_t getAcquireRC(AcquireResult rc)
+{
+       // CS TODO: get rid of rc_t in Zero
+    switch (rc) {
+        case AcquireResult::OK: return RCOK;
+        case AcquireResult::TIMEOUT: return RC(stTIMEOUT);
+        case AcquireResult::WOULD_BLOCK: return RC(stINUSE);
+    }
+}
 
 w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
                                    PageID pid, latch_mode_t mode,
@@ -469,8 +478,9 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
         w_assert1(_is_valid_idx(idx));
         bf_tree_cb_t &cb = get_cb(idx);
 
-        W_DO(cb.latch().latch_acquire(mode,
-                    conditional ? timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
+        auto rc = cb.latch().latch_acquire(mode,
+                    conditional ? timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER);
+        W_DO(getAcquireRC(rc));
 
         // CS: Normally, we must always check if cb is still valid after
         // latching, because page might have been evicted while we were waiting
@@ -539,9 +549,8 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
 
             // STEP 2) Acquire EX latch before hash table insert, to make sure
             // nobody will access this page until we're done
-            w_rc_t check_rc = cb.latch().latch_acquire(LATCH_EX,
-                    timeout_t::WAIT_IMMEDIATE);
-            if (check_rc.is_error())
+            auto check_rc = cb.latch().latch_acquire(LATCH_EX, timeout_t::WAIT_IMMEDIATE);
+            if (check_rc != AcquireResult::OK)
             {
                 _add_free_block(idx);
                 continue;
@@ -598,8 +607,9 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
             // Grab latch in the mode requested by user (or in EX if we might
             // have to recover this page)
             latch_mode_t temp_mode = cb._check_recovery ? LATCH_EX : mode;
-            W_DO(cb.latch().latch_acquire(temp_mode, conditional ?
-                        timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
+            auto rc = cb.latch().latch_acquire(temp_mode, conditional ?
+                        timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER);
+            W_DO(getAcquireRC(rc));
 
             // Checks below must be performed again, because CB state may have changed
             // while we were waiting for the latch
@@ -984,7 +994,7 @@ w_rc_t bf_tree_m::_sx_update_child_emlsn(btree_page_h &parent, general_recordid_
                                          lsn_t child_emlsn) {
     sys_xct_section_t sxs;
     w_assert1(parent.is_latched());
-    Logger::log_p<update_emlsn_log>(&parent, child_slotid, child_emlsn);
+    Logger::log_p<LogRecordType::update_emlsn_log>(&parent, child_slotid, child_emlsn);
     parent.set_emlsn_general(child_slotid, child_emlsn);
     W_DO (sxs.end_sys_xct (RCOK));
     return RCOK;
@@ -1061,8 +1071,9 @@ bf_idx bf_tree_m::get_root_page_idx(StoreID store) {
 w_rc_t bf_tree_m::refix_direct (generic_page*& page, bf_idx
                                        idx, latch_mode_t mode, bool conditional) {
     bf_tree_cb_t &cb = get_cb(idx);
-    W_DO(cb.latch().latch_acquire(mode, conditional ?
-                timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
+    auto rc = cb.latch().latch_acquire(mode, conditional ?
+                timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER);
+    W_DO(getAcquireRC(rc));
     w_assert1(cb._pin_cnt > 0);
     // cb.pin();
     DBG(<< "Refix direct of " << idx << " set pin cnt to " << cb._pin_cnt);
@@ -1117,8 +1128,9 @@ w_rc_t bf_tree_m::fix_root (generic_page*& page, StoreID store,
     }
     else {
         // Pointer to root page was swizzled -- direct access to CB
-        W_DO(get_cb(idx).latch().latch_acquire(
-                    mode, conditional ? timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
+        auto rc = get_cb(idx).latch().latch_acquire(
+                    mode, conditional ? timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER);
+        W_DO(getAcquireRC(rc));
         page = &(_buffer[idx]);
     }
 

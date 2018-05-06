@@ -2,7 +2,6 @@
 #include "sm.h"
 #include "stopwatch.h"
 #include "sm_options.h"
-#include "log_core.h"
 #include "alloc_cache.h"
 #include "stnode_page.h"
 #include "bf_tree.h"
@@ -178,7 +177,7 @@ public:
         // CS TODO
         ss_m::_options = sm_opt;
 
-        smlevel_0::log = new log_core(sm_opt);
+        smlevel_0::log = new LogManager(sm_opt);
         smlevel_0::log->init();
 
         bool archiving = sm_opt.get_bool_option("sm_archiving", false);

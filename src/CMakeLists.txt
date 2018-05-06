@@ -11,6 +11,7 @@ INCLUDE_DIRECTORIES (
   ${CMAKE_SOURCE_DIR}/src/common
   ${CMAKE_SOURCE_DIR}/src/sm
   ${CMAKE_SOURCE_DIR}/src/cmd
+  ${CMAKE_SOURCE_DIR}/finelog/src
 )
 # to look for generated headers
 INCLUDE_DIRECTORIES (
@@ -18,6 +19,7 @@ INCLUDE_DIRECTORIES (
   ${CMAKE_BINARY_DIR}/src/common
   ${CMAKE_BINARY_DIR}/src/sm
   ${CMAKE_BINARY_DIR}/src/cmd
+  ${CMAKE_SOURCE_DIR}/finelog/src
 )
 
 add_subdirectory(common)

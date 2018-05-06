@@ -45,7 +45,7 @@ void SprIterator::redo(fixable_page_h& p, logrec_t* lr)
         return;
     }
 
-    lr->redo(&p);
+    ZeroLogInterface::redo(lr, &p);
 }
 
 void SprIterator::apply(fixable_page_h &p)

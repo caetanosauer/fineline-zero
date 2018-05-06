@@ -7,7 +7,7 @@
 
 #include "w_defines.h"
 #include "alloc_page.h"
-#include "latch.h"
+#include "latches.h"
 #include "stnode_page.h"
 #include <map>
 #include <vector>

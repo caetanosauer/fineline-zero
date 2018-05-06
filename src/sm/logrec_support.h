@@ -19,7 +19,7 @@
 struct page_img_format_t {
     size_t      beginning_bytes;
     size_t      ending_bytes;
-    char        data[logrec_t::max_data_sz - 2 * sizeof(size_t)];
+    char        data[logrec_t::MaxDataSize - 2 * sizeof(size_t)];
 
     int size()        { return 2 * sizeof(size_t) + beginning_bytes + ending_bytes; }
 
@@ -68,7 +68,7 @@ struct page_img_format_t {
         w_assert1(beginning_bytes + ending_bytes <= sizeof(generic_page));
     }
 
-    void apply(generic_page* page)
+    void apply(generic_page* page) const
     {
         // w_assert1(beginning_bytes >= btree_page::hdr_sz);
         w_assert1(beginning_bytes + ending_bytes <= sizeof(generic_page));
@@ -129,7 +129,7 @@ struct btree_ghost_t {
     // this is analogous to BTree page structure on purpose.
     // by doing so, we can guarantee the total size is <data_sz.
     // because one log should be coming from just one page.
-    char          slot_data[logrec_t::max_data_sz - sizeof(PageID)
+    char          slot_data[logrec_t::MaxDataSize - sizeof(PageID)
                         - sizeof(uint16_t) * 2 - sizeof(size_t)];
 
     btree_ghost_t(const PagePtr p, const vector<slotid_t>& slots, const bool is_sys_txn)
@@ -166,7 +166,7 @@ struct btree_ghost_t {
             current += sizeof(uint16_t) + len;
         }
         total_data_size = current - slot_data;
-        w_assert0(logrec_t::max_data_sz >= sizeof(PageID) + sizeof(uint16_t) * 2  + sizeof(size_t) + total_data_size);
+        w_assert0(logrec_t::MaxDataSize >= sizeof(PageID) + sizeof(uint16_t) * 2  + sizeof(size_t) + total_data_size);
     }
 
     w_keystr_t get_key (size_t i) const
@@ -195,7 +195,7 @@ struct btree_ghost_t {
 struct btree_ghost_reserve_t {
     uint16_t      klen;
     uint16_t      element_length;
-    char          data[logrec_t::max_data_sz - sizeof(uint16_t) * 2];
+    char          data[logrec_t::MaxDataSize - sizeof(uint16_t) * 2];
 
     btree_ghost_reserve_t(const w_keystr_t& key, int elem_length)
         : klen (key.get_length_as_keystr()), element_length (elem_length)
@@ -210,7 +210,7 @@ struct btree_foster_adopt_t {
     lsn_t   _new_child_emlsn;   // +8
     PageID _new_child_pid;     // +4
     int16_t _new_child_key_len; // +2
-    char    _data[logrec_t::max_data_sz - 14];
+    char    _data[logrec_t::MaxDataSize - 14];
 
     btree_foster_adopt_t(PageID new_child_pid,
                          lsn_t new_child_emlsn, const w_keystr_t& new_child_key)
@@ -241,7 +241,7 @@ struct btree_bulk_delete_t {
             sizeof(uint16_t) * 4 // 3 uints + fill
             + sizeof(PageID)
     };
-    char _data[logrec_t::max_data_sz - fields_sz];
+    char _data[logrec_t::MaxDataSize - fields_sz];
 
     btree_bulk_delete_t(PageID new_foster_child,
             uint16_t move_count, const w_keystr_t& new_high_fence,

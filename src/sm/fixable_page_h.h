@@ -7,7 +7,7 @@
 
 #include "bf_hashtable.h"
 #include "generic_page.h"
-#include "latch.h"
+#include "latches.h"
 #include "sm_base.h"
 
 

@@ -1,5 +1,4 @@
 #include "genarchive.h"
-#include "log_core.h"
 #include "xct_logger.h"
 
 #include <fstream>
@@ -23,21 +22,19 @@ void GenArchive::setupOptions()
 
 void GenArchive::run()
 {
-    sm_options opt;
-    opt.set_string_option("sm_logdir", logdir);
-    opt.set_string_option("sm_archdir", archdir);
-    opt.set_int_option("sm_archiver_block_size", BLOCK_SIZE);
-    opt.set_int_option("sm_archiver_bucket_size", bucketSize);
-    opt.set_int_option("sm_page_img_compression", 16384);
+    // CS TODO: sm_options is gone!
+    // opt.set_int_option("sm_archiver_block_size", BLOCK_SIZE);
+    // opt.set_int_option("sm_archiver_bucket_size", bucketSize);
+    // opt.set_int_option("sm_page_img_compression", 16384);
 
-    log_core* log = new log_core(opt);
-    W_COERCE(log->init());
+    LogManager* log = new LogManager(logdir);
+    log->init();
     smlevel_0::log = log;
     // CS TODO: little hack -- empty log causes file not found in archiveUntilLSN
-    Logger::log_sys<comment_log>("o hi there");
-    W_COERCE(log->flush_all());
+    Logger::log_sys<LogRecordType::comment_log>("o hi there");
+    log->flush_all();
 
-    LogArchiver* la = new LogArchiver(opt);;
+    LogArchiver* la = new LogArchiver(archdir, log, true /*format*/, false /*merge*/);
 
     lsn_t durableLSN = log->durable_lsn();
     cerr << "Activating log archiver until LSN " << durableLSN << endl;

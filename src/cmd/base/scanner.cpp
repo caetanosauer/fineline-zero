@@ -33,7 +33,7 @@ void BaseScanner::initialize()
 }
 
 BlockScanner::BlockScanner(const po::variables_map& options,
-        bitset<t_max_logrec>* filter)
+        bitset<ZeroLogInterface::typeCount>* filter)
     : BaseScanner(options), pnum(-1)
 {
     logdir = options["logdir"].as<string>().c_str();
@@ -43,16 +43,17 @@ BlockScanner::BlockScanner(const po::variables_map& options,
     logScanner = new LogScanner(blockSize);
     currentBlock = new char[blockSize];
 
-    if (filter) {
-        logScanner->ignoreAll();
-        for (int i = 0; i < t_max_logrec; i++) {
-            if (filter->test(i)) {
-                logScanner->unsetIgnore((kind_t) i);
-            }
-        }
-        // skip cannot be ignored because it tells us when file ends
-        logScanner->unsetIgnore(skip_log);
-    }
+    // CS TODO: filters disabled in finelog
+    // if (filter) {
+    //     logScanner->ignoreAll();
+    //     for (int i = 0; i < ZeroLogInterface::typeCount; i++) {
+    //         if (filter->test(i)) {
+    //             logScanner->unsetIgnore((kind_t) i);
+    //         }
+    //     }
+    //     // skip cannot be ignored because it tells us when file ends
+    //     logScanner->unsetIgnore(skip_log);
+    // }
 }
 
 void BlockScanner::findFirstFile()
@@ -156,7 +157,7 @@ void BlockScanner::run()
             bpos = 0;
             while (logScanner->nextLogrec(currentBlock, bpos, lr)) {
                 handle(lr, lsn_t(pnum, readpos + bpos - lr->length()));
-                if (lr->type() == skip_log) {
+                if (lr->is_eof()) {
                     fpos = fend;
                     break;
                 }
@@ -210,10 +211,10 @@ void LogArchiveScanner::run()
     // CS TODO no option for archiver block size
     // size_t blockSize = LogArchiver::DFT_BLOCK_SIZE;
     // size_t blockSize = options["sm_archiver_block_size"].as<int>();
-    sm_options opt;
-    opt.set_string_option("sm_archdir", archdir);
+    // sm_options opt;
+    // opt.set_string_option("sm_archdir", archdir);
     // opt.set_int_option("sm_archiver_block_size", blockSize);
-    auto directory = std::make_shared<ArchiveIndex>(opt);
+    auto directory = std::make_shared<ArchiveIndex>(archdir, nullptr /*logStorage*/, false /*format*/);
 
     std::vector<std::string> runFiles;
 
@@ -289,7 +290,7 @@ void MergeScanner::run()
     // opt.set_int_option("sm_archiver_block_size", blockSize);
     // opt.set_int_option("sm_archiver_bucket_size", bucketSize);
 
-    auto directory = std::make_shared<ArchiveIndex>(opt);
+    auto directory = std::make_shared<ArchiveIndex>(archdir, nullptr /*logStorage*/, false /*format*/);
     ArchiveScan scan {directory};
     scan.open(scan_pid, 0, 0);
 

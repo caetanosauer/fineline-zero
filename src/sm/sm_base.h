@@ -70,7 +70,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include <climits>
 #include <w.h>
 #include <vec_t.h>
-#include <latch.h>
+#include <latches.h>
 #include <smthread.h>
 #include <tid_t.h>
 #include "smstats.h"
@@ -88,7 +88,7 @@ class xct_i;
 
 class bf_tree_m;
 class comm_m;
-class log_core;
+class LogManager;
 class lock_m;
 class LogArchiver;
 class alloc_cache_t;
@@ -285,7 +285,7 @@ public:
     static alloc_cache_t* alloc;
     static stnode_cache_t* stnode;
 
-    static log_core* log;
+    static LogManager* log;
     static LogArchiver* logArchiver;
 
     static int    dcommit_timeout; // to convey option to coordinator,

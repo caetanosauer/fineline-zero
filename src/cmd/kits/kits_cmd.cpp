@@ -18,8 +18,6 @@ namespace fs = boost::filesystem;
 #include "tpcc/tpcc_client.h"
 #include "tpcc/tpcc_input.h"
 
-#include "util/stopwatch.h"
-
 int MAX_THREADS = 1000;
 
 template <class Env>

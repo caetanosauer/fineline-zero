@@ -6,8 +6,7 @@
 #define BF_TREE_H
 
 #include "w_defines.h"
-#include "latch.h"
-#include "tatas.h"
+#include "latches.h"
 #include "generic_page.h"
 #include "bf_hashtable.h"
 #include "bf_tree_cb.h"

@@ -392,7 +392,7 @@ void Command::helpOption()
 size_t LogScannerCommand::BLOCK_SIZE = 1024 * 1024;
 
 BaseScanner* LogScannerCommand::getScanner(
-        bitset<t_max_logrec>* filter)
+        bitset<ZeroLogInterface::typeCount>* filter)
 {
     BaseScanner* s;
     if (isArchive) {

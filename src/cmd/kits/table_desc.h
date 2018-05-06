@@ -94,7 +94,6 @@
 
 
 #include "sm_vas.h"
-#include "mcs_lock.h"
 
 //#include "shore_msg.h"
 #include "util/guard.h"

@@ -9,21 +9,21 @@
 #include "w_okvl.h"
 #include "btree.h"
 #include "btree_impl.h"
-#include "logrec.h"
 #include "logrec_support.h"
 #include "logrec_serialize.h"
+#include "logrec_types.h"
 #include "encoding.h"
 
-template<kind_t LR, class PagePtr>
+template<LogRecordType LR, class PagePtr>
 struct LogrecHandler
 {
     // generic template, never instantiated
 };
 
 template<class PagePtr>
-struct LogrecHandler<stnode_format_log, PagePtr>
+struct LogrecHandler<LogRecordType::stnode_format_log, PagePtr>
 {
-    static void redo(logrec_t*, PagePtr p)
+    static void redo(const logrec_t*, PagePtr p)
     {
         auto stpage = reinterpret_cast<stnode_page*>(p->get_generic_page());
         stpage->format_empty();
@@ -31,9 +31,9 @@ struct LogrecHandler<stnode_format_log, PagePtr>
 };
 
 template<class PagePtr>
-struct LogrecHandler<alloc_format_log, PagePtr>
+struct LogrecHandler<LogRecordType::alloc_format_log, PagePtr>
 {
-    static void redo(logrec_t*, PagePtr p)
+    static void redo(const logrec_t*, PagePtr p)
     {
         auto page = reinterpret_cast<alloc_page*>(p->get_generic_page());
         page->format_empty();
@@ -41,9 +41,9 @@ struct LogrecHandler<alloc_format_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<update_emlsn_log, PagePtr>
+struct LogrecHandler<LogRecordType::update_emlsn_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page)
+    static void redo(const logrec_t* lr, PagePtr page)
     {
         general_recordid_t slot;
         lsn_t lsn;
@@ -54,9 +54,9 @@ struct LogrecHandler<update_emlsn_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<alloc_page_log, PagePtr>
+struct LogrecHandler<LogRecordType::alloc_page_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr p)
+    static void redo(const logrec_t* lr, PagePtr p)
     {
         PageID alloc_pid = lr->pid();
         PageID pid;
@@ -70,9 +70,9 @@ struct LogrecHandler<alloc_page_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<dealloc_page_log, PagePtr>
+struct LogrecHandler<LogRecordType::dealloc_page_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr p)
+    static void redo(const logrec_t* lr, PagePtr p)
     {
         PageID pid;
         deserialize_log_fields(lr, pid);
@@ -86,18 +86,18 @@ struct LogrecHandler<dealloc_page_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<page_img_format_log, PagePtr>
+struct LogrecHandler<LogRecordType::page_img_format_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page) {
-        page_img_format_t* dp = reinterpret_cast<page_img_format_t*>(lr->data());
+    static void redo(const logrec_t* lr, PagePtr page) {
+        auto dp = reinterpret_cast<const page_img_format_t*>(lr->data());
         dp->apply(page->get_generic_page());
     }
 };
 
 template <class PagePtr>
-struct LogrecHandler<create_store_log, PagePtr>
+struct LogrecHandler<LogRecordType::create_store_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page)
+    static void redo(const logrec_t* lr, PagePtr page)
     {
         StoreID snum;
         PageID root_pid;
@@ -113,9 +113,9 @@ struct LogrecHandler<create_store_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<append_extent_log, PagePtr>
+struct LogrecHandler<LogRecordType::append_extent_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page)
+    static void redo(const logrec_t* lr, PagePtr page)
     {
         extent_id_t ext;
         StoreID snum;
@@ -126,17 +126,17 @@ struct LogrecHandler<append_extent_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_compress_page_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_compress_page_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page)
+    static void redo(const logrec_t* lr, PagePtr page)
     {
-        char* ptr = lr->data();
+        const char* ptr = lr->data();
 
-        uint16_t low_len = *((uint16_t*) ptr);
+        uint16_t low_len = *((const uint16_t*) ptr);
         ptr += sizeof(uint16_t);
-        uint16_t high_len = *((uint16_t*) ptr);
+        uint16_t high_len = *((const uint16_t*) ptr);
         ptr += sizeof(uint16_t);
-        uint16_t chain_len = *((uint16_t*) ptr);
+        uint16_t chain_len = *((const uint16_t*) ptr);
         ptr += sizeof(uint16_t);
 
         w_keystr_t low, high, chain;
@@ -152,12 +152,12 @@ struct LogrecHandler<btree_compress_page_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_insert_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_insert_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page)
+    static void redo(const logrec_t* lr, PagePtr page)
     {
         borrowed_btree_page_h bp(page);
-        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data());
+        auto dp = reinterpret_cast<const serialized_kv_pair_t*>(lr->data());
 
         w_assert1(bp.is_leaf());
         w_keystr_t key;
@@ -178,12 +178,12 @@ struct LogrecHandler<btree_insert_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_insert_nonghost_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_insert_nonghost_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page)
+    static void redo(const logrec_t* lr, PagePtr page)
     {
         borrowed_btree_page_h bp(page);
-        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data());
+        auto dp = reinterpret_cast<const serialized_kv_pair_t*>(lr->data());
 
         w_assert1(bp.is_leaf());
         w_keystr_t key;
@@ -195,17 +195,17 @@ struct LogrecHandler<btree_insert_nonghost_log, PagePtr>
 
     static void undo(StoreID stid, const char* data)
     {
-        LogrecHandler<btree_insert_log, PagePtr>::undo(stid, data);
+        LogrecHandler<LogRecordType::btree_insert_log, PagePtr>::undo(stid, data);
     }
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_update_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_update_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page)
+    static void redo(const logrec_t* lr, PagePtr page)
     {
         borrowed_btree_page_h bp(page);
-        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data());
+        auto dp = reinterpret_cast<const serialized_kv_pair_t*>(lr->data());
 
         w_assert1(bp.is_leaf());
         w_keystr_t key;
@@ -232,13 +232,13 @@ struct LogrecHandler<btree_update_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_overwrite_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_overwrite_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page)
+    static void redo(const logrec_t* lr, PagePtr page)
     {
         borrowed_btree_page_h bp(page);
-        uint16_t offset = *(reinterpret_cast<uint16_t*>(lr->data()));
-        auto dp = reinterpret_cast<serialized_kv_pair_t*>(lr->data() + sizeof(uint16_t));
+        uint16_t offset = *(reinterpret_cast<const uint16_t*>(lr->data()));
+        auto dp = reinterpret_cast<const serialized_kv_pair_t*>(lr->data() + sizeof(uint16_t));
 
         w_assert1(bp.is_leaf());
 
@@ -270,9 +270,9 @@ struct LogrecHandler<btree_overwrite_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_ghost_mark_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_ghost_mark_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page)
+    static void redo(const logrec_t* lr, PagePtr page)
     {
         w_assert1(page);
         borrowed_btree_page_h bp(page);
@@ -322,9 +322,9 @@ struct LogrecHandler<btree_ghost_mark_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_ghost_reclaim_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_ghost_reclaim_log, PagePtr>
 {
-    static void redo(logrec_t* /*unused*/, PagePtr page)
+    static void redo(const logrec_t* /*unused*/, PagePtr page)
     {
         // REDO is to defrag it again
         borrowed_btree_page_h bp(page);
@@ -336,9 +336,9 @@ struct LogrecHandler<btree_ghost_reclaim_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_ghost_reserve_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_ghost_reserve_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr page)
+    static void redo(const logrec_t* lr, PagePtr page)
     {
         // REDO is to physically make the ghost record
         borrowed_btree_page_h bp(page);
@@ -351,9 +351,9 @@ struct LogrecHandler<btree_ghost_reserve_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_bulk_delete_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_bulk_delete_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr p)
+    static void redo(const logrec_t* lr, PagePtr p)
     {
         btree_bulk_delete_t* bulk = (btree_bulk_delete_t*) lr->data();
 
@@ -369,9 +369,9 @@ struct LogrecHandler<btree_bulk_delete_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_unset_foster_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_unset_foster_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr p)
+    static void redo(const logrec_t* lr, PagePtr p)
     {
         borrowed_btree_page_h bp(p);
         btree_impl::_ux_adopt_foster_apply_child(bp);
@@ -379,12 +379,12 @@ struct LogrecHandler<btree_unset_foster_log, PagePtr>
 };
 
 template <class PagePtr>
-struct LogrecHandler<btree_foster_adopt_log, PagePtr>
+struct LogrecHandler<LogRecordType::btree_foster_adopt_log, PagePtr>
 {
-    static void redo(logrec_t* lr, PagePtr p)
+    static void redo(const logrec_t* lr, PagePtr p)
     {
         borrowed_btree_page_h bp(p);
-        btree_foster_adopt_t *dp = reinterpret_cast<btree_foster_adopt_t*>(lr->data());
+        auto dp = reinterpret_cast<const btree_foster_adopt_t*>(lr->data());
 
         w_keystr_t new_child_key;
         new_child_key.construct_from_keystr(dp->_data, dp->_new_child_key_len);

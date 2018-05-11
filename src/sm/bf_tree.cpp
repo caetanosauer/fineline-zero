@@ -493,7 +493,7 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
         page = &(_buffer[idx]);
 
         INC_TSTAT(bf_fix_cnt);
-        INC_TSTAT(bf_hit_cnt);
+        INC_TSTAT(bf_hit_swizzled_cnt);
         _fix_cnt++;
         _hit_cnt++;
 
@@ -580,7 +580,7 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
         }
         else
         {
-            INC_TSTAT(bf_hit_cnt);
+            INC_TSTAT(bf_hit_unswizzled_cnt);
             _hit_cnt++;
 
             // Page index is registered in hash table

@@ -100,7 +100,8 @@ const char* get_stat_name(sm_stat_id s)
         case sm_stat_id::io_latch_wait: return "io_latch_wait";
         case sm_stat_id::bf_look_cnt: return "bf_look_cnt";
         case sm_stat_id::bf_grab_latch_failed: return "bf_grab_latch_failed";
-        case sm_stat_id::bf_hit_cnt: return "bf_hit_cnt";
+        case sm_stat_id::bf_hit_swizzled_cnt: return "bf_hit_swizzled_cnt";
+        case sm_stat_id::bf_hit_unswizzled_cnt: return "bf_hit_unswizzled_cnt";
         case sm_stat_id::bf_hit_wait: return "bf_hit_wait";
         case sm_stat_id::bf_hit_wait_any_p: return "bf_hit_wait_any_p";
         case sm_stat_id::bf_hit_wait_btree_p: return "bf_hit_wait_btree_p";
@@ -336,7 +337,8 @@ const char* get_stat_expl(sm_stat_id s)
         case sm_stat_id::io_latch_wait: return "Waited on io store latch (not in buffer pool)";
         case sm_stat_id::bf_look_cnt: return "Calls to find/grab";
         case sm_stat_id::bf_grab_latch_failed: return "Page found but could not acquire latch ";
-        case sm_stat_id::bf_hit_cnt: return "Found page in buffer pool in find/grab";
+        case sm_stat_id::bf_hit_unswizzled_cnt: return "Found page in buffer pool in find/grab (unswizzled)";
+        case sm_stat_id::bf_hit_swizzled_cnt: return "Found page in buffer pool in find/grab (swizzled)";
         case sm_stat_id::bf_hit_wait: return "Found page in buffer pool but awaited latch";
         case sm_stat_id::bf_hit_wait_any_p: return "Found page in b pool but awaited latch";
         case sm_stat_id::bf_hit_wait_btree_p: return "Found page in b pool but awaited latch";

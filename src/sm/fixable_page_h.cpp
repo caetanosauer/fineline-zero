@@ -149,8 +149,13 @@ uint64_t fixable_page_h::get_epoch() const
 
 void fixable_page_h::set_epoch(uint64_t epoch)
 {
+    // Caller must hold EX latch
     w_assert1(_pp);
-    _pp->epoch = epoch;
+    // Epoch field should contain the highest epoch among all transactions that modified the page.
+    // Thus, it canno be decreased when multiple transactions on different epochs update it.
+    if (epoch > _pp->epoch) {
+        _pp->epoch = epoch;
+    }
 }
 
 void fixable_page_h::set_check_recovery(bool chk)

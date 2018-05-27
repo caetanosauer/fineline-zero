@@ -8,6 +8,30 @@
 #include "logrec_support.h"
 #include "logrec_serialize.h"
 
+class DummyLogger
+{
+public:
+
+    template <kind_t LR, class... Args>
+    static void log(const Args&... args)
+    {
+        log_sys<LR>(args...);
+    }
+
+    template <kind_t LR, class PagePtr, class... Args>
+    static void log_p(PagePtr p, const Args&...)
+    {
+        p->incr_version();
+    }
+
+    /// This Logger still generates system log records
+    template <kind_t LR, class... Args>
+    static lsn_t log_sys(const Args&...)
+    {
+        return lsn_t::null;
+    }
+};
+
 class UndoOnlyLogger
 {
 public:
@@ -193,6 +217,7 @@ public:
 // CS TODO this is a temporary alias -- at some point the SM should have its
 // own generic Logger template argument
 // using Logger = UndoOnlyLogger;
-using Logger = XctLogger;
+// using Logger = XctLogger;
+using Logger = DummyLogger;
 
 #endif

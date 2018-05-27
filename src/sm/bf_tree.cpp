@@ -98,7 +98,7 @@ bf_tree_m::bf_tree_m(const sm_options& options)
     }
 
     bool bufferpool_swizzle =
-        options.get_bool_option("sm_bufferpool_swizzle", false);
+        options.get_bool_option("sm_bufferpool_swizzle", true);
     // clock or random
     std::string replacement_policy =
         options.get_string_option("sm_bufferpool_replacement_policy", "clock");
@@ -219,7 +219,7 @@ bf_tree_m::bf_tree_m(const sm_options& options)
     _hashtable = new bf_hashtable<bf_idx_pair>(buckets);
     w_assert0(_hashtable != NULL);
 
-    _evictioner = std::make_shared<page_evictioner_base>(this, options);
+    // _evictioner = std::make_shared<page_evictioner_base>(this, options);
     _async_eviction = options.get_bool_option("sm_async_eviction", false);
     if (_async_eviction) { _evictioner->fork(); }
 
@@ -315,6 +315,8 @@ w_rc_t bf_tree_m::_grab_free_block(bf_idx& ret)
                 break;
             }
         } // exit the scope to do the following out of the critical section
+
+        w_assert0(false && "Bottleneck experiments -- larger-than-memory workload not supported!");
 
         // no free frames -> warmup is done
         set_warmup_done();
@@ -457,7 +459,7 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
                                    bool only_if_hit, bool do_recovery,
                                    lsn_t emlsn)
 {
-    stopwatch_t timer;
+    // stopwatch_t timer;
 
     if (is_swizzled_pointer(pid)) {
         w_assert1(!virgin_page);
@@ -469,8 +471,8 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
         w_assert1(_is_valid_idx(idx));
         bf_tree_cb_t &cb = get_cb(idx);
 
-        W_DO(cb.latch().latch_acquire(mode,
-                    conditional ? timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
+        // W_DO(cb.latch().latch_acquire(mode,
+        //             conditional ? timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
 
         // CS: Normally, we must always check if cb is still valid after
         // latching, because page might have been evicted while we were waiting
@@ -487,7 +489,7 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
         w_assert1(cb._pid == _buffer[idx].pid);
 
         cb.inc_ref_count();
-        _evictioner->ref(idx);
+        // _evictioner->ref(idx);
         if (mode == LATCH_EX) { cb.inc_ref_count_ex(); }
 
         page = &(_buffer[idx]);
@@ -505,12 +507,12 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
     if (do_recovery && !virgin_page && _restore_coord && !_warmup_done)
     {
         // copy into local variable to avoid race condition with setting member to null
-        timer.reset();
+        // timer.reset();
         auto restore = _restore_coord;
         if (restore) {
             restore->fetch(pid);
         }
-        ADD_TSTAT(bf_batch_wait_time, timer.time_us());
+        // ADD_TSTAT(bf_batch_wait_time, timer.time_us());
     }
 
     while (true)
@@ -539,24 +541,24 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
 
             // STEP 2) Acquire EX latch before hash table insert, to make sure
             // nobody will access this page until we're done
-            w_rc_t check_rc = cb.latch().latch_acquire(LATCH_EX,
-                    timeout_t::WAIT_IMMEDIATE);
-            if (check_rc.is_error())
-            {
-                _add_free_block(idx);
-                continue;
-            }
+            // w_rc_t check_rc = cb.latch().latch_acquire(LATCH_EX,
+            //         timeout_t::WAIT_IMMEDIATE);
+            // if (check_rc.is_error())
+            // {
+            //     _add_free_block(idx);
+            //     continue;
+            // }
 
             // Register the page on the hashtable atomically. This guarantees
             // that only one thread will attempt to read the page
             bf_idx parent_idx = parent ? parent - _buffer : 0;
             bool registered = _hashtable->insert_if_not_exists(pid,
                     bf_idx_pair(idx, parent_idx));
-            if (!registered) {
-                cb.latch().latch_release();
-                _add_free_block(idx);
-                continue;
-            }
+            // if (!registered) {
+            //     cb.latch().latch_release();
+            //     _add_free_block(idx);
+            //     continue;
+            // }
 
             w_assert1(idx != parent_idx);
             // Read page from disk
@@ -586,31 +588,31 @@ w_rc_t bf_tree_m::fix(generic_page* parent, generic_page*& page,
             // Page index is registered in hash table
             bf_tree_cb_t &cb = get_cb(idx);
 
-            // Wait for instant restore to restore this segment
-            if (do_recovery && cb.is_pinned_for_restore())
-            {
-                timer.reset();
-                auto restore = _restore_coord;
-                if (restore) { restore->fetch(pid); }
-                ADD_TSTAT(bf_batch_wait_time, timer.time_us());
-            }
+//             // Wait for instant restore to restore this segment
+//             if (do_recovery && cb.is_pinned_for_restore())
+//             {
+//                 // timer.reset();
+//                 auto restore = _restore_coord;
+//                 if (restore) { restore->fetch(pid); }
+//                 // ADD_TSTAT(bf_batch_wait_time, timer.time_us());
+//             }
 
             // Grab latch in the mode requested by user (or in EX if we might
             // have to recover this page)
-            latch_mode_t temp_mode = cb._check_recovery ? LATCH_EX : mode;
-            W_DO(cb.latch().latch_acquire(temp_mode, conditional ?
-                        timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
+            // latch_mode_t temp_mode = cb._check_recovery ? LATCH_EX : mode;
+            // W_DO(cb.latch().latch_acquire(temp_mode, conditional ?
+            //             timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
 
-            // Checks below must be performed again, because CB state may have changed
-            // while we were waiting for the latch
-            bool check_recovery_changed = cb._check_recovery && temp_mode == LATCH_SH;
-            bool wait_for_restore = cb.is_pinned_for_restore() && do_recovery;
-            bool page_was_evicted = !cb.is_in_use() || cb._pid != pid;
-            if (page_was_evicted || check_recovery_changed || wait_for_restore)
-            {
-                cb.latch().latch_release();
-                continue;
-            }
+//             // Checks below must be performed again, because CB state may have changed
+//             // while we were waiting for the latch
+//             bool check_recovery_changed = cb._check_recovery && temp_mode == LATCH_SH;
+//             bool wait_for_restore = cb.is_pinned_for_restore() && do_recovery;
+//             bool page_was_evicted = !cb.is_in_use() || cb._pid != pid;
+//             if (page_was_evicted || check_recovery_changed || wait_for_restore)
+//             {
+//                 cb.latch().latch_release();
+//                 continue;
+//             }
 
             w_assert1(_is_active_idx(idx));
             cb.inc_ref_count();
@@ -1061,13 +1063,13 @@ bf_idx bf_tree_m::get_root_page_idx(StoreID store) {
 w_rc_t bf_tree_m::refix_direct (generic_page*& page, bf_idx
                                        idx, latch_mode_t mode, bool conditional) {
     bf_tree_cb_t &cb = get_cb(idx);
-    W_DO(cb.latch().latch_acquire(mode, conditional ?
-                timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
+    // W_DO(cb.latch().latch_acquire(mode, conditional ?
+    //             timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
     w_assert1(cb._pin_cnt > 0);
     // cb.pin();
     DBG(<< "Refix direct of " << idx << " set pin cnt to " << cb._pin_cnt);
     cb.inc_ref_count();
-    _evictioner->ref(idx);
+    // _evictioner->ref(idx);
     if (mode == LATCH_EX) { cb.inc_ref_count_ex(); }
     page = &(_buffer[idx]);
     return RCOK;
@@ -1117,8 +1119,8 @@ w_rc_t bf_tree_m::fix_root (generic_page*& page, StoreID store,
     }
     else {
         // Pointer to root page was swizzled -- direct access to CB
-        W_DO(get_cb(idx).latch().latch_acquire(
-                    mode, conditional ? timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
+        // W_DO(get_cb(idx).latch().latch_acquire(
+        //             mode, conditional ? timeout_t::WAIT_IMMEDIATE : timeout_t::WAIT_FOREVER));
         page = &(_buffer[idx]);
     }
 
@@ -1154,7 +1156,7 @@ void bf_tree_m::unfix(const generic_page* p, bool evict)
         w_assert1(cb._pin_cnt >= 0);
     }
     DBG(<< "Unfixed " << idx << " pin count " << cb._pin_cnt);
-    cb.latch().latch_release();
+    // cb.latch().latch_release();
 }
 
 bool bf_tree_m::is_used (bf_idx idx) const {

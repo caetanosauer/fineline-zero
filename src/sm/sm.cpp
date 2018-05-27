@@ -239,14 +239,14 @@ ss_m::_construct_once()
     // FineLine: log archiver always on; restart recovery consists of archiving
     // the unsorted portion of the log
     logArchiver = new LogArchiver(_options);
-    logArchiver->fork();
-    lsn_t durable_lsn = log->durable_lsn();
-    if (durable_lsn > lsn_t(1,0)) {
-        // log_core always creates a new partition, so flush archive until end of previous one
-        logArchiver->archiveUntil(durable_lsn.hi() - 1);
-        ERROUT(<< "[" << timer.time_ms() << "] Log archiver reached durable_lsn: "
-                << durable_lsn);
-    }
+    // logArchiver->fork();
+    // lsn_t durable_lsn = log->durable_lsn();
+    // if (durable_lsn > lsn_t(1,0)) {
+    //     // log_core always creates a new partition, so flush archive until end of previous one
+    //     logArchiver->archiveUntil(durable_lsn.hi() - 1);
+    //     ERROUT(<< "[" << timer.time_ms() << "] Log archiver reached durable_lsn: "
+    //             << durable_lsn);
+    // }
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing restart manager");
 
@@ -354,7 +354,7 @@ ss_m::_destruct_once()
     bf->shutdown();
 
     ERROUT(<< "Terminating log archiver");
-    if (logArchiver) { logArchiver->shutdown(); }
+    // if (logArchiver) { logArchiver->shutdown(); }
 
     ERROUT(<< "Terminating buffer manager");
     delete bf; bf = 0;

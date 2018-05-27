@@ -630,15 +630,15 @@ void
 xct_t::change_state(state_t new_state)
 {
     // Acquire a write latch, the traditional read latch is used by checkpoint
-    w_rc_t latch_rc = latch().latch_acquire(LATCH_EX, timeout_t::WAIT_FOREVER);
-    if (latch_rc.is_error())
-    {
-        // Unable to the read acquire latch, cannot continue, raise an internal error
-        DBGOUT2 (<< "Unable to acquire LATCH_EX for transaction object. tid = "
-                 << tid() << ", rc = " << latch_rc);
-        W_FATAL_MSG(fcINTERNAL, << "unable to write latch a transaction object to change state");
-        return;
-    }
+    // w_rc_t latch_rc = latch().latch_acquire(LATCH_EX, timeout_t::WAIT_FOREVER);
+    // if (latch_rc.is_error())
+    // {
+    //     // Unable to the read acquire latch, cannot continue, raise an internal error
+    //     DBGOUT2 (<< "Unable to acquire LATCH_EX for transaction object. tid = "
+    //              << tid() << ", rc = " << latch_rc);
+    //     W_FATAL_MSG(fcINTERNAL, << "unable to write latch a transaction object to change state");
+    //     return;
+    // }
 
     w_assert2(_core->_state != new_state);
     w_assert2((new_state > _core->_state) ||
@@ -647,7 +647,7 @@ xct_t::change_state(state_t new_state)
     _core->_state = new_state;
 
     // Release the write latch
-    latch().latch_release();
+    // latch().latch_release();
 
 }
 
@@ -675,7 +675,7 @@ void xct_t::flush_redo_buffer(bool sys_xct, bool sync_log)
     redobuf->drop_suffix(commit_size);
 
     if (sync_log) {
-	smlevel_0::log->flush(lsn);
+	// smlevel_0::log->flush(lsn);
     }
     w_assert1(sys_xct || redobuf->get_size() == 0);
     if (redobuf->get_size() == 0) {
@@ -796,10 +796,8 @@ xct_t::_commit_read_only(lsn_t& inherited_read_watermark)
             timeval start, now, result;
             ::gettimeofday(&start,NULL);
             while (true) {
-                W_DO(log->flush(_read_watermark, false, true, &flushed));
-                if (flushed) {
-                    break;
-                }
+                // W_DO(log->flush(_read_watermark, false, true, &flushed));
+                // if (flushed) { break; }
 
                 // in some OS, usleep() has a very low accuracy.
                 // So, we check the current time rather than assuming

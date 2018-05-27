@@ -310,7 +310,7 @@ rc_t log_core::init()
     if (_ticker) {
         _ticker->fork();
     }
-    start_flush_daemon();
+    // start_flush_daemon();
 
     return RCOK;
 }
@@ -985,7 +985,7 @@ lsn_t log_core::flush_daemon_work(lsn_t old_mark)
 
             // CS TODO: what is the purpose of old_mark? Do we ever use it?
             write_size = (end2 - start2) + (end1 - start1);
-            if (!_should_group_commit(write_size)) { return old_mark; }
+            // if (!_should_group_commit(write_size)) { return old_mark; }
 
             base_lsn_before = base_lsn_after;
             _cur_epoch.start = end2;
@@ -1002,7 +1002,7 @@ lsn_t log_core::flush_daemon_work(lsn_t old_mark)
             end1 = _old_epoch.end;
 
             write_size = (end2 - start2) + (end1 - start1);
-            if (!_should_group_commit(write_size)) { return old_mark; }
+            // if (!_should_group_commit(write_size)) { return old_mark; }
 
             _old_epoch.start = end1;
             _cur_epoch.start = end2;
@@ -1057,7 +1057,7 @@ lsn_t log_core::flush_daemon_work(lsn_t old_mark)
     // For eviction purposes, epoch associated with the log file must be the lowest active, and not current!
     _log_file_epochs[p->num()] = _epoch_tracker.get_lowest_active_epoch() - 1;
 
-    _group_commit_timer.reset();
+    // _group_commit_timer.reset();
 
     return end_lsn;
 }

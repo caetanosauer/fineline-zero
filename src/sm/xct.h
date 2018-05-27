@@ -684,10 +684,11 @@ operator>(const xct_t& x1, const xct_t& x2)
 inline bool
 g_xct_does_need_lock()
 {
-    xct_t* x = xct();
-    if (x == NULL)  return false;
-    if (x->is_sys_xct()) return false; // system transaction never needs locks
-    return x->get_query_concurrency() == smlevel_0::t_cc_keyrange;
+    // xct_t* x = xct();
+    // if (x == NULL)  return false;
+    // if (x->is_sys_xct()) return false; // system transaction never needs locks
+    // return x->get_query_concurrency() == smlevel_0::t_cc_keyrange;
+    return false;
 }
 
 inline bool

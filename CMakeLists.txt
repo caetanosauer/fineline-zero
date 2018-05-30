@@ -76,7 +76,7 @@ SET(CMAKE_CXX_FLAGS_DEBUG3  "-O0 -g -DDEBUG -DW_DEBUG_LEVEL=3 ${LINK_GOOGLEPROFI
 SET(CMAKE_CXX_FLAGS_DEBUG1  "-Og -g -DDEBUG -DW_DEBUG_LEVEL=1 ${LINK_GOOGLEPROFILER}")
 SET(CMAKE_CXX_FLAGS_DEBUG  ${CMAKE_CXX_FLAGS_DEBUG1})
 ## Below is better for performance analysis; above is better for debugging
-SET(CMAKE_CXX_FLAGS_PROFILE "-O3 -g -pg -DW_DEBUG_LEVEL=0 -DNDEBUG -fPIC ${LINK_GOOGLEPROFILER} ${COMPILE_MUTRACE}")
+SET(CMAKE_CXX_FLAGS_PROFILE "-O3 -g -pg -DW_DEBUG_LEVEL=0 -DNDEBUG -fPIC -fno-omit-frame-pointer ${LINK_GOOGLEPROFILER} ${COMPILE_MUTRACE}")
 ## Release build with most aggressive optimization
 ## (leave debug symbols since they don't affect performance at all=
 SET(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -DNDEBUG -fexpensive-optimizations -finline-functions -DW_DEBUG_LEVEL=0 ${LINK_GOOGLEPROFILER}")

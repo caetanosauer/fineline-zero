@@ -40,13 +40,13 @@
 
 
 index_desc_t::index_desc_t(table_desc_t* table,
-                           string name,
+                           StoreID stid,
                            const int fieldcnt,
                            const unsigned* fields,
                            bool unique, bool primary,
                            const uint32_t& pd,
                            bool rmapholder)
-    : _table(table), _name(name), _field_count(fieldcnt),
+    : _table(table), _stid(stid), _field_count(fieldcnt),
       _unique(unique), _primary(primary),
       _rmapholder(rmapholder),
       _maxkeysize(0)
@@ -73,12 +73,6 @@ index_desc_t::~index_desc_t()
     }
 }
 
-// find the index_desc_t by name
-bool index_desc_t::matches_name(const char* name)
-{
-    return (strcmp(name, _name.c_str()) == 0);
-}
-
 int index_desc_t::key_index(const unsigned index) const
 {
     assert (index < _field_count);
@@ -93,34 +87,16 @@ int index_desc_t::key_index(const unsigned index) const
  *
  ******************************************************************/
 
-// For debug use only: print the description for all the field
-void index_desc_t::print_desc(ostream& os)
-{
-    os << "Schema for index " << _name << endl;
-    os << "Numer of fields: " << _field_count << endl;
-    for (unsigned i=0; i< _field_count; i++) {
-	os << _keydesc[i] << "|";
-    }
-    os << endl;
-}
-
-w_rc_t index_desc_t::load_stid(ss_m* db, StoreID cat_stid)
-{
-    smsize_t size = sizeof(StoreID);
-    w_keystr_t kstr;
-    kstr.construct_regularkey(_name.c_str(), _name.length());
-    StoreID stid;
-    bool found;
-    W_DO(db->find_assoc(cat_stid, kstr, &stid, size, found));
-
-    if (!found) {
-        return RC(eNOTFOUND);
-    }
-    set_stid(stid);
-
-    return RCOK;
-}
-
+// // For debug use only: print the description for all the field
+// void index_desc_t::print_desc(ostream& os)
+// {
+//     os << "Schema for index " << _name << endl;
+//     os << "Numer of fields: " << _field_count << endl;
+//     for (unsigned i=0; i< _field_count; i++) {
+// 	os << _keydesc[i] << "|";
+//     }
+//     os << endl;
+// }
 
 #include <sstream>
 char const* db_pretty_print(index_desc_t const* ptdesc, int /* i=0 */, char const* /* s=0 */)

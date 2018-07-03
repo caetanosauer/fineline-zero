@@ -67,7 +67,6 @@ private:
     table_desc_t*   _table;
 
     StoreID _stid;
-    string _name;
 
     unsigned*       _key;                      /* index of fields in the base table */
     unsigned        _field_count;
@@ -91,7 +90,7 @@ public:
     /* ------------------- */
 
     index_desc_t(table_desc_t* table,
-                 string name, const int fieldcnt,
+                 StoreID stid, const int fieldcnt,
                  const unsigned* fields,
                  bool unique=true, bool primary=false,
                  const uint32_t& pd=PD_NORMAL,
@@ -99,17 +98,13 @@ public:
 
     ~index_desc_t();
 
-    string  name() const { return _name; }
     unsigned field_count() const { return _field_count; }
     table_desc_t* table() const { return _table; }
 
 
     bool          is_fid_valid() const { return (_stid != 0); }
 
-    StoreID& stid() { return _stid; }
-    void set_stid(StoreID const &stid) { _stid = stid; }
-
-    w_rc_t load_stid(ss_m* db, StoreID cat_stid);
+    StoreID stid() const { return _stid; }
 
     /* ---------------------- */
     /* --- access methods --- */
@@ -135,9 +130,6 @@ public:
         }
         return false;
     }
-
-    // find the index_desc_t by name
-    bool matches_name(const char* name);
 
     int key_index(const unsigned index) const;
 

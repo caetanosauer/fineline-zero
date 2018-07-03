@@ -125,7 +125,7 @@ district_t::district_t(const uint32_t& pd) :
 
 
 customer_t::customer_t(const uint32_t& pd) :
-    table_desc_t("CUSTOMER", TPCC_CUSTOMER_FCOUNT, pd)
+    table_desc_t(STID_CUSTOMER, TPCC_CUSTOMER_FCOUNT, pd)
 {
     // Schema
     _desc[0].setup(SQL_INT,    "C_ID");
@@ -161,7 +161,7 @@ customer_t::customer_t(const uint32_t& pd) :
 
     // create index c_name_index on (w_id, d_id, last, first, id)
     uint keys2[5] = {2, 1, 5, 3, 0}; // IDX { C_W_ID, C_D_ID, C_LAST, C_FIRST, C_ID }
-    create_index_desc("C_NAME_IDX", keys2, 5, false, false, pd);
+    create_index_desc(STID_CUSTOMER_NAME_IDX, keys2, 5, false, false, pd);
 }
 
 

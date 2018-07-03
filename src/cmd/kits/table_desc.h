@@ -129,8 +129,6 @@ class table_desc_t
 {
 protected:
 
-    pthread_mutex_t   _fschema_mutex;        // file schema mutex
-    string              _name;  // file name
     unsigned            _field_count;          // # of fields
     uint32_t           _pd;                   // info about the physical design
 
@@ -138,6 +136,7 @@ protected:
     /* --- table schema -- */
     /* ------------------- */
 
+    // TODO template ss_m as Database
     ss_m*           _db;                 // the SM
 
     field_desc_t*   _desc;               // schema - set of field descriptors
@@ -156,7 +155,7 @@ public:
     /* --- Constructor --- */
     /* ------------------- */
 
-    table_desc_t(const char* name, int fieldcnt, uint32_t pd);
+    table_desc_t(int fieldcnt, uint32_t pd);
     virtual ~table_desc_t();
 
 
@@ -182,15 +181,14 @@ public:
     /* ----------------------------------------------------- */
 
     // create an index on the table
-    bool   create_index_desc(const char* name,
-                             const unsigned* fields,
-                             const unsigned num,
+    bool   create_index_desc(const unsigned* fields,
+                             const unsigned num_fields,
                              const bool unique=true,
                              const bool primary=false,
                              const uint32_t& pd=PD_NORMAL);
 
     bool   create_primary_idx_desc(const unsigned* fields,
-                                   const unsigned num,
+                                   const unsigned num_fields,
                                    const uint32_t& pd=PD_NORMAL);
 
 
@@ -198,20 +196,6 @@ public:
     /* ------------------------ */
     /* --- index facilities --- */
     /* ------------------------ */
-
-    // index by name
-    index_desc_t* find_index(const char* index_name)
-    {
-        if (_primary_idx->matches_name(index_name)) {
-            return _primary_idx;
-        }
-        for (size_t i = 0; i < _indexes.size(); i++) {
-            if (_indexes[i]->matches_name(index_name)) {
-                return _indexes[i];
-            }
-        }
-        return NULL;
-    }
 
     std::vector<index_desc_t*>& get_indexes()
     {
@@ -246,7 +230,6 @@ public:
         return (&(_desc[descidx]));
     }
 
-    const char*   name() const { return _name.c_str(); }
     unsigned        field_count() const { return _field_count; }
     uint32_t       get_pd() const { return _pd; }
 
@@ -263,6 +246,7 @@ public:
     void print_desc(ostream & os = cout);  /* print the schema */
 
 protected:
+    // TODO hard-code field numbers!
     int find_field_by_name(const char* field_name) const;
 
     srwlock_t _mutex;

@@ -56,17 +56,17 @@ public:
     ~warehouse_man_impl() { }
 
     // --- access specific tuples  --- //
-    w_rc_t wh_index_probe(ss_m* db,
+    w_rc_t wh_index_probe(Database* db,
                           warehouse_tuple* ptuple,
                           const int w_id);
 
-    w_rc_t wh_index_probe_forupdate(ss_m* db,
+    w_rc_t wh_index_probe_forupdate(Database* db,
                                     warehouse_tuple* ptuple,
                                     const int w_id);
 
 
     // --- update a retrieved tuple --- //
-    w_rc_t wh_update_ytd(ss_m* db,
+    w_rc_t wh_update_ytd(Database* db,
                          warehouse_tuple* ptuple,
                          const double h_amount
                          );
@@ -88,24 +88,24 @@ public:
     ~district_man_impl() { }
 
     // --- access specific tuples --- //
-    w_rc_t dist_index_probe(ss_m* db,
+    w_rc_t dist_index_probe(Database* db,
                             district_tuple* ptuple,
                             const int w_id,
                             const int d_id);
 
-    w_rc_t dist_index_probe_forupdate(ss_m* db,
+    w_rc_t dist_index_probe_forupdate(Database* db,
                                       district_tuple* ptuple,
                                       const int w_id,
                                       const int d_id);
 
 
     // --- update a retrieved tuple --- //
-    w_rc_t dist_update_ytd(ss_m* db,
+    w_rc_t dist_update_ytd(Database* db,
                            district_tuple* ptuple,
                            const double h_amount);
 
 
-    w_rc_t dist_update_next_o_id(ss_m* db,
+    w_rc_t dist_update_next_o_id(Database* db,
                                  district_tuple* ptuple,
                                  const int  next_o_id);
 
@@ -128,7 +128,7 @@ public:
     ~customer_man_impl() { }
 
     // --- access tuples with iterator --- //
-    w_rc_t cust_get_iter_by_index(ss_m* db,
+    w_rc_t cust_get_iter_by_index(Database* db,
                                   customer_index_iter* &iter,
                                   customer_tuple* ptuple,
                                   rep_row_t &replow,
@@ -140,33 +140,33 @@ public:
 
 
     // --- access specific tuples --- //
-    w_rc_t cust_index_probe(ss_m* db,
+    w_rc_t cust_index_probe(Database* db,
                             customer_tuple* ptuple,
                             const int w_id,
                             const int d_id,
                             const int c_id);
 
-    w_rc_t cust_index_probe_by_name(ss_m* db,
+    w_rc_t cust_index_probe_by_name(Database* db,
                                     const char* idx_name,
                                     customer_tuple* ptuple,
                                     const int w_id,
                                     const int d_id,
                                     const int c_id);
 
-    w_rc_t cust_index_probe_forupdate(ss_m* db,
+    w_rc_t cust_index_probe_forupdate(Database* db,
                                       customer_tuple* ptuple,
                                       const int w_id,
                                       const int d_id,
                                       const int c_id);
 
     // --- update a retrieved tuple --- //
-    w_rc_t cust_update_tuple(ss_m* db,
+    w_rc_t cust_update_tuple(Database* db,
                              customer_tuple* ptuple,
                              const tpcc_customer_tuple& acustomer,
                              const char* adata1 = NULL,
                              const char* adata2 = NULL);
 
-    w_rc_t cust_update_discount_balance(ss_m* db,
+    w_rc_t cust_update_discount_balance(Database* db,
                                         customer_tuple* ptuple,
                                         const decimal discount,
                                         const decimal balance);
@@ -209,7 +209,7 @@ public:
     }
 
     // --- access tuples with iterator --- //
-    w_rc_t no_get_iter_by_index(ss_m* db,
+    w_rc_t no_get_iter_by_index(Database* db,
                                 new_order_table_iter* &iter,
                                 new_order_tuple* ptuple,
                                 rep_row_t &replow,
@@ -219,7 +219,7 @@ public:
                                 bool need_tuple = false);
 
     // --- update a retrieved tuple --- //
-    w_rc_t no_delete_by_index(ss_m* db,
+    w_rc_t no_delete_by_index(Database* db,
                               new_order_tuple* ptuple,
                               const int w_id,
                               const int d_id,
@@ -246,7 +246,7 @@ public:
     }
 
     // --- access tuples with iterator --- //
-    w_rc_t ord_get_iter_by_index(ss_m* db,
+    w_rc_t ord_get_iter_by_index(Database* db,
                                  order_index_iter* &iter,
                                  order_tuple* ptuple,
                                  rep_row_t &replow,
@@ -258,7 +258,7 @@ public:
 
 
     // --- update a retrieved tuple --- //
-    w_rc_t ord_update_carrier_by_index(ss_m* db,
+    w_rc_t ord_update_carrier_by_index(Database* db,
                                        order_tuple* ptuple,
                                        const int carrier_id);
 
@@ -284,7 +284,7 @@ public:
     }
 
     // --- access tuple with iterator --- //
-    w_rc_t ol_get_range_iter_by_index(ss_m* db,
+    w_rc_t ol_get_range_iter_by_index(Database* db,
                                       order_line_table_iter* &iter,
                                       order_line_tuple* ptuple,
                                       rep_row_t &replow,
@@ -295,7 +295,7 @@ public:
                                       const int high_o_id,
                                       bool need_tuple = true);
 
-    w_rc_t ol_get_probe_iter_by_index(ss_m* db,
+    w_rc_t ol_get_probe_iter_by_index(Database* db,
                                       order_line_table_iter* &iter,
                                       order_line_tuple* ptuple,
                                       rep_row_t &replow,
@@ -326,11 +326,11 @@ public:
     }
 
     // --- access specific tuple --- //
-    w_rc_t it_index_probe(ss_m* ddb,
+    w_rc_t it_index_probe(Database* ddb,
                           item_tuple* ptuple,
                           const int i_id);
 
-    w_rc_t it_index_probe_forupdate(ss_m* db,
+    w_rc_t it_index_probe_forupdate(Database* db,
                                     item_tuple* ptuple,
                                     const int i_id);
 
@@ -355,18 +355,18 @@ public:
     }
 
     /* --- access the table --- */
-    w_rc_t st_index_probe(ss_m* db,
+    w_rc_t st_index_probe(Database* db,
                           stock_tuple* ptuple,
                           const int w_id,
                           const int i_id);
 
-    w_rc_t st_index_probe_forupdate(ss_m* db,
+    w_rc_t st_index_probe_forupdate(Database* db,
                                     stock_tuple* ptuple,
                                     const int w_id,
                                     const int i_id);
 
     /* --- update a retrieved tuple --- */
-    w_rc_t st_update_tuple(ss_m* db,
+    w_rc_t st_update_tuple(Database* db,
                            stock_tuple* ptuple,
                            const tpcc_stock_tuple* pstock);
 

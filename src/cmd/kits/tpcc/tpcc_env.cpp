@@ -78,7 +78,7 @@ struct ShoreTPCCEnv::table_creator_t : public thread_t
 void ShoreTPCCEnv::table_creator_t::work()
 {
     // Create the tables
-    W_COERCE(_env->db()->begin_xct());
+    W_COERCE(_env->begin_xct());
     W_COERCE(_env->_pwarehouse_desc->create_physical_table(_env->db()));
     W_COERCE(_env->_pdistrict_desc->create_physical_table(_env->db()));
     W_COERCE(_env->_pcustomer_desc->create_physical_table(_env->db()));
@@ -88,11 +88,11 @@ void ShoreTPCCEnv::table_creator_t::work()
     W_COERCE(_env->_porder_line_desc->create_physical_table(_env->db()));
     W_COERCE(_env->_pitem_desc->create_physical_table(_env->db()));
     W_COERCE(_env->_pstock_desc->create_physical_table(_env->db()));
-    W_COERCE(_env->db()->commit_xct());
+    W_COERCE(_env->commit_xct());
 
     // do the first transaction
     populate_baseline_input_t in = {_sf};
-    W_COERCE(_env->db()->begin_xct());
+    W_COERCE(_env->begin_xct());
     W_COERCE(_env->xct_populate_baseline(0, in));
 
     // W_COERCE(_env->db()->begin_xct());
@@ -158,7 +158,7 @@ void ShoreTPCCEnv::table_builder_t::work()
 	int *cids = overlap? _cids : cid_array+0;
 	populate_one_unit_input_t in = {tid, cids};
     retry:
-	W_COERCE(_env->db()->begin_xct());
+	W_COERCE(_env->begin_xct());
 
 	e = _env->xct_populate_one_unit(tid, in);
 
@@ -776,6 +776,7 @@ w_rc_t ShoreTPCCEnv::db_fetch()
     assert (_initialized);
     assert (_loaded);
 
+#ifndef USE_LEVELDB
     // fetch tables
     W_DO(_pnew_order_man->fetch_table(_pssm));
     W_DO(_porder_line_man->fetch_table(_pssm));
@@ -786,6 +787,7 @@ w_rc_t ShoreTPCCEnv::db_fetch()
     W_DO(_pwarehouse_man->fetch_table(_pssm));
     W_DO(_pdistrict_man->fetch_table(_pssm));
     W_DO(_pstock_man->fetch_table(_pssm));
+#endif
 
     return (RCOK);
 }

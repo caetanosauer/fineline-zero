@@ -47,7 +47,7 @@ namespace tpcc {
 
 
 w_rc_t
-warehouse_man_impl::wh_index_probe(ss_m* db,
+warehouse_man_impl::wh_index_probe(Database* db,
                                    warehouse_tuple* ptuple,
                                    const int w_id)
 {
@@ -58,7 +58,7 @@ warehouse_man_impl::wh_index_probe(ss_m* db,
 
 
 w_rc_t
-warehouse_man_impl::wh_index_probe_forupdate(ss_m* db,
+warehouse_man_impl::wh_index_probe_forupdate(Database* db,
                                              warehouse_tuple* ptuple,
                                              const int w_id)
 {
@@ -68,7 +68,7 @@ warehouse_man_impl::wh_index_probe_forupdate(ss_m* db,
 }
 
 w_rc_t
-warehouse_man_impl::wh_update_ytd(ss_m* db,
+warehouse_man_impl::wh_update_ytd(Database* db,
                                   warehouse_tuple* ptuple,
                                   const double amount)
 {
@@ -91,7 +91,7 @@ warehouse_man_impl::wh_update_ytd(ss_m* db,
 /* ---------------- */
 
 
-w_rc_t district_man_impl::dist_index_probe(ss_m* db,
+w_rc_t district_man_impl::dist_index_probe(Database* db,
                                            district_tuple* ptuple,
                                            const int w_id,
                                            const int d_id)
@@ -102,7 +102,7 @@ w_rc_t district_man_impl::dist_index_probe(ss_m* db,
     return (index_probe(db, _ptable->primary_idx(), ptuple));
 }
 
-w_rc_t district_man_impl::dist_index_probe_forupdate(ss_m* db,
+w_rc_t district_man_impl::dist_index_probe_forupdate(Database* db,
                                                      district_tuple* ptuple,
                                                      const int w_id,
                                                      const int d_id)
@@ -113,7 +113,7 @@ w_rc_t district_man_impl::dist_index_probe_forupdate(ss_m* db,
     return (index_probe_forupdate(db, _ptable->primary_idx(), ptuple));
 }
 
-w_rc_t district_man_impl::dist_update_ytd(ss_m* db,
+w_rc_t district_man_impl::dist_update_ytd(Database* db,
                                           district_tuple* ptuple,
                                           const double amount)
 {
@@ -129,7 +129,7 @@ w_rc_t district_man_impl::dist_update_ytd(ss_m* db,
     return (RCOK);
 }
 
-w_rc_t district_man_impl::dist_update_next_o_id(ss_m* db,
+w_rc_t district_man_impl::dist_update_next_o_id(Database* db,
                                                 district_tuple* ptuple,
                                                 const int next_o_id)
 {
@@ -147,7 +147,7 @@ w_rc_t district_man_impl::dist_update_next_o_id(ss_m* db,
 /* ---------------- */
 
 
-w_rc_t customer_man_impl::cust_get_iter_by_index(ss_m* /*db*/,
+w_rc_t customer_man_impl::cust_get_iter_by_index(Database* /*db*/,
                                                  customer_index_iter* &iter,
                                                  customer_tuple* ptuple,
                                                  rep_row_t &replow,
@@ -176,7 +176,6 @@ w_rc_t customer_man_impl::cust_get_iter_by_index(ss_m* /*db*/,
     size_t lowsz = replow._bufsz;
     ptuple->store_key(replow._dest, lowsz, pindex);
 
-    // CS TODO -- use open-end btcursor
     char   temp[2];
     temp[0] = MAX('z', 'Z')+1;
     temp[1] = '\0';
@@ -192,7 +191,7 @@ w_rc_t customer_man_impl::cust_get_iter_by_index(ss_m* /*db*/,
     return (RCOK);
 }
 
-w_rc_t customer_man_impl::cust_index_probe(ss_m* db,
+w_rc_t customer_man_impl::cust_index_probe(Database* db,
                                            customer_tuple* ptuple,
                                            const int w_id,
                                            const int d_id,
@@ -205,7 +204,7 @@ w_rc_t customer_man_impl::cust_index_probe(ss_m* db,
     return (index_probe(db, _ptable->primary_idx(), ptuple));
 }
 
-w_rc_t customer_man_impl::cust_index_probe_by_name(ss_m* db,
+w_rc_t customer_man_impl::cust_index_probe_by_name(Database* db,
                                                    const char* idx_name,
                                                    customer_tuple* ptuple,
                                                    const int w_id,
@@ -219,7 +218,7 @@ w_rc_t customer_man_impl::cust_index_probe_by_name(ss_m* db,
     return (index_probe_by_name(db, idx_name, ptuple));
 }
 
-w_rc_t customer_man_impl::cust_index_probe_forupdate(ss_m * db,
+w_rc_t customer_man_impl::cust_index_probe_forupdate(Database * db,
                                                      customer_tuple* ptuple,
                                                      const int w_id,
                                                      const int d_id,
@@ -232,7 +231,7 @@ w_rc_t customer_man_impl::cust_index_probe_forupdate(ss_m * db,
     return (index_probe_forupdate(db, _ptable->primary_idx(), ptuple));
 }
 
-w_rc_t customer_man_impl::cust_update_tuple(ss_m* db,
+w_rc_t customer_man_impl::cust_update_tuple(Database* db,
                                             customer_tuple* ptuple,
                                             const tpcc_customer_tuple& acustomer,
                                             const char* adata1,
@@ -254,7 +253,7 @@ w_rc_t customer_man_impl::cust_update_tuple(ss_m* db,
 
 
 
-w_rc_t customer_man_impl::cust_update_discount_balance(ss_m* db,
+w_rc_t customer_man_impl::cust_update_discount_balance(Database* db,
                                                        customer_tuple* ptuple,
                                                        const decimal discount,
                                                        const decimal balance)
@@ -272,7 +271,7 @@ w_rc_t customer_man_impl::cust_update_discount_balance(ss_m* db,
 /* ----------------- */
 
 
-w_rc_t new_order_man_impl::no_get_iter_by_index(ss_m* /*db*/,
+w_rc_t new_order_man_impl::no_get_iter_by_index(Database* /*db*/,
                                                 new_order_table_iter* &iter,
                                                 new_order_tuple* ptuple,
                                                 rep_row_t &replow,
@@ -309,7 +308,7 @@ w_rc_t new_order_man_impl::no_get_iter_by_index(ss_m* /*db*/,
 }
 
 
-w_rc_t new_order_man_impl::no_delete_by_index(ss_m* db,
+w_rc_t new_order_man_impl::no_delete_by_index(Database* db,
                                               new_order_tuple* ptuple,
                                               const int w_id,
                                               const int d_id,
@@ -335,7 +334,7 @@ w_rc_t new_order_man_impl::no_delete_by_index(ss_m* db,
 /* ------------- */
 
 
-w_rc_t order_man_impl::ord_get_iter_by_index(ss_m* /*db*/,
+w_rc_t order_man_impl::ord_get_iter_by_index(Database* /*db*/,
                                              order_index_iter* &iter,
                                              order_tuple* ptuple,
                                              rep_row_t &replow,
@@ -374,7 +373,7 @@ w_rc_t order_man_impl::ord_get_iter_by_index(ss_m* /*db*/,
 }
 
 
-w_rc_t order_man_impl::ord_update_carrier_by_index(ss_m* db,
+w_rc_t order_man_impl::ord_update_carrier_by_index(Database* db,
                                                    order_tuple* ptuple,
                                                    const int carrier_id)
 {
@@ -397,7 +396,7 @@ w_rc_t order_man_impl::ord_update_carrier_by_index(ss_m* db,
 /* ----------------- */
 
 
-w_rc_t order_line_man_impl::ol_get_range_iter_by_index(ss_m* /*db*/,
+w_rc_t order_line_man_impl::ol_get_range_iter_by_index(Database* /*db*/,
                                                        order_line_table_iter* &iter,
                                                        order_line_tuple* ptuple,
                                                        rep_row_t &replow,
@@ -441,7 +440,7 @@ w_rc_t order_line_man_impl::ol_get_range_iter_by_index(ss_m* /*db*/,
 }
 
 
-w_rc_t order_line_man_impl::ol_get_probe_iter_by_index(ss_m* /*db*/,
+w_rc_t order_line_man_impl::ol_get_probe_iter_by_index(Database* /*db*/,
                                                        order_line_table_iter* &iter,
                                                        order_line_tuple* ptuple,
                                                        rep_row_t &replow,
@@ -485,7 +484,7 @@ w_rc_t order_line_man_impl::ol_get_probe_iter_by_index(ss_m* /*db*/,
 /* ------------ */
 
 
-w_rc_t item_man_impl::it_index_probe(ss_m* db,
+w_rc_t item_man_impl::it_index_probe(Database* db,
                                      item_tuple* ptuple,
                                      const int i_id)
 {
@@ -494,7 +493,7 @@ w_rc_t item_man_impl::it_index_probe(ss_m* db,
     return (index_probe(db, _ptable->primary_idx(), ptuple));
 }
 
-w_rc_t item_man_impl::it_index_probe_forupdate(ss_m* db,
+w_rc_t item_man_impl::it_index_probe_forupdate(Database* db,
                                                item_tuple* ptuple,
                                                const int i_id)
 {
@@ -509,7 +508,7 @@ w_rc_t item_man_impl::it_index_probe_forupdate(ss_m* db,
 /* ------------- */
 
 
-w_rc_t stock_man_impl::st_index_probe(ss_m* db,
+w_rc_t stock_man_impl::st_index_probe(Database* db,
                                       stock_tuple* ptuple,
                                       const int w_id,
                                       const int i_id)
@@ -520,7 +519,7 @@ w_rc_t stock_man_impl::st_index_probe(ss_m* db,
     return (index_probe(db, _ptable->primary_idx(), ptuple));
 }
 
-w_rc_t stock_man_impl::st_index_probe_forupdate(ss_m* db,
+w_rc_t stock_man_impl::st_index_probe_forupdate(Database* db,
                                                 stock_tuple* ptuple,
                                                 const int w_id,
                                                 const int i_id)
@@ -531,7 +530,7 @@ w_rc_t stock_man_impl::st_index_probe_forupdate(ss_m* db,
     return (index_probe_forupdate(db, _ptable->primary_idx(), ptuple));
 }
 
-w_rc_t  stock_man_impl::st_update_tuple(ss_m* db,
+w_rc_t  stock_man_impl::st_update_tuple(Database* db,
                                         stock_tuple* ptuple,
                                         const tpcc_stock_tuple* pstock)
 {

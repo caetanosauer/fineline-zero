@@ -196,6 +196,13 @@ SET (SM_DREADLOCK_FINGERS 3)
 SET (W_USE_COMPAT_STRSTREAM "true")
 SET (BP_MAINTAIN_PARENT_PTR "true")
 
+# TODO: replace with option (see USE_MMAP)
+SET (USE_LEVELDB "false")
+if (USE_LEVELDB)
+   # TODO this should not be hard coded
+   INCLUDE_DIRECTORIES ("/home/csauer/dev/leveldb/include")
+endif(USE_LEVELDB)
+
 ####################   OS/architecture #####################
 SET (ARCH_LP64  "true") # so far, always assume 64 bits
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")

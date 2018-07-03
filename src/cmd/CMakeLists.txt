@@ -24,6 +24,15 @@ add_subdirectory(loginspect)
 
 add_executable(zapps main.cpp)
 
+if (USE_LEVELDB)
+   # TODO this should not be hard coded!
+   # add_library(leveldb STATIC "/home/csauer/dev/leveldb/build/libleveldb.a")
+   set (LEVELDB_LIB "/home/csauer/dev/leveldb/build/libleveldb.a")
+   # target_link_libraries(leveldb /home/csauer/dev/leveldb/build/libleveldb.a)
+else ()
+   set (LEVELDB_LIB "/home/csauer/dev/leveldb/build/libleveldb.a")
+endif ()
+
 set(zapps_LIBS
     # zapps components
     zapps_base
@@ -35,6 +44,11 @@ set(zapps_LIBS
     common
     # third-party dependencies
     pthread
+    ${LEVELDB_LIB}
 )
+
+if (USE_LEVELDB)
+   # set(zapps_LIBS ${zapps_LIBS} leveldb)
+endif(USE_LEVELDB)
 
 target_link_libraries(zapps ${zapps_LIBS})

@@ -254,6 +254,17 @@ void table_row_t::load_key(char* data, index_desc_t* pindex)
 {
     char buffer[8];
     char* pos = data;
+
+#ifdef USE_LEVELDB
+    if (pindex) {
+       // In LevelDB storage, first byte of key is the StoreID
+       auto stid = static_cast<StoreID>(*data);
+       w_assert1(stid > 0 && stid < 128);
+       w_assert1(stid == pindex->stid());
+       pos++;
+    }
+#endif
+
     unsigned field_cnt = pindex ? pindex->field_count() : _field_cnt;
     for (unsigned j = 0; j < field_cnt; j++) {
         unsigned i = pindex ? pindex->key_index(j) : j;
@@ -405,8 +416,7 @@ void table_row_t::load_value(char* data, index_desc_t* pindex)
             // If it is of FIXED length, copy the data from the fixed length
             // part of the buffer (pointed by fixed_offset), and the increase
             // the fixed offset by the (fixed) size of the field
-            _pvalues[i].set_value(data+fixed_offset,
-                    _pvalues[i].maxsize());
+            _pvalues[i].set_value(data+fixed_offset, _pvalues[i].maxsize());
 	    fixed_offset += _pvalues[i].maxsize();
 	}
     }
@@ -427,6 +437,19 @@ void table_row_t::store_key(char* data, size_t& length, index_desc_t* pindex)
     size_t req_size = 0;
     char buffer[8];
     char* pos = data;
+
+#ifdef USE_LEVELDB
+    // In LevelDB storage, first byte of key is the StoreID
+    if (pindex) {
+       auto stid = pindex->stid();
+       w_assert1(stid > 0 && stid < 128);
+       *pos = static_cast<char>(stid);
+       pos++;
+       req_size++;
+       w_assert1(data[0] != 0);
+    }
+#endif
+
     unsigned field_cnt = pindex ? pindex->field_count() : _field_cnt;
     for (unsigned j = 0; j < field_cnt; j++) {
         unsigned i = pindex ? pindex->key_index(j) : j;

@@ -45,7 +45,7 @@ namespace tpcb {
 /* ----------------- */
 
 w_rc_t
-branch_man_impl::b_index_probe(ss_m* db,
+branch_man_impl::b_index_probe(Database* db,
 			       branch_tuple* ptuple,
 			       const int b_id)
 {
@@ -54,7 +54,7 @@ branch_man_impl::b_index_probe(ss_m* db,
     return (index_probe_by_name(db, "B_INDEX", ptuple));
 }
 
-w_rc_t branch_man_impl::b_index_probe_forupdate(ss_m* db,
+w_rc_t branch_man_impl::b_index_probe_forupdate(Database* db,
                                                 branch_tuple* ptuple,
                                                 const int b_id)
 {
@@ -63,7 +63,7 @@ w_rc_t branch_man_impl::b_index_probe_forupdate(ss_m* db,
     return (index_probe_forupdate_by_name(db, "BRANCH", ptuple));
 }
 
-w_rc_t branch_man_impl::b_idx_nl(ss_m* db,
+w_rc_t branch_man_impl::b_idx_nl(Database* db,
                                  branch_tuple* ptuple,
                                  const int b_id)
 {
@@ -78,7 +78,7 @@ w_rc_t branch_man_impl::b_idx_nl(ss_m* db,
 /* ---------------- */
 
 
-w_rc_t teller_man_impl::t_index_probe_forupdate(ss_m* db,
+w_rc_t teller_man_impl::t_index_probe_forupdate(Database* db,
                                                 teller_tuple* ptuple,
                                                 const int t_id)
 {
@@ -87,7 +87,7 @@ w_rc_t teller_man_impl::t_index_probe_forupdate(ss_m* db,
     return (index_probe_forupdate_by_name(db, "TELLER", ptuple));
 }
 
-w_rc_t teller_man_impl::t_idx_nl(ss_m* db,
+w_rc_t teller_man_impl::t_idx_nl(Database* db,
                                  teller_tuple* ptuple,
                                  const int t_id)
 {
@@ -102,7 +102,7 @@ w_rc_t teller_man_impl::t_idx_nl(ss_m* db,
 /* --- ACCOUNT --- */
 /* ---------------- */
 
-w_rc_t account_man_impl::a_index_probe(ss_m* db,
+w_rc_t account_man_impl::a_index_probe(Database* db,
                                        account_tuple* ptuple,
                                        const int a_id,
                                        const int b_id,
@@ -120,7 +120,7 @@ w_rc_t account_man_impl::a_index_probe(ss_m* db,
     return (index_probe_by_name(db, "ACCOUNT", ptuple));
 }
 
-w_rc_t account_man_impl::a_delete_by_index(ss_m* db,
+w_rc_t account_man_impl::a_delete_by_index(Database* db,
                                            account_tuple* ptuple,
                                            const int a_id,
                                            const int b_id,
@@ -139,7 +139,7 @@ w_rc_t account_man_impl::a_delete_by_index(ss_m* db,
     return (delete_tuple(db, ptuple));
 }
 
-w_rc_t account_man_impl::a_index_probe_forupdate(ss_m* db,
+w_rc_t account_man_impl::a_index_probe_forupdate(Database* db,
                                                  account_tuple* ptuple,
                                                  const int a_id,
                                                  const int b_id,
@@ -157,7 +157,7 @@ w_rc_t account_man_impl::a_index_probe_forupdate(ss_m* db,
     return (index_probe_forupdate_by_name(db, "ACCOUNT", ptuple));
 }
 
-w_rc_t account_man_impl::a_idx_nl(ss_m* db,
+w_rc_t account_man_impl::a_idx_nl(Database* db,
                                   account_tuple* ptuple,
                                   const int a_id,
                                   const int b_id,

@@ -104,14 +104,32 @@ void index_desc_t::print_desc(ostream& os)
     os << endl;
 }
 
-w_rc_t index_desc_t::load_stid(ss_m* db, StoreID cat_stid)
+#ifdef USE_LEVELDB
+std::string index_desc_t::getNameAsLevelDBKey() const
 {
+   return string({'+', 0x07}) + name();
+}
+#endif
+
+w_rc_t index_desc_t::load_stid(Database* db, StoreID cat_stid)
+{
+    StoreID stid;
+    bool found = false;
+#ifdef USE_LEVELDB
+    auto name = getNameAsLevelDBKey();
+    string value;
+    auto status = db->Get(leveldb::ReadOptions(), leveldb::Slice{name}, &value);
+    found = !status.IsNotFound();
+    if (found) {
+       stid = *reinterpret_cast<const uint8_t*>(value.c_str());
+       w_assert1(stid > 0 && stid < 128);
+    }
+#else
     smsize_t size = sizeof(StoreID);
     w_keystr_t kstr;
     kstr.construct_regularkey(_name.c_str(), _name.length());
-    StoreID stid;
-    bool found;
     W_DO(db->find_assoc(cat_stid, kstr, &stid, size, found));
+#endif
 
     if (!found) {
         return RC(eNOTFOUND);

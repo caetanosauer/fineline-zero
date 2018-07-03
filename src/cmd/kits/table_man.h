@@ -142,7 +142,7 @@ public:
     T* table() { return (_ptable); }
 
     // loads store id values in fid field for this table and its indexes
-    w_rc_t load_and_register_fid(ss_m* db);
+    w_rc_t load_and_register_fid(Database* db);
 
     /* ------------------------------ */
     /* --- trash stack operations --- */
@@ -156,14 +156,14 @@ public:
     /* ---------------------------- */
 
     // idx probe
-    w_rc_t index_probe(ss_m* db,
+    w_rc_t index_probe(Database* db,
                        index_desc_t* pidx,
                        table_row_t*  ptuple,
                        const lock_mode_t lock_mode = okvl_mode::S,     /* One of: N, S, X */
                        const PageID& root = 0);   /* Start of the search */
 
     // probe idx in X (& LATCH_EX) mode
-    inline w_rc_t   index_probe_forupdate(ss_m* db,
+    inline w_rc_t   index_probe_forupdate(Database* db,
                                           index_desc_t* pidx,
                                           table_row_t*  ptuple,
                                           const PageID& root = 0)
@@ -172,7 +172,7 @@ public:
     }
 
     // probe idx in N (& LATCH_SH) mode
-    inline w_rc_t   index_probe_nl(ss_m* db,
+    inline w_rc_t   index_probe_nl(Database* db,
                                    index_desc_t* pidx,
                                    table_row_t*  ptuple,
                                    const PageID& root = 0)
@@ -181,7 +181,7 @@ public:
     }
 
     // probe primary idx
-    inline w_rc_t   index_probe_primary(ss_m* db,
+    inline w_rc_t   index_probe_primary(Database* db,
                                         table_row_t* ptuple,
                                         lock_mode_t  lock_mode = okvl_mode::S,
                                         const PageID& root = 0)
@@ -191,7 +191,7 @@ public:
     }
 
     // idx probe - based on idx name //
-    inline w_rc_t   index_probe_by_name(ss_m* db,
+    inline w_rc_t   index_probe_by_name(Database* db,
                                         const char*  idx_name,
                                         table_row_t* ptuple,
                                         lock_mode_t  lock_mode = okvl_mode::S,
@@ -202,7 +202,7 @@ public:
     }
 
     // probe idx in EX (& LATCH_EX) mode - based on idx name //
-    inline w_rc_t   index_probe_forupdate_by_name(ss_m* db,
+    inline w_rc_t   index_probe_forupdate_by_name(Database* db,
                                                   const char* idx_name,
                                                   table_row_t* ptuple,
                                                   const PageID& root = 0)
@@ -213,7 +213,7 @@ public:
     }
 
     // probe idx in N (& LATCH_NL) mode - based on idx name //
-    inline w_rc_t   index_probe_nl_by_name(ss_m* db,
+    inline w_rc_t   index_probe_nl_by_name(Database* db,
                                            const char* idx_name,
                                            table_row_t* ptuple,
                                            const PageID& root = 0)
@@ -227,29 +227,29 @@ public:
     /* --- tuple manipulation --- */
     /* -------------------------- */
 
-    w_rc_t    add_tuple(ss_m* db,
+    w_rc_t    add_tuple(Database* db,
                         table_row_t*  ptuple,
                         const lock_mode_t   lock_mode = okvl_mode::X,
                         const PageID& primary_root = 0);
 
-    w_rc_t    add_index_entry(ss_m* db,
+    w_rc_t    add_index_entry(Database* db,
 			      const char* idx_name,
 			      table_row_t* ptuple,
 			      const lock_mode_t lock_mode = okvl_mode::X,
 			      const PageID& primary_root = 0);
 
-    w_rc_t    delete_tuple(ss_m* db,
+    w_rc_t    delete_tuple(Database* db,
                            table_row_t* ptuple,
                            const lock_mode_t lock_mode = okvl_mode::X,
                            const PageID& primary_root = 0);
 
-    w_rc_t    delete_index_entry(ss_m* db,
+    w_rc_t    delete_index_entry(Database* db,
 				 const char* idx_name,
 				 table_row_t* ptuple,
 				 const lock_mode_t lock_mode = okvl_mode::X,
 				 const PageID& primary_root = 0);
 
-    w_rc_t    update_tuple(ss_m* db,
+    w_rc_t    update_tuple(Database* db,
                            table_row_t* ptuple,
                            const lock_mode_t lock_mode = okvl_mode::X);
 
@@ -286,7 +286,7 @@ public:
     /* -------------------------------- */
     /* - population related if needed - */
     /* -------------------------------- */
-    virtual w_rc_t populate(ss_m* /* db */, bool& /* hasNext */)
+    virtual w_rc_t populate(Database* /* db */, bool& /* hasNext */)
     {
         return (RCOK);
     }
@@ -309,7 +309,7 @@ public:
     /* --------------- */
 
     /* fetch the pages of the table and its indexes to buffer pool */
-    virtual w_rc_t fetch_table(ss_m* db, lock_mode_t alm = okvl_mode::S);
+    virtual w_rc_t fetch_table(Database* db, lock_mode_t alm = okvl_mode::S);
 
 // Row cache
 protected:
@@ -349,6 +349,36 @@ public:
     template<> row_cache_t<bench::table##_t>* \
         table_man_t<bench::table##_t>::pcache_link::tls_get() \
             { return bench##_##table##_cache; }
+
+#ifdef USE_LEVELDB
+inline bool levelDBProbe(leveldb::DB* db, const w_keystr_t& kstr, char* dest)
+{
+   string value;
+   auto status = db->Get(leveldb::ReadOptions(), toSlice(kstr), &value);
+   if (status.IsNotFound()) {
+      return false;
+   } else {
+      w_assert1(status.ok());
+      w_assert1(value.length() > 0);
+      ::memcpy(dest, value.c_str(), value.length());
+      return true;
+   }
+}
+
+inline void levelDBInsert(leveldb::DB* db, const w_keystr_t& kstr, char* data, size_t len)
+{
+   w_assert1(reinterpret_cast<const char*>(kstr.buffer_as_keystr())[0] == '+');
+   w_assert1(reinterpret_cast<const char*>(kstr.buffer_as_keystr())[1] != 0);
+   auto status = db->Put(leveldb::WriteOptions(), toSlice(kstr), leveldb::Slice{data, len});
+   w_assert1(status.ok());
+}
+
+inline void levelDBDelete(leveldb::DB* db, const w_keystr_t& kstr)
+{
+   auto status = db->Delete(leveldb::WriteOptions(), toSlice(kstr));
+   w_assert1(status.ok());
+}
+#endif
 
 
 #if 0 // CS: disabled for now -- should be moved to other file anyway

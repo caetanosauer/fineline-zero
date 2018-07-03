@@ -103,6 +103,12 @@
 #include "index_desc.h"
 #include "row.h"
 
+#ifdef USE_LEVELDB
+#include <atomic>
+
+leveldb::Slice toSlice(const w_keystr_t& kstr);
+#endif
+
 // Shore -> Zero compatibility
 typedef okvl_mode::element_lock_mode lock_mode_t;
 
@@ -137,7 +143,7 @@ protected:
     /* --- table schema -- */
     /* ------------------- */
 
-    ss_m*           _db;                 // the SM
+    Database*           _db;                 // the SM
 
     field_desc_t*   _desc;               // schema - set of field descriptors
 
@@ -163,9 +169,9 @@ public:
     /* --- create physical table and indexes --- */
     /* ----------------------------------------- */
 
-    w_rc_t create_physical_table(ss_m* db);
+    w_rc_t create_physical_table(Database* db);
 
-    w_rc_t create_physical_index(ss_m* db, index_desc_t* index);
+    w_rc_t create_physical_index(Database* db, index_desc_t* index);
 
     StoreID get_catalog_stid()
     {
@@ -252,8 +258,8 @@ public:
     /* ---------- */
     /* --- db --- */
     /* ---------- */
-    void set_db(ss_m* db) { _db = db; }
-    ss_m* db() { return (_db); }
+    void set_db(Database* db) { _db = db; }
+    Database* db() { return (_db); }
 
     /* ----------------- */
     /* --- debugging --- */

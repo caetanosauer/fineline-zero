@@ -123,21 +123,22 @@ int trx_worker_t::_serve_action(Request* prequest)
     //smthread_t::me()->attach_xct(prequest->_xct);
     tid_t atid;
     {
-    w_rc_t e = _env->db()->begin_xct(atid);
+    w_rc_t e = _env->begin_xct(atid);
     if (e.is_error()) {
-        TRACE( TRACE_TRX_FLOW, "Problem beginning xct [0x%x]\n",
-               e.err_num());
+        TRACE( TRACE_TRX_FLOW, "Problem beginning xct [0x%x]\n", e.err_num());
         W_COERCE(e);
         ++_stats._problems;
         return (1);
     }
     }
 
+#ifndef USE_LEVELDB
     xct_t* pxct = smthread_t::xct();
     assert (pxct);
     // TRACE( TRACE_TRX_FLOW, "Begin (%d)\n", atid.get_lo());
     prequest->_xct = pxct;
     prequest->_tid = atid;
+#endif
 
     // Serve request
     {

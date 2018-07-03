@@ -527,11 +527,11 @@ int ShoreEnv::start()
     }
 
     if (!_clobber) {
-    // Cache fids at the kits side
-    W_COERCE(db()->begin_xct());
-    W_COERCE(load_and_register_fids());
-    W_COERCE(db()->commit_xct());
-    // Call the (virtual) post-initialization function
+        // Cache fids at the kits side
+        W_COERCE(begin_xct());
+        W_COERCE(load_and_register_fids());
+        W_COERCE(commit_xct());
+        // Call the (virtual) post-initialization function
         if (int rval = post_init()) {
             TRACE( TRACE_ALWAYS, "Error in Shore post-init\n");
             return (rval);
@@ -730,7 +730,9 @@ int ShoreEnv::close_sm()
  ********************************************************************/
  void ShoreEnv::set_sm_shudown_filthy(bool filthy)
  {
+#ifndef USE_LEVELDB
      _pssm->set_shutdown_filthy(filthy);
+#endif
  }
 /********************************************************************
  *
@@ -744,6 +746,7 @@ static sm_stats_t oldstats;
 
 void ShoreEnv::gatherstats_sm(ostream &stream)
 {
+#ifndef USE_LEVELDB
     // sm_du_stats_t stats;
     // memset(&stats, 0, sizeof(stats));
 
@@ -759,14 +762,17 @@ void ShoreEnv::gatherstats_sm(ostream &stream)
     // Print the diff and save the latest reading
     print_sm_stats(diff, stream);
     _last_sm_stats = stats;
+#endif
 }
 
 void ShoreEnv::wait_for_warmup()
 {
+#ifndef USE_LEVELDB
     while (true) {
         if (ss_m::bf->is_warmup_done()) { break; }
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
+#endif
 }
 
 /********************************************************************
@@ -784,7 +790,12 @@ int ShoreEnv::configure_sm()
     TRACE( TRACE_DEBUG, "Configuring Shore...\n");
 
     upd_worker_cnt();
+
+#ifdef USE_LEVELDB
+    // TODO set relevant levelDB options from optionValues
+#else
     Command::setSMOptions(_popts, optionValues);
+#endif
 
     // If we reached this point the sm is configured correctly
     return (0);
@@ -805,15 +816,26 @@ int ShoreEnv::configure_sm()
  *  @return: 0 on success, non-zero otherwise
  *
  ******************************************************************/
-int /*shore::*/ssm_max_small_rec;
-sm_config_info_t  sm_config_info;
-
 int ShoreEnv::start_sm()
 {
     TRACE( TRACE_DEBUG, "Starting Shore...\n");
 
     if (_initialized == false) {
+#ifdef USE_LEVELDB
+        string db_path = "leveldb"; // TODO read from options
+        if (_clobber) {
+           // TODO delete directory
+            _popts.error_if_exists = true;
+            _popts.create_if_missing = true;
+        }
+        auto status = leveldb::DB::Open(_popts, db_path, &_pssm);
+        if (!status.ok()) {
+            cerr << status.ToString() << endl;
+            w_assert0(status.ok());
+        }
+#else
         _pssm = new ss_m(_popts);
+#endif
         // _logger = new kits_logger_t(_pssm);
     }
     else {
@@ -829,12 +851,14 @@ int ShoreEnv::start_sm()
         // if didn't clobber then the db is already loaded
         CRITICAL_SECTION(cs, _load_mutex);
 
+#ifndef USE_LEVELDB
         // create catalog index (must be on stid 1)
         StoreID cat_stid;
         W_COERCE(_pssm->begin_xct());
         W_COERCE(_pssm->create_index(cat_stid));
         w_assert0(cat_stid == 1);
         W_COERCE(_pssm->commit_xct());
+#endif
 
         // set that the database is not loaded
         _loaded = false;
@@ -848,8 +872,10 @@ int ShoreEnv::start_sm()
         // system state. Mount here is only necessary if we explicitly dismount
         // after loading, which is not the case.
 
+#ifndef USE_LEVELDB
         // Make sure that catalog index (stid 1) exists
         w_assert0(smlevel_0::stnode->is_allocated(1));
+#endif
 
         // "speculate" that the database is loaded
         _loaded = true;
@@ -869,14 +895,6 @@ int ShoreEnv::start_sm()
     // int ioLatency = optionValues["sm_fakeiodelay"].as<uint>();
     // TRACE( TRACE_DEBUG, "I/O delay latency set: (%d)\n", ioLatency);
     // W_COERCE(_pssm->set_fake_disk_latency(_vid,ioLatency));
-
-    // Using the physical ID interface
-
-    // Get the configuration info so we have the max size of a small record
-    // for use in _post_init_impl()
-    if (ss_m::config_info(sm_config_info).is_error()) return (1);
-    ssm_max_small_rec = sm_config_info.max_small_rec;
-
 
     // If we reached this point the sm has started correctly
     return (0);

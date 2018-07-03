@@ -126,6 +126,7 @@ abort_smt_t::~abort_smt_t()
 
 void abort_smt_t::work()
 {
+#ifndef USE_LEVELDB
     w_rc_t r = RCOK;
     xct_t* victim = NULL;
     // me()->alloc_sdesc_cache();
@@ -144,6 +145,7 @@ void abort_smt_t::work()
         }
     }
     // me()->free_sdesc_cache();
+#endif
 }
 
 void checkpointer_t::work()

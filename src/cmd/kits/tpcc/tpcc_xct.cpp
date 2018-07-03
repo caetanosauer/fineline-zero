@@ -391,7 +391,7 @@ w_rc_t ShoreTPCCEnv::xct_populate_baseline(const int /* xct_id */,
     }
 
     // Should do the commit here, called by the loader
-    W_DO(_pssm->commit_xct());
+    W_DO(commit_xct());
 
     return RCOK;
 }
@@ -620,7 +620,7 @@ w_rc_t ShoreTPCCEnv::xct_populate_one_unit(const int /* xct_id */,
     }
 
     // Should do the commit here, called by the loaded
-    W_DO(_pssm->commit_xct());
+    W_DO(commit_xct());
 
     return RCOK;
 }
@@ -843,6 +843,8 @@ w_rc_t ShoreTPCCEnv::xct_new_order(const int xct_id,
 	// 4. for all items read item, and update stock, and order line
 	int ol_i_id = pnoin.items[item_cnt]._ol_i_id;
 	int ol_supply_w_id = pnoin.items[item_cnt]._ol_supply_wh_id;
+        // TODO would this assertion also fail in Zero?
+        // assert(ol_i_id > 0);
 
 
 	/* SELECT i_price, i_name, i_data
@@ -954,6 +956,7 @@ w_rc_t ShoreTPCCEnv::xct_new_order(const int xct_id,
     prord->set_value(7, pnoin._all_local);
     // TRACE( TRACE_TRX_FLOW, "App: %d NO:ord-add-tuple (%d)\n",
 	   // xct_id, adist.D_NEXT_O_ID);
+    assert(pnoin._ol_cnt > 0);
     W_DO(_porder_man->add_tuple(_pssm, prord));
 
 
@@ -1413,12 +1416,14 @@ w_rc_t ShoreTPCCEnv::xct_order_status(const int xct_id,
     W_DO(o_iter->next(eof, *prord));
     while (!eof) {
 	prord->get_value(0, aorder.O_ID);
+	prord->get_value(1, aorder.O_C_ID);
 	prord->get_value(4, aorder.O_ENTRY_D);
 	prord->get_value(5, aorder.O_CARRIER_ID);
 	prord->get_value(6, aorder.O_OL_CNT);
 	W_DO(o_iter->next(eof, *prord));
     }
 
+        assert(aorder.O_C_ID == pstin._c_id);
     // we should have retrieved a valid id and ol_cnt for the order
     assert (aorder.O_ID);
     assert (aorder.O_OL_CNT);
@@ -1496,8 +1501,8 @@ w_rc_t ShoreTPCCEnv::xct_delivery(const int xct_id,
     int d_id;
     w_rc_t e = _xct_delivery_helper(xct_id, pdin, dlist, d_id, SPLIT_TRX);
     while(SPLIT_TRX && e.is_error() && e.err_num() == eDEADLOCK) {
-	W_COERCE(_pssm->abort_xct());
-	W_DO(_pssm->begin_xct());
+	W_COERCE(abort_xct());
+	W_DO(begin_xct());
         lintel::unsafe::atomic_fetch_add(&delivery_abort_ctr, 1);
 	dlist.push_back(d_id); // retry the failed trx
 	e = _xct_delivery_helper(xct_id, pdin, dlist, d_id, SPLIT_TRX);
@@ -1696,8 +1701,8 @@ w_rc_t ShoreTPCCEnv::_xct_delivery_helper(const int xct_id,
 #ifdef CFG_FLUSHER
 #warning TPCC-Delivery does not do the intermediate commits lazily
 #endif
-	    W_DO(_pssm->commit_xct());
-	    W_DO(_pssm->begin_xct());
+	    W_DO(commit_xct());
+	    W_DO(begin_xct());
 	}
     }
 

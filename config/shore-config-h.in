@@ -415,6 +415,9 @@
 /* include tracing code? */
 #undef TRACECODE
 
+/* use LevelDB ? */
+#undef USE_LEVELDB
+
 /* operating system */
 #undef Ultrix42
 

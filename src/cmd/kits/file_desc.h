@@ -39,6 +39,15 @@
 
 using std::list;
 
+#ifdef USE_LEVELDB
+#include <leveldb/db.h>
+typedef leveldb::DB Database;
+typedef leveldb::Options DatabaseOptions;
+#else
+typedef ss_m Database;
+typedef sm_options DatabaseOptions;
+#endif
+
 
 /******** Exported constants ********/
 

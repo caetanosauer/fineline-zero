@@ -54,7 +54,7 @@ protected:
     std::shared_ptr<SkewShiftingThread> skew_shifter;
 
     // overridden in sub-commands to set their own options
-    virtual void loadOptions(sm_options& opt);
+    virtual void loadOptions(DatabaseOptions& opt);
 
     template<class Client, class Environment> void runBenchmarkSpec();
     void runBenchmark();

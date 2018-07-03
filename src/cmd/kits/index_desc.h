@@ -109,7 +109,11 @@ public:
     StoreID& stid() { return _stid; }
     void set_stid(StoreID const &stid) { _stid = stid; }
 
-    w_rc_t load_stid(ss_m* db, StoreID cat_stid);
+    w_rc_t load_stid(Database* db, StoreID cat_stid);
+
+#ifdef USE_LEVELDB
+   std::string getNameAsLevelDBKey() const;
+#endif
 
     /* ---------------------- */
     /* --- access methods --- */

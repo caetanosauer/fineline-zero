@@ -46,7 +46,7 @@
  *********************************************************************/
 
 template<class T>
-w_rc_t table_man_t<T>::load_and_register_fid(ss_m* db)
+w_rc_t table_man_t<T>::load_and_register_fid(Database* db)
 {
     assert (_ptable);
     assert (db);
@@ -71,7 +71,7 @@ w_rc_t table_man_t<T>::load_and_register_fid(ss_m* db)
  *********************************************************************/
 
 template<class T>
-w_rc_t table_man_t<T>::index_probe(ss_m* db,
+w_rc_t table_man_t<T>::index_probe(Database* db,
                                 index_desc_t* pindex,
                                 table_row_t*  ptuple,
                                 lock_mode_t   /* lock_mode */,
@@ -106,8 +106,11 @@ w_rc_t table_man_t<T>::index_probe(ss_m* db,
         ptuple->_rep->set(fields_sz);
 
         smsize_t len = ptuple->_rep->_bufsz;
-        W_DO(db->find_assoc(pindex->stid(), kstr, ptuple->_rep->_dest, len,
-                    found));
+#ifdef USE_LEVELDB
+        found = levelDBProbe(db, kstr, ptuple->_rep->_dest);
+#else
+        W_DO(db->find_assoc(pindex->stid(), kstr, ptuple->_rep->_dest, len, found));
+#endif
         if (!found) return RC(se_TUPLE_NOT_FOUND);
 
         // load the non-key fields into the tuple
@@ -124,15 +127,21 @@ w_rc_t table_man_t<T>::index_probe(ss_m* db,
         smsize_t len = ptuple->_rep_key->_bufsz;
         // int ref_sz = key_size(ptuple->_ptable->primary_idx());
         // ptuple->_rep_key->set(ref_sz);
-        W_DO(db->find_assoc(pindex->stid(), kstr, ptuple->_rep_key->_dest, len,
-                    found));
+#ifdef USE_LEVELDB
+        found = levelDBProbe(db, kstr, ptuple->_rep_key->_dest);
+#else
+        W_DO(db->find_assoc(pindex->stid(), kstr, ptuple->_rep_key->_dest, len, found));
+#endif
 
         if (!found) return RC(se_TUPLE_NOT_FOUND);
 
         // read the tuple from the primary index
         kstr.construct_regularkey(ptuple->_rep_key->_dest, len);
-        W_DO(db->find_assoc(pindex->table()->get_primary_stid(), kstr,
-                    ptuple->_rep->_dest, len, found));
+#ifdef USE_LEVELDB
+        found = levelDBProbe(db, kstr, ptuple->_rep_key->_dest);
+#else
+        W_DO(db->find_assoc(pindex->table()->get_primary_stid(), kstr, ptuple->_rep->_dest, len, found));
+#endif
 
         if (!found) return RC(se_TUPLE_NOT_FOUND);
     }
@@ -162,7 +171,7 @@ w_rc_t table_man_t<T>::index_probe(ss_m* db,
  *********************************************************************/
 
 template<class T>
-w_rc_t table_man_t<T>::add_tuple(ss_m* db,
+w_rc_t table_man_t<T>::add_tuple(Database* db,
                               table_row_t* ptuple,
                               const lock_mode_t /* lock_mode */,
                               const PageID& /* primary_root */)
@@ -190,7 +199,11 @@ w_rc_t table_man_t<T>::add_tuple(ss_m* db,
     ptuple->store_key(ptuple->_rep_key->_dest, ksz, pindex);
     kstr.construct_regularkey(ptuple->_rep_key->_dest, ksz);
 
+#ifdef USE_LEVELDB
+    levelDBInsert(db, kstr, ptuple->_rep->_dest, tsz);
+#else
     W_DO(db->create_assoc(pindex->stid(), kstr, vec_t(ptuple->_rep->_dest, tsz)));
+#endif
 
     // update the indexes
     const std::vector<index_desc_t*>& indexes = _ptable->get_indexes();
@@ -201,10 +214,11 @@ w_rc_t table_man_t<T>::add_tuple(ss_m* db,
         sec_kstr.construct_regularkey(ptuple->_rep->_dest, sec_ksz);
 
         // primary key value (i.e., pointer) is stored in _rep_key
-        W_DO(db->create_assoc(indexes[i]->stid(),
-                    sec_kstr,
-                    vec_t(ptuple->_rep_key->_dest, ksz)
-                    ));
+#ifdef USE_LEVELDB
+        levelDBInsert(db, sec_kstr, ptuple->_rep_key->_dest, ksz);
+#else
+        W_DO(db->create_assoc(indexes[i]->stid(), sec_kstr, vec_t(ptuple->_rep_key->_dest, ksz)));
+#endif
     }
     return (RCOK);
 }
@@ -223,7 +237,7 @@ w_rc_t table_man_t<T>::add_tuple(ss_m* db,
  *********************************************************************/
 
 template<class T>
-w_rc_t table_man_t<T>::add_index_entry(ss_m* db,
+w_rc_t table_man_t<T>::add_index_entry(Database* db,
 				    const char* idx_name,
 				    table_row_t* ptuple,
 				    const lock_mode_t /* lock_mode */,
@@ -255,10 +269,11 @@ w_rc_t table_man_t<T>::add_index_entry(ss_m* db,
     ptuple->store_key(ptuple->_rep->_dest, ksz, pindex);
     w_keystr_t sec_kstr;
     sec_kstr.construct_regularkey(ptuple->_rep->_dest, sec_ksz);
-    W_DO(db->create_assoc(pindex->stid(),
-                sec_kstr,
-                vec_t(ptuple->_rep_key->_dest, ksz)
-                ));
+#ifdef USE_LEVELDB
+    levelDBInsert(db, sec_kstr, ptuple->_rep_key->_dest, ksz);
+#else
+    W_DO(db->create_assoc(pindex->stid(), sec_kstr, vec_t(ptuple->_rep_key->_dest, ksz)));
+#endif
 
     return (RCOK);
 }
@@ -276,7 +291,7 @@ w_rc_t table_man_t<T>::add_index_entry(ss_m* db,
  *********************************************************************/
 
 template<class T>
-w_rc_t table_man_t<T>::delete_tuple(ss_m* db,
+w_rc_t table_man_t<T>::delete_tuple(Database* db,
                                  table_row_t* ptuple,
                                  const lock_mode_t /* lock_mode */,
                                  const PageID& /* primary_root */)
@@ -306,14 +321,22 @@ w_rc_t table_man_t<T>::delete_tuple(ss_m* db,
 
         w_keystr_t kstr;
         kstr.construct_regularkey(ptuple->_rep->_dest, ksz);
+#ifdef USE_LEVELDB
+        levelDBDelete(db, kstr);
+#else
         W_DO(db->destroy_assoc(indexes[i]->stid(), kstr));
+#endif
     }
 
     size_t ksz = ptuple->_rep_key->_bufsz;
     ptuple->store_key(ptuple->_rep_key->_dest, ksz, _ptable->primary_idx());
     w_keystr_t kstr;
     kstr.construct_regularkey(ptuple->_rep_key->_dest, ksz);
+#ifdef USE_LEVELDB
+    levelDBDelete(db, kstr);
+#else
     W_DO(db->destroy_assoc(_ptable->primary_idx()->stid(), kstr));
+#endif
 
     // invalidate tuple
     // ptuple->set_rid(rid_t::null);
@@ -335,7 +358,7 @@ w_rc_t table_man_t<T>::delete_tuple(ss_m* db,
  *********************************************************************/
 
 template<class T>
-w_rc_t table_man_t<T>::delete_index_entry(ss_m* db,
+w_rc_t table_man_t<T>::delete_index_entry(Database* db,
 				       const char* idx_name,
 				       table_row_t* ptuple,
 				       const lock_mode_t /* lock_mode */,
@@ -364,7 +387,11 @@ w_rc_t table_man_t<T>::delete_index_entry(ss_m* db,
 
     w_keystr_t kstr;
     kstr.construct_regularkey(ptuple->_rep->_dest, ksz);
+#ifdef USE_LEVELDB
+    levelDBDelete(db, kstr);
+#else
     W_DO(db->destroy_assoc(pindex->stid(), kstr));
+#endif
 
     return (RCOK);
 }
@@ -390,7 +417,7 @@ w_rc_t table_man_t<T>::delete_index_entry(ss_m* db,
  *********************************************************************/
 
 template<class T>
-w_rc_t table_man_t<T>::update_tuple(ss_m* db,
+w_rc_t table_man_t<T>::update_tuple(Database* db,
                                  table_row_t* ptuple,
                                  const lock_mode_t  /* lock_mode */) // physical_design_t
 {
@@ -411,8 +438,11 @@ w_rc_t table_man_t<T>::update_tuple(ss_m* db,
 
     w_keystr_t kstr;
     kstr.construct_regularkey(ptuple->_rep_key->_dest, ksz);
-    W_DO(db->overwrite_assoc(table()->primary_idx()->stid(),
-                kstr, ptuple->_rep->_dest, 0, elen));
+#ifdef USE_LEVELDB
+    levelDBInsert(db, kstr, ptuple->_rep->_dest, elen);
+#else
+    W_DO(db->overwrite_assoc(table()->primary_idx()->stid(), kstr, ptuple->_rep->_dest, 0, elen));
+#endif
 
     return RCOK;
 
@@ -553,7 +583,7 @@ w_rc_t table_man_t<T>::print_index(unsigned ind, ostream& os,
  *********************************************************************/
 
 template<class T>
-w_rc_t table_man_t<T>::fetch_table(ss_m* db, lock_mode_t /* alm */)
+w_rc_t table_man_t<T>::fetch_table(Database* db, lock_mode_t /* alm */)
 {
     assert (db);
     assert (_ptable);
@@ -569,7 +599,9 @@ w_rc_t table_man_t<T>::fetch_table(ss_m* db, lock_mode_t /* alm */)
     tuple->_rep = &areprow;
     tuple->_rep_key = &areprow_key;
 
+#ifndef USE_LEVELDB
     W_DO(db->begin_xct());
+#endif
 
     // 1. scan the table
     table_scan_iter_impl<T> t_scan(this);
@@ -591,7 +623,9 @@ w_rc_t table_man_t<T>::fetch_table(ss_m* db, lock_mode_t /* alm */)
         TRACE( TRACE_ALWAYS, "\t%s:%d pages\n", index->name().c_str(), counter);
     }
 
+#ifndef USE_LEVELDB
     W_DO(db->commit_xct());
+#endif
     give_tuple(tuple);
 
     return RCOK;

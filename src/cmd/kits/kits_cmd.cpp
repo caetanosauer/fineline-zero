@@ -175,6 +175,9 @@ void KitsCommand::run()
 
 void KitsCommand::randomRootPageFailure()
 {
+#ifdef USE_LEVELDB
+    w_assert0(false && "reandomRootPageFailure not supported with LevelDB");
+#else
     std::vector<StoreID> stores;
     smlevel_0::stnode->get_used_stores(stores);
     int randomStore = random()%(stores.size() -1);
@@ -187,6 +190,7 @@ void KitsCommand::randomRootPageFailure()
     // CS TODO FINELINE
     // raw_page->lsn = lsn_t(1, 0);
     page.unfix(true);
+#endif
 }
 
 void KitsCommand::init()
@@ -345,15 +349,21 @@ void KitsCommand::joinClients()
 
 void KitsCommand::doWork()
 {
+#ifndef USE_LEVELDB
     lsn_t last_log_tail = smlevel_0::log->durable_lsn();
+#endif
 
     forkClients();
+
 
     // If running for a time duration, wait specified number of seconds
     if (mtype == MT_TIME_DUR) {
         std::this_thread::sleep_for(std::chrono::seconds(opt_duration));
     }
     else if (mtype == MT_LOG_VOL) {
+#ifdef USE_LEVELDB
+        w_assert0(false && "MT_LOG_VOL not supported with LevelDB");
+#else
         // check every second
         size_t part_size = smlevel_0::log->get_storage()->get_partition_size();
         unsigned long generated_log_vol = 0;
@@ -371,6 +381,7 @@ void KitsCommand::doWork()
             }
             last_log_tail = log_tail;
         }
+#endif
     }
     else if (mtype == MT_NO_STOP) {
         // keep running until variable is externally set to true
@@ -465,12 +476,14 @@ void KitsCommand::ensureEmptyPath(string path)
     }
 }
 
-void KitsCommand::loadOptions(sm_options& options)
+void KitsCommand::loadOptions(DatabaseOptions& options)
 {
+#ifdef USE_LEVELDB
+#else
     options.set_bool_option("sm_format", opt_load);
-
     // ticker always turned on
     options.set_bool_option("sm_ticker_enable", true);
+#endif
 }
 
 void KitsCommand::finish()

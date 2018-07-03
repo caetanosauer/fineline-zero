@@ -34,6 +34,13 @@
 
 #include "w_key.h"
 
+#ifdef USE_LEVELDB
+leveldb::Slice toSlice(const w_keystr_t& kstr)
+{
+   return leveldb::Slice{reinterpret_cast<const char*>(kstr.buffer_as_keystr()), kstr.get_length_as_keystr()};
+}
+#endif
+
 table_desc_t::table_desc_t(const char* name, int fieldcnt, uint32_t pd)
     : _name(name), _field_count(fieldcnt), _pd(pd), _db(NULL), _primary_idx(NULL),
     _maxsize(0)
@@ -65,12 +72,9 @@ table_desc_t::~table_desc_t()
     _indexes.clear();
 }
 
-
 /* ----------------------------------------- */
 /* --- create physical table and indexes --- */
 /* ----------------------------------------- */
-
-
 /*********************************************************************
  *
  *  @fn:    create_physical_table
@@ -80,7 +84,7 @@ table_desc_t::~table_desc_t()
  *
  *********************************************************************/
 
-w_rc_t table_desc_t::create_physical_table(ss_m* db)
+w_rc_t table_desc_t::create_physical_table(Database* db)
 {
     assert (db);
     _db = db;
@@ -95,8 +99,6 @@ w_rc_t table_desc_t::create_physical_table(ss_m* db)
     return (RCOK);
 }
 
-
-
 /*********************************************************************
  *
  *  @fn:    create_physical_index
@@ -105,20 +107,26 @@ w_rc_t table_desc_t::create_physical_table(ss_m* db)
  *
  *********************************************************************/
 
-w_rc_t table_desc_t::create_physical_index(ss_m* db, index_desc_t* index)
+w_rc_t table_desc_t::create_physical_index(Database* db, index_desc_t* index)
 {
-    // Create all the indexes of the table
-    StoreID stid = 0;
-
-    W_DO(db->create_index(stid));
     w_assert0(index);
-    index->set_stid(stid);
-
-    // Add entry on catalog
+    StoreID stid = 0;
+#ifdef USE_LEVELDB
+    // 0x70 character added to key to identify this as catalog data
+    auto name = index->getNameAsLevelDBKey();
+    static std::atomic<uint8_t> StoreCounter{1};
+    stid = StoreCounter++;
+    w_assert1(name.length() > 2 && name.c_str()[0] != 0);
+    auto status = db->Put(leveldb::WriteOptions(), leveldb::Slice{name}, leveldb::Slice{reinterpret_cast<char*>(&stid), sizeof(uint8_t)});
+#else
     w_keystr_t kstr;
     kstr.construct_regularkey(index->name().c_str(), index->name().length());
-    W_DO(db->create_assoc(get_catalog_stid(), kstr,
-                vec_t(&stid, sizeof(StoreID))));
+    // Create all the indexes of the table
+    W_DO(db->create_index(stid));
+    // Add entry on catalog
+    W_DO(db->create_assoc(get_catalog_stid(), kstr, vec_t(&stid, sizeof(StoreID))));
+#endif
+    index->set_stid(stid);
 
     // Print info
     TRACE( TRACE_STATISTICS, "%s %d (%s) (%s) (%s)\n",

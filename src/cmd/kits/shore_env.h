@@ -101,14 +101,14 @@ const int SHORE_NUM_OF_RETRIES       = 3;
         w_rc_t e = xct_##trximpl(xct_id, in);                           \
         if (!e.is_error()) {                                            \
             lsn_t xctLastLsn;                                           \
-            e = _pssm->commit_xct(true,&xctLastLsn);                    \
+            e = commit_xct(true,&xctLastLsn);                    \
             prequest->set_last_lsn(xctLastLsn); }                       \
         if (e.is_error()) {                                             \
             if (e.err_num() != smlevel_0::eDEADLOCK)                    \
                 _inc_##trxlid##_failed();                               \
             else _inc_##trxlid##_dld();                                 \
             /*TRACE( TRACE_TRX_FLOW, "Xct (%d) aborted [0x%x]\n", xct_id, e.err_num());*/ \
-            w_rc_t e2 = _pssm->abort_xct();                             \
+            w_rc_t e2 = abort_xct();                             \
             if(e2.is_error()) TRACE( TRACE_ALWAYS, "Xct (%d) abort failed [0x%x]\n", xct_id, e2.err_num()); \
             prequest->notify_client();                                  \
             _request_pool.destroy(prequest);				\
@@ -128,14 +128,14 @@ const int SHORE_NUM_OF_RETRIES       = 3;
         _inc_##trxlid##_att();                                          \
         w_rc_t e = xct_##trximpl(xct_id, in);                           \
         if (!e.is_error()) {                                            \
-            if (isAsynchCommit()) e = _pssm->commit_xct(true);          \
-            else e = _pssm->commit_xct(); }                             \
+            if (isAsynchCommit()) e = commit_xct(true);          \
+            else e = commit_xct(); }                             \
         if (e.is_error()) {                                             \
             if (e.err_num() != eDEADLOCK)                    \
                 _inc_##trxlid##_failed();                               \
             else _inc_##trxlid##_dld();                                 \
             /*TRACE( TRACE_TRX_FLOW, "Xct (%d) aborted [0x%x]\n", xct_id, e.err_num());*/ \
-            w_rc_t e2 = _pssm->abort_xct();                             \
+            w_rc_t e2 = abort_xct();                             \
             if(e2.is_error()) TRACE( TRACE_ALWAYS, "Xct (%d) abort failed [0x%x]\n", xct_id, e2.err_num()); \
             prequest->notify_client();                                  \
             if ((*&_measure)!=MST_MEASURE) return (e);                  \
@@ -173,7 +173,7 @@ const int SHORE_NUM_OF_RETRIES       = 3;
 #define CHECK_XCT_RETURN(rc,retry,ENV)			\
     if (rc.is_error()) {						\
 	TRACE( TRACE_ALWAYS, "Error %x\n", rc.err_num());		\
-	W_COERCE(ENV->db()->abort_xct());				\
+	W_COERCE(ENV->abort_xct());				\
 	switch(rc.err_num()) {						\
 	case eDEADLOCK:					\
 	    goto retry;							\
@@ -310,8 +310,6 @@ extern ShoreEnv* _g_shore_env;
 
 // extern procmonitor_t* _g_mon;
 
-extern int ssm_max_small_rec;
-
 
 /********************************************************************
  *
@@ -354,7 +352,10 @@ public:
 
 protected:
 
-    ss_m*           _pssm;               // database handle
+    /// Database handle
+    Database* _pssm;
+    // Configuration variables
+    DatabaseOptions _popts;
 
     // CS: parameters removed from envVar/shore.conf/SHORE_*_OPTIONS
     bool _clobber;
@@ -373,8 +374,6 @@ protected:
     StoreID             _root_iid;  // root id of the volume
     pthread_mutex_t    _vol_mutex; // volume mutex
 
-    // Configuration variables
-    sm_options _popts;
 
     // Processor info
     uint _max_cpu_count;    // hard limit
@@ -452,9 +451,6 @@ protected:
     int  close_sm();
 
     // load balancing settings
-
-
-
     volatile bool _bAlarmSet;
     tatas_lock _alarm_lock;
     int _start_imbalance;
@@ -463,12 +459,60 @@ protected:
     std::atomic<bool> stop_benchmark;
 
     po::variables_map optionValues;
+
+public:
+
+    rc_t begin_xct()
+    {
+#ifdef USE_LEVELDB
+       return RCOK;
+#else
+       return db()->begin_xct();
+#endif
+    }
+
+    rc_t begin_xct(tid_t& tid)
+    {
+#ifdef USE_LEVELDB
+       return RCOK;
+#else
+       return db()->begin_xct(tid);
+#endif
+    }
+
+    rc_t commit_xct(bool lazy)
+    {
+#ifdef USE_LEVELDB
+       return RCOK;
+#else
+       return db()->commit_xct(lazy);
+#endif
+    }
+
+    rc_t commit_xct()
+    {
+#ifdef USE_LEVELDB
+       return RCOK;
+#else
+       return db()->commit_xct();
+#endif
+    }
+
+    rc_t abort_xct()
+    {
+#ifdef USE_LEVELDB
+       return RCOK;
+#else
+       return db()->abort_xct();
+#endif
+    }
+
 public:
 
     ShoreEnv(po::variables_map& vm);
     virtual ~ShoreEnv();
 
-    sm_options& get_opts() { return _popts; }
+    DatabaseOptions& get_opts() { return _popts; }
     po::variables_map& get_optionValues(){ return optionValues; };
     // DB INTERFACE
 
@@ -503,7 +547,7 @@ public:
     virtual w_rc_t load_and_register_fids()=0;
 
     // inline access methods
-    inline ss_m* db() { return(_pssm); }
+    inline Database* db() { return(_pssm); }
 
     bool is_initialized();
     bool is_loaded();

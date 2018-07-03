@@ -155,6 +155,9 @@
 /* # of bits used as identity. */
 #cmakedefine SM_DREADLOCK_FINGERS ${SM_DREADLOCK_FINGERS}
 
+/* use LevelDB for Kits workloads instead of Zero ? */
+#cmakedefine USE_LEVELDB
+
 /* maintain parent pointer among control blocks */
 #cmakedefine BP_MAINTAIN_PARENT_PTR ${BP_MAINTAIN_PARENT_PTR}
 

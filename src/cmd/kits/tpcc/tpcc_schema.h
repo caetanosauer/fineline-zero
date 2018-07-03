@@ -42,15 +42,12 @@
 
 namespace tpcc {
 
-
-/* -------------------------------------------------- */
-/* --- All the tables used in the TPC-C benchmark --- */
-/* ---                                            --- */
-/* --- Schema details at:                         --- */
-/* --- src/workload/tpcc/shore_tpcc_schema.cpp    --- */
-/* -------------------------------------------------- */
-
-
+// declares a sub-class of table_desc_t with the given name and an overridden constructor with a (const uint32_t& pd) argument
+// these constructors are then defined manually in tpcc_schema.cpp
+// what each constructor does:
+// 1. invoke the parent constructor with hard-coded stid, hard-coded field count, and given pd
+// 2. fill up the _desc field, which is an array of field_desc_t
+// 3. call create_primary_idx_desc for the table and then create_index_desc on each 2ndary index
 DECLARE_TABLE_SCHEMA_PD(warehouse_t);
 DECLARE_TABLE_SCHEMA_PD(district_t);
 DECLARE_TABLE_SCHEMA_PD(stock_t);

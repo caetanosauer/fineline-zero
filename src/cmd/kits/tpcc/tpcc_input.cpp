@@ -230,6 +230,7 @@ new_order_input_t create_new_order_input(int sf, int specificWH, int tspread)
     noin._d_id   = URand(1, 10);
     noin._c_id   = NURand(1023, 1, 3000);
     noin._ol_cnt = URand(5, 15);
+    assert(noin._ol_cnt > 0);
     noin._rbk    = URand(1, 100); // if rbk == 1 - ROLLBACK
 
     noin._tstamp = time(NULL);
@@ -237,6 +238,7 @@ new_order_input_t create_new_order_input(int sf, int specificWH, int tspread)
     // generate the items order
     for (int i=0; i<noin._ol_cnt; i++) {
         noin.items[i]._ol_i_id = NURand(8191, 1, 100000);
+        assert(noin.items[i]._ol_i_id > 0);
         noin.items[i]._ol_supply_wh_select = URand(1, 100); // 1 - 99
         noin.items[i]._ol_quantity = URand(1, 10);
 

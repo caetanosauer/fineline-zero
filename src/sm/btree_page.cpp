@@ -6,7 +6,7 @@
 
 #include <algorithm>
 #include <memory>
-#include "w_debug.h"
+#include "finelog_basics.h"
 #include "w_key.h"
 
 

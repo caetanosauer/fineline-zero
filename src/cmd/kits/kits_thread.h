@@ -41,7 +41,7 @@
 #include "kits_exception.h"
 #include "util/randgen.h"
 
-#include "thread_wrapper.h"
+#include "sm_thread_wrapper.h"
 
 #ifdef __spacrv9
 // Macro that tries to bind a thread to a specific CPU
@@ -142,7 +142,7 @@ struct thread_pool
  *
  ***********************************************************************/
 
-class thread_t : public thread_wrapper_t
+class thread_t : public sm_thread_wrapper_t
 {
 private:
     std::string        _thread_name;

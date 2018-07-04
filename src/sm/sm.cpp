@@ -104,12 +104,9 @@ LogManager* smlevel_0::log = 0;
 stnode_cache_t* smlevel_0::stnode = 0;
 alloc_cache_t* smlevel_0::alloc = 0;
 LogArchiver* smlevel_0::logArchiver = 0;
-
 lock_m* smlevel_0::lm = 0;
-
-char smlevel_0::zero_page[page_sz];
-
 btree_m* smlevel_0::bt = 0;
+oldest_lsn_tracker_t* smlevel_0::oldest_lsn_tracker = 0;
 
 ss_m* smlevel_top::SSM = 0;
 
@@ -225,6 +222,9 @@ ss_m::_construct_once()
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing log manager (part 1)");
 
+    // Initialize log record type table
+    ZeroLogInterface::initialize();
+
     /*
      *  Level 1
      */
@@ -232,10 +232,12 @@ ss_m::_construct_once()
     bool format = _options.get_bool_option("sm_format", false);
     size_t partition_size = _options.get_int_option("sm_log_partition_size", 1024);
     bool delete_old_partitions = _options.get_bool_option("sm_log_delete_old_partitions", true);
-    log = new LogManager(logdir, format, partition_size, delete_old_partitions);
+    log = new LogManager(logdir, format, delete_old_partitions, partition_size);
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing log manager (part 2)");
     log->init();
+
+    oldest_lsn_tracker = new oldest_lsn_tracker_t(1 << 20);
 
     ERROUT(<< "[" << timer.time_ms() << "] Initializing log archiver");
 
@@ -377,6 +379,7 @@ ss_m::_destruct_once()
     ERROUT(<< "Terminating log manager");
     log->shutdown();
     delete log; log = 0;
+    delete oldest_lsn_tracker;
 
 
      if (shutdown_filthy) {
@@ -755,7 +758,7 @@ ss_m::_begin_xct(sm_stats_t *_stats, tid_t& tid, int timeout, bool sys_xct)
         if(log) {
             // This transaction will make no events related to LSN
             // smaller than this. Used to control garbage collection, etc.
-            log->get_oldest_lsn_tracker()->enter(reinterpret_cast<uintptr_t>(x), log->curr_lsn());
+            oldest_lsn_tracker->enter(reinterpret_cast<uintptr_t>(x), log->curr_lsn());
         }
     }
 

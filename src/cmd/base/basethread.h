@@ -2,7 +2,7 @@
 #define BASETHREAD_H
 
 
-#include "thread_wrapper.h"
+#include "sm_thread_wrapper.h"
 #include "sm_base.h"
 #include "logarchiver.h"
 #include "xct.h"
@@ -13,7 +13,7 @@
 
 using namespace std;
 
-class basethread_t : public thread_wrapper_t {
+class basethread_t : public sm_thread_wrapper_t {
 public:
     basethread_t();
 

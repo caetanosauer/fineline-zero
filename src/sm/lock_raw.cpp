@@ -5,7 +5,6 @@
 #include <time.h>
 #include <set>
 #include "w_okvl_inl.h"
-#include "w_debug.h"
 #include "latches.h"
 #include "sm_options.h"
 
@@ -878,7 +877,7 @@ RawLock* RawXct::allocate_lock(uint32_t hash, const okvl_mode& mode, RawLock::Lo
     lock->next = NULL_RAW_LOCK;
     lock->state = state;
 
-    w_assert4(is_private_list_consistent(this));
+    w_assert9(is_private_list_consistent(this));
     // put it on transaction-private linked list
     if (private_first == NULL) {
         // was empty
@@ -901,7 +900,7 @@ RawLock* RawXct::allocate_lock(uint32_t hash, const okvl_mode& mode, RawLock::Lo
         private_last->xct_next = lock;
         private_last = lock;
     }
-    w_assert4(is_private_list_consistent(this));
+    w_assert9(is_private_list_consistent(this));
 
     // and transaction-private hashmap
     private_hash_map.push_front(lock);
@@ -912,7 +911,7 @@ void RawXct::deallocate_lock(RawLock* lock) {
     // remove from transaction-private linked list
     w_assert1(this == lock->owner_xct);
     w_assert1(private_first != NULL);
-    w_assert4(is_private_list_consistent(this));
+    w_assert9(is_private_list_consistent(this));
     if (private_last == NULL) {
         // was the only entry
         w_assert1(private_first->xct_next == NULL);
@@ -940,7 +939,7 @@ void RawXct::deallocate_lock(RawLock* lock) {
     if (private_first == private_last) {
         private_last = NULL;
     }
-    w_assert4(is_private_list_consistent(this));
+    w_assert9(is_private_list_consistent(this));
 
     // and from transaction-private hashmap
     private_hash_map.remove(lock);
@@ -1161,7 +1160,7 @@ void handle_pool(bool &more_work,
             low_water_mark.set(dummy_lsn - generation_count + 1);
             now.set(++dummy_lsn);
         } else {
-            low_water_mark = smlevel_0::log->get_oldest_lsn_tracker()->get_oldest_active_lsn(
+            low_water_mark = smlevel_0::oldest_lsn_tracker->get_oldest_active_lsn(
                 smlevel_0::log->curr_lsn());
             now = smlevel_0::log->curr_lsn();
         }
@@ -1182,8 +1181,7 @@ void handle_pool(bool &more_work,
             low_water_mark.set(dummy_lsn - generation_count + 1);
         } else {
             DBGOUT1(<< name << "Retrieving low water mark...");
-            low_water_mark = smlevel_0::log->get_oldest_lsn_tracker()->get_oldest_active_lsn(
-                smlevel_0::log->curr_lsn());
+            low_water_mark = smlevel_0::oldest_lsn_tracker->get_oldest_active_lsn(smlevel_0::log->curr_lsn());
             DBGOUT1(<< name << "Retrieved low water mark=" << low_water_mark.data()
                 << "(curr_lsn=" << smlevel_0::log->curr_lsn().data()
                 << ", durable_lsn=" << smlevel_0::log->durable_lsn().data() << ")");

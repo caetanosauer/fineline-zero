@@ -63,7 +63,6 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 
 #include <vector>
 #include "basics.h"
-#include <w_debug.h>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -74,6 +73,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include <smthread.h>
 #include <tid_t.h>
 #include "smstats.h"
+#include "finelog_basics.h"
 
 
 /**\file sm_base.h
@@ -87,12 +87,12 @@ class xct_t;
 class xct_i;
 
 class bf_tree_m;
-class comm_m;
 class LogManager;
 class lock_m;
 class LogArchiver;
 class alloc_cache_t;
 class stnode_cache_t;
+class oldest_lsn_tracker_t;
 
 class option_t;
 class rid_t;
@@ -284,9 +284,9 @@ public:
     static lock_m* lm;
     static alloc_cache_t* alloc;
     static stnode_cache_t* stnode;
-
     static LogManager* log;
     static LogArchiver* logArchiver;
+    static oldest_lsn_tracker_t* oldest_lsn_tracker;
 
     static int    dcommit_timeout; // to convey option to coordinator,
                                    // if it is created by VAS
@@ -305,10 +305,6 @@ public:
     static bool         lock_caching_default;
     static bool         do_prefetch;
     static bool         statistics_enabled;
-
-    // This is a zeroed page for use wherever initialized memory
-    // is needed.
-    static char zero_page[page_sz];
 
     /// NB: this had better match sm_store_property_t (sm_int_3.h) !!!
     // or at least be converted properly every time we come through the API

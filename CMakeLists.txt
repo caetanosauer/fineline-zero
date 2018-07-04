@@ -194,7 +194,6 @@ SET (SM_DREADLOCK_BITCOUNT 256)
 SET (SM_DREADLOCK_FINGERS 3)
 
 SET (W_USE_COMPAT_STRSTREAM "true")
-SET (USE_PTHREAD_MUTEX "true")
 SET (BP_MAINTAIN_PARENT_PTR "true")
 
 ####################   OS/architecture #####################

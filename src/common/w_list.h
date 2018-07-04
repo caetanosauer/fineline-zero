@@ -1,19 +1,19 @@
 /* -*- mode:C++; c-basic-offset:4 -*-
      Shore-MT -- Multi-threaded port of the SHORE storage manager
-   
+
                        Copyright (c) 2007-2009
       Data Intensive Applications and Systems Labaratory (DIAS)
                Ecole Polytechnique Federale de Lausanne
-   
+
                          All Rights Reserved.
-   
+
    Permission to use, copy, modify and distribute this software and
    its documentation is hereby granted, provided that both the
    copyright notice and this permission notice appear in all copies of
    the software, derivative works or modified versions, and any
    portions thereof, and that both notices appear in supporting
    documentation.
-   
+
    This code is distributed in the hope that it will be useful, but
    WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. THE AUTHORS
@@ -53,15 +53,11 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #ifndef W_LIST_H
 #define W_LIST_H
 
-#include "w_defines.h"
-
-/*  -- do not edit anything above this line --   </std-header>*/
-
-#ifndef W_BASE_H
-#include <w_base.h>
-#endif
+#include "finelog_basics.h"
+#include "w_base.h"
 
 #include <iostream>
+#include <limits>
 
 /**\file w_list.h
  *
@@ -86,14 +82,14 @@ template <class T, class LOCK, class K> class w_hash_t;
  */
 class unsafe_list_dummy_lock_t
 {};
-unsafe_list_dummy_lock_t* const unsafe_nolock=NULL; // instantiate with this 
+unsafe_list_dummy_lock_t* const unsafe_nolock=NULL; // instantiate with this
 
 
 /**\brief Link structure for membership in any class to be put on a w_list*
  *
  * Classes that will always be on one or more lists may contain a member
  * of type w_link_t. This contains the \b next and \b prev pointers
- * for putting the class instance into a doubly-linked list. 
+ * for putting the class instance into a doubly-linked list.
  *
  * Embedding the w_link_t structures in the objects to be linked together
  * into a list avoids heap activity for list insertion and removal.
@@ -130,7 +126,7 @@ private:
  *
  */
 class w_list_base_t : public w_vbase_t {
-    
+
 public:
     bool             is_empty() const;
     uint32_t          num_members() const;
@@ -142,7 +138,7 @@ protected:
     NORET            ~w_list_base_t();
 
     void            set_offset(uint32_t offset);
-    
+
     w_link_t            _tail;
     uint32_t            _cnt;
     uint32_t            _adj;
@@ -150,13 +146,13 @@ protected:
 private:
     NORET            w_list_base_t(w_list_base_t&); // disabled
     w_list_base_t&        operator=(w_list_base_t&);
-    
+
     friend class w_link_t;
 };
 
 inline NORET
 w_link_t::w_link_t()
-: _list(0) 
+: _list(0)
 {
     _next = this;
     _prev = this;
@@ -220,7 +216,7 @@ w_list_base_t::w_list_base_t(uint32_t offset)
     w_assert9(_tail._next == &_tail && _tail._prev == &_tail);
 }
 
-inline void 
+inline void
 w_list_base_t::set_offset(uint32_t offset)
 {
     w_assert9(_cnt == 0 && _adj == uint4_max && _tail._list == 0);
@@ -250,7 +246,7 @@ w_list_base_t::num_members() const
 template <class T, class L> class w_list_t;
 
 BIND_FRIEND_OPERATOR_PART_1(T, L, w_list_t<T,L>)
-    
+
 /**\brief Templated list of type T.
  *
  * \attention These lists are not thread-safe.
@@ -298,7 +294,7 @@ public:
      * for this list.
      * @param[in] l Pointer to the lock that will protect this list.
      *
-     * \note These lists are not locked; it is up to the client to 
+     * \note These lists are not locked; it is up to the client to
      * provide synchronization for the list.  The LOCK template argument
      * is solely to make the list uses somewhat self-documenting.
      * By code perusal you might be able to tell what lock type and
@@ -324,7 +320,7 @@ public:
 
     NORET            ~w_list_t() {}
 
-    /// Tell the list where to find the offset of the w_link_t in 
+    /// Tell the list where to find the offset of the w_link_t in
     /// the item-type T.
     /// Lists constructed with the vacuous constructor \b must
     /// have this called before the list is used.
@@ -346,8 +342,8 @@ public:
     T*	back()  { return bottom(); }
     T*	pop_front() { return pop(); }
     T*	pop_back()  { return chop(); }
-    
-    /// Insert 
+
+    /// Insert
     w_list_t<T,LOCK>&   push(T* t)   {
         link_of(t)->attach(&_tail);
         return *this;
@@ -358,7 +354,7 @@ public:
         link_of(t)->attach(_tail.prev());
         return *this;
     }
- 
+
     // Insert t after pos (for log buffer)
     void insert_after(T* t, T* pos) {
         link_of(t)->attach(link_of(pos));
@@ -441,7 +437,7 @@ private:
     // disabled
     NORET                  w_list_t(const w_list_t<T,LOCK>&x) ;
     w_list_t<T,LOCK>&      operator=(const w_list_t<T,LOCK>&) ;
-    
+
     friend class w_list_i<T, LOCK>;
 };
 
@@ -454,7 +450,7 @@ private:
  * \attention This iterator is not thread-safe. It is up to the user to
  * provide thread-safety for the list.
  *
- * \attention Modifying the list while iterating over it: 
+ * \attention Modifying the list while iterating over it:
  * You can remove items from the list while iterating over it thus:
  * \code
  * while(iter.next()) {
@@ -501,13 +497,13 @@ public:
         _backwards = backwards;
         _next = (_backwards ? l._tail.prev() : l._tail.next());
     }
-    
-    /// Adjust the iterator to point to the next item in the list and return 
+
+    /// Adjust the iterator to point to the next item in the list and return
     /// a pointer to that next item.
     /// Returns NULL if there is no next item.
     /// Note that this depends on the results of the previous next() call,
     /// but what we do with curr() from the prior call is immaterial.
-    T*                next()     
+    T*                next()
     {
         if (_next)  {
             _curr = (_next == &(_list->_tail)) ? 0 : _list->base_of(_next);
@@ -529,8 +525,8 @@ public:
     T*                curr() const  {
         return _curr;
     }
-    
-protected: 
+
+protected:
     const w_list_t<T, LOCK>*        _list;
 private:
     w_link_t*           _next;
@@ -555,14 +551,14 @@ public:
     NORET            w_list_const_i(const w_list_t<T,LOCK>& l)
                         : w_list_i<T,LOCK>(* (w_list_t<T,LOCK>*)(&l))    {};
     NORET            ~w_list_const_i() {};
-    
+
     void            reset(const w_list_t<T,LOCK>& l) {
         w_list_i<T,LOCK>::reset(* (w_list_t<T,LOCK>*) (&l));
     }
 
     const T*            next() { return w_list_i<T,LOCK>::next(); }
-    const T*            curr() const { 
-        return w_list_i<T,LOCK>::curr(); 
+    const T*            curr() const {
+        return w_list_i<T,LOCK>::curr();
     }
 private:
     // disabled
@@ -586,7 +582,7 @@ public:
     NORET            w_keyed_list_t(
                         uint32_t        key_offset,
                         uint32_t        link_offset,
-                        LOCK *                   lock 
+                        LOCK *                   lock
                         );
 
     NORET            ~w_keyed_list_t()    {};
@@ -617,9 +613,9 @@ private:
 };
 
 #define    W_KEYED_ARG(class,key,link)    \
-    W_LIST_ARG(class,key), W_LIST_ARG(class,link) 
+    W_LIST_ARG(class,key), W_LIST_ARG(class,link)
 
-/**\brief List maintained in ascending order. 
+/**\brief List maintained in ascending order.
  *
  * T is the type of the objects in the list.
  * K is the type of the key used for sorting.
@@ -646,14 +642,14 @@ private:
                             const w_ascend_list_t<T,LOCK,K>&); // disabled
 };
 
-/**\brief List maintained in descending order. 
+/**\brief List maintained in descending order.
  *
  * T is the type of the objects in the list.
  * K is the type of the key used for sorting.
  *   This type must have an operator >=.
  */
 template <class T, class LOCK, class K>
-class w_descend_list_t : public w_keyed_list_t<T,LOCK, K> 
+class w_descend_list_t : public w_keyed_list_t<T,LOCK, K>
 {
     using w_keyed_list_t<T,LOCK, K>::_tail;
     using w_keyed_list_t<T,LOCK, K>::base_of;
@@ -703,7 +699,7 @@ w_keyed_list_t<T,LOCK, K>::w_keyed_list_t(
     uint32_t        link_offset,
     LOCK*                    lock
     )
-    : w_list_t<T,LOCK>(link_offset, lock), _key_offset(key_offset)    
+    : w_list_t<T,LOCK>(link_offset, lock), _key_offset(key_offset)
 {
 #ifdef __GNUC__
 #else
@@ -722,7 +718,7 @@ template <class T, class LOCK, class K>
 void
 w_keyed_list_t<T,LOCK, K>::set_offset(
     uint32_t        key_offset,
-    uint32_t        link_offset) 
+    uint32_t        link_offset)
 {
     w_assert3(_key_offset == 0);
     w_list_t<T,LOCK>::set_offset(link_offset);

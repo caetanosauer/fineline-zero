@@ -60,6 +60,17 @@ class XctLogger
 {
 public:
 
+    static RedoBuffer* _get_redo_buffer()
+    {
+        auto redobuf = smthread_t::get_redo_buf();
+        // Initialize epoch, if not done yet
+        if (redobuf->get_size() == 0) {
+            auto epoch = smlevel_0::log->get_epoch_tracker().acquire();
+            redobuf->set_epoch(epoch);
+        }
+        return redobuf;
+    }
+
     template <LogRecordType LR, class... Args>
     static void log(const Args&... args)
     {
@@ -153,17 +164,6 @@ public:
 
         delete logrec;
         return lsn;
-    }
-
-    static RedoBuffer* _get_redo_buffer()
-    {
-        auto redobuf = smthread_t::get_redo_buf();
-        // Initialize epoch, if not done yet
-        if (redobuf->get_size() == 0) {
-            auto epoch = smlevel_0::log->get_epoch_tracker().acquire();
-            redobuf->set_epoch(epoch);
-        }
-        return redobuf;
     }
 
     template <class PagePtr>

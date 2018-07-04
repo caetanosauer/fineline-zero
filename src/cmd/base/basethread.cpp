@@ -6,6 +6,7 @@
 #include <lock.h>
 
 #include "log.h"
+#include "log_interface.h"
 #include "log_lsn_tracker.h"
 
 sm_options basethread_t::_options;
@@ -14,6 +15,7 @@ basethread_t::basethread_t()
     : finished(false), current_xct(NULL)
 {
     DO_PTHREAD(pthread_mutex_init(&running_mutex, NULL));
+    ZeroLogInterface::initialize();
 }
 
 basethread_t::~basethread_t()
@@ -120,9 +122,7 @@ void basethread_t::begin_xct()
     assert(current_xct == NULL);
     int timeout = timeout_t::WAIT_SPECIFIED_BY_THREAD;
     current_xct = new xct_t(NULL, timeout, false, false, false);
-    smlevel_0::log->get_oldest_lsn_tracker()
-        ->enter(reinterpret_cast<uintptr_t>(current_xct),
-                smlevel_0::log->curr_lsn());
+    smlevel_0::oldest_lsn_tracker->enter(reinterpret_cast<uintptr_t>(current_xct), smlevel_0::log->curr_lsn());
 }
 
 void basethread_t::commit_xct()

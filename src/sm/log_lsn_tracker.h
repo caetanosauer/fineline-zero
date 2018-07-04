@@ -21,10 +21,10 @@
  * Retrieving the low water mark takes time because it has to read all entries, but
  * this class can be used as a delayed proxy. Use get_oldest_active_lsn_cache() in that case.
  */
-class PoorMansOldestLsnTracker {
+class oldest_lsn_tracker_t {
 public:
-    PoorMansOldestLsnTracker(uint32_t buckets);
-    ~PoorMansOldestLsnTracker();
+    oldest_lsn_tracker_t(uint32_t buckets);
+    ~oldest_lsn_tracker_t();
 
     /**
      * Put the log_m::curr_lsn as of starting the given transaction.

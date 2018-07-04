@@ -69,9 +69,9 @@ public:
 
    static void initialize()
    {
-      std::vector<uint8_t> flags{typeCount};
+      std::vector<uint8_t> flags;
       for (uint8_t i = 0; i < typeCount; i++) {
-         flags[i] = getFlags(base_to_enum<Type>(i));
+         flags.push_back(getFlags(base_to_enum<Type>(i)));
       }
       logrec_t::initialize(flags.begin(), flags.end());
    }

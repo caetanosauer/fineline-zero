@@ -59,14 +59,14 @@ void sm_tls_allocator::release(xct_t::xct_core* p, size_t)
 
 #define DBGX(arg) DBG(<< "tid." << _tid  arg)
 
-#ifdef W_TRACE
-extern "C" void debugflags(const char *);
-void
-debugflags(const char *a)
-{
-   _w_debug.setflags(a);
-}
-#endif /* W_TRACE */
+// #ifdef W_TRACE
+// extern "C" void debugflags(const char *);
+// void
+// debugflags(const char *a)
+// {
+//    _w_debug.setflags(a);
+// }
+// #endif /* W_TRACE */
 
 /*********************************************************************
  *
@@ -328,7 +328,7 @@ xct_t::~xct_t()
     w_assert9(__stats == 0);
 
     if (!is_sys_xct() && smlevel_0::log) {
-        smlevel_0::log->get_oldest_lsn_tracker()->leave(
+        smlevel_0::oldest_lsn_tracker->leave(
                 reinterpret_cast<uintptr_t>(this));
     }
 
@@ -627,8 +627,8 @@ xct_t::change_state(state_t new_state)
     if (latch_rc != AcquireResult::OK)
     {
         // Unable to the read acquire latch, cannot continue, raise an internal error
-        DBGOUT2 (<< "Unable to acquire LATCH_EX for transaction object. tid = "
-                 << tid() << ", rc = " << latch_rc);
+        // DBGOUT2 (<< "Unable to acquire LATCH_EX for transaction object. tid = "
+        //          << tid() << ", rc = " << latch_rc);
         W_FATAL_MSG(fcINTERNAL, << "unable to write latch a transaction object to change state");
         return;
     }

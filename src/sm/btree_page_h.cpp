@@ -350,7 +350,7 @@ rc_t btree_page_h::format_foster_child(btree_page_h& parent,
         w_assert0(inserted);
 
         w_assert3(is_consistent(true, true));
-        w_assert5(_is_consistent_keyorder());
+        w_assert9(_is_consistent_keyorder());
     }
 
     return RCOK;
@@ -499,7 +499,7 @@ void btree_page_h::_steal_records(btree_page_h* steal_src,
         }
 
         w_assert3(is_consistent());
-        w_assert5(_is_consistent_keyorder());
+        w_assert9(_is_consistent_keyorder());
     }
 }
 
@@ -1163,7 +1163,7 @@ rc_t btree_page_h::insert_node(const w_keystr_t &key, slotid_t slot, PageID chil
     }
 
     w_assert3 (is_consistent(true, false));
-    w_assert5 (is_consistent(true, true));
+    w_assert9 (is_consistent(true, true));
 
     return RCOK;
 }

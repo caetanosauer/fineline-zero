@@ -2,7 +2,7 @@
 #define ITERATOR_H
 
 
-#include "thread_wrapper.h"
+#include "sm_thread_wrapper.h"
 #include "sm_base.h"
 #include "generic_page.h"
 
@@ -10,7 +10,7 @@
 
 #include "ringbuffer.h"
 
-class PageIterator : public thread_wrapper_t
+class PageIterator : public sm_thread_wrapper_t
 {
 public:
     static const size_t PAGE_SIZE;

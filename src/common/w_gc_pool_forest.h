@@ -8,7 +8,7 @@
 #include <memory>
 #include <AtomicCounter.hpp>
 #include "w_defines.h"
-#include "w_debug.h"
+#include "finelog_basics.h"
 #include "lsn.h"
 
 /**

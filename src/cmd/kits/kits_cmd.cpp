@@ -21,7 +21,7 @@ namespace fs = boost::filesystem;
 int MAX_THREADS = 1000;
 
 template <class Env>
-class CrashThread : public thread_wrapper_t
+class CrashThread : public sm_thread_wrapper_t
 {
 public:
     CrashThread(Env* env, unsigned delay, bool wait_for_warmup)

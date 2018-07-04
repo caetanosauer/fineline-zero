@@ -395,17 +395,10 @@ class fixable_page_h;
 class btree_page_h;
 class xct_t;
 class vec_t;
-class log_m;
+class LogManager;
 class lock_m;
 class btree_m;
-class pool_m;
-class dir_m;
-class chkpt_m;
-class lid_m;
-class sm_stats_cache_t;
-class prologue_rc_t;
 class w_keystr_t;
-class verify_volume_result;
 class lil_global_table;
 struct okvl_mode;
 
@@ -443,10 +436,6 @@ private:
     tid_t            _tid;
 };
 
-class sm_store_info_t;
-class log_entry;
-class coordinator;
-class tape_t;
 /**
  * \brief \b This \b is \b the \b SHORE \b Storage \b Manager \b API.
  * \ingroup SSMBTREE
@@ -456,10 +445,6 @@ class tape_t;
  */
 class ss_m : public smlevel_top
 {
-    friend class prologue_rc_t;
-    friend class log_entry;
-    friend class coordinator;
-    friend class tape_t;
 public:
 
     typedef smlevel_0::concurrency_t concurrency_t;
@@ -1406,9 +1391,9 @@ private:
 
     static rc_t            _rollback_work(const sm_save_point_t&        sp);
 
-    static rc_t            _get_store_info(
-        const StoreID  &       stid,
-        sm_store_info_t&      info);
+//     static rc_t            _get_store_info(
+//         const StoreID  &       stid,
+//         sm_store_info_t&      info);
 
     //
     // The following functions deal with files of records.

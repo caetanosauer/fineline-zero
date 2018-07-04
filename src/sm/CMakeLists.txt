@@ -11,7 +11,6 @@ set(sm_STAT_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/logarchive_scanner.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/logrec.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/lsn.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/mem_mgmt.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/latches.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/partition.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../finelog/src/worker_thread.cpp
@@ -59,7 +58,6 @@ target_link_libraries(sm
     boost_program_options
     boost_system
     boost_filesystem
-    boost_regex
     )
 
 # generate a library that performs swizzling but no pin_cnt increments/decrements

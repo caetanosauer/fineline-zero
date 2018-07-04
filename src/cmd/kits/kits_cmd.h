@@ -29,6 +29,7 @@ protected:
 
     bool opt_sharpBackup;
     bool opt_load;
+    bool opt_print_tables;
     string opt_benchmark;
     string opt_conffile;
     int opt_num_trxs;

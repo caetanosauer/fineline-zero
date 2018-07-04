@@ -308,8 +308,8 @@ public:
     /* --- caching --- */
     /* --------------- */
 
-    /* fetch the pages of the table and its indexes to buffer pool */
-    virtual w_rc_t fetch_table(Database* db, lock_mode_t alm = okvl_mode::S);
+    /* Scan table and its secondaryindexes, calling the given callback for each tuple */
+    w_rc_t scan_table_and_indexes(Database* db, std::function<void(const char*, StoreID, table_row_t*)> callback = [](table_row_t*){});
 
 // Row cache
 protected:

@@ -1048,7 +1048,7 @@ int ShoreEnv::conf()
     return (0);
 }
 
-int ShoreEnv::dump()
+void ShoreEnv::dump()
 {
     TRACE( TRACE_DEBUG, "~~~~~~~~~~~~~~~~~~~~~\n");
     TRACE( TRACE_DEBUG, "Dumping Shore Data\n");
@@ -1056,7 +1056,6 @@ int ShoreEnv::dump()
     TRACE( TRACE_ALWAYS, "Not implemented...\n");
 
     TRACE( TRACE_DEBUG, "~~~~~~~~~~~~~~~~~~~~~\n");
-    return (0);
 }
 
 

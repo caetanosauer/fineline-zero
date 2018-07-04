@@ -502,7 +502,7 @@ w_rc_t ShoreTPCBEnv::warmup()
  *
  ********************************************************************/
 
-int ShoreTPCBEnv::dump()
+void ShoreTPCBEnv::dump()
 {
     assert (0); // IP: not implemented yet
 
@@ -513,8 +513,6 @@ int ShoreTPCBEnv::dump()
 //             ptable_man = *table_man_iter;
 //             ptable_man->print_table(this->_pssm);
 //         }
-
-    return (0);
 }
 
 
@@ -887,10 +885,10 @@ w_rc_t ShoreTPCBEnv::db_fetch()
     assert (_loaded);
 
     // fetch tables -- CS TODO
-    // W_DO(_pbranch_man->fetch_table(_pssm));
-    // W_DO(_pteller_man->fetch_table(_pssm));
-    // W_DO(_paccount_man->fetch_table(_pssm));
-    // W_DO(_phistory_man->fetch_table(_pssm));
+    // W_DO(_pbranch_man->scan_table_and_indexes(_pssm));
+    // W_DO(_pteller_man->scan_table_and_indexes(_pssm));
+    // W_DO(_paccount_man->scan_table_and_indexes(_pssm));
+    // W_DO(_phistory_man->scan_table_and_indexes(_pssm));
 
     return (RCOK);
 }

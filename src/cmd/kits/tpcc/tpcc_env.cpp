@@ -512,27 +512,69 @@ w_rc_t ShoreTPCCEnv::warmup()
     return (check_consistency());
 }
 
-
-/********************************************************************
- *
- *  @fn:    dump
- *
- *  @brief: Print information for all the tables in the environment
- *
- ********************************************************************/
-
-int ShoreTPCCEnv::dump()
+void load_warehouse_tuple(tpcc_warehouse_tuple& tuple, table_row_t* row)
 {
-    assert (0); // IP: Not implemented yet
+    row->get_value(0, tuple.W_ID);
+    row->get_value(1, tuple.W_NAME, 11);
+    row->get_value(2, tuple.W_STREET_1, 21);
+    row->get_value(3, tuple.W_STREET_2, 21);
+    row->get_value(4, tuple.W_CITY, 21);
+    row->get_value(5, tuple.W_STATE, 3);
+    row->get_value(6, tuple.W_ZIP, 10);
+    row->get_value(7, tuple.W_TAX);
+    row->get_value(8, tuple.W_YTD);
+}
 
-//     table_man_t* ptable_man = NULL;
-//     for(table_man_list_iter table_man_iter = _table_man_list.begin();
-//         table_man_iter != _table_man_list.end(); table_man_iter++)
-//         {
-//             ptable_man = *table_man_iter;
-//             ptable_man->print_table(this->_pssm);
-//         }
-    return (0);
+void load_customer_tuple(tpcc_customer_tuple& tuple, table_row_t* row)
+{
+    row->get_value(0, tuple.C_C_ID);
+    row->get_value(1, tuple.C_D_ID);
+    row->get_value(2, tuple.C_W_ID);
+    row->get_value(3, tuple.C_FIRST, 16);
+    row->get_value(4, tuple.C_MIDDLE, 2);
+    row->get_value(5, tuple.C_LAST, 16);
+    row->get_value(6, tuple.C_STREET_1, 20);
+    row->get_value(7, tuple.C_STREET_2, 20);
+    row->get_value(8, tuple.C_CITY, 20);
+    row->get_value(9, tuple.C_STATE, 2);
+    row->get_value(10, tuple.C_ZIP, 9);
+    row->get_value(11, tuple.C_PHONE, 16);
+    row->get_value(12, tuple.C_SINCE);
+    row->get_value(13, tuple.C_CREDIT, 2);
+    row->get_value(14, tuple.C_CREDIT_LIM);
+    row->get_value(15, tuple.C_DISCOUNT);
+    row->get_value(16, tuple.C_BALANCE);
+    row->get_value(17, tuple.C_YTD_PAYMENT);
+    row->get_value(18, tuple.C_LAST_PAYMENT);
+    row->get_value(19, tuple.C_PAYMENT_CNT);
+    row->get_value(20, tuple.C_DATA_1, 250);
+    row->get_value(21, tuple.C_DATA_2, 250);
+}
+
+void ShoreTPCCEnv::dump()
+{
+#define DUMP(tablename) \
+    { \
+       tpcc_##tablename##_tuple tuple; \
+       auto scan = [&tuple] (const char* name, StoreID stid, table_row_t* row) { \
+          (void) name; \
+          (void) stid; \
+          load_##tablename##_tuple(tuple, row); \
+          cout << tuple.to_string() << endl; \
+       }; \
+       _p##tablename##_man->scan_table_and_indexes(db(), scan); \
+    }
+
+    DUMP(warehouse);
+    DUMP(customer);
+    // _pdistrict_man;
+    // _pstock_man;
+    // _porder_line_man;
+    // _pcustomer_man;
+    // _phistory_man;
+    // _porder_man;
+    // _pnew_order_man;
+    // _pitem_man;
 }
 
 
@@ -778,15 +820,15 @@ w_rc_t ShoreTPCCEnv::db_fetch()
 
 #ifndef USE_LEVELDB
     // fetch tables
-    W_DO(_pnew_order_man->fetch_table(_pssm));
-    W_DO(_porder_line_man->fetch_table(_pssm));
-    // W_DO(_phistory_man->fetch_table(_pssm));
-    W_DO(_porder_man->fetch_table(_pssm));
-    W_DO(_pitem_man->fetch_table(_pssm));
-    W_DO(_pcustomer_man->fetch_table(_pssm));
-    W_DO(_pwarehouse_man->fetch_table(_pssm));
-    W_DO(_pdistrict_man->fetch_table(_pssm));
-    W_DO(_pstock_man->fetch_table(_pssm));
+    // W_DO(_pnew_order_man->scan_table_and_indexes(_pssm));
+    // W_DO(_porder_line_man->scan_table_and_indexes(_pssm));
+    // W_DO(_phistory_man->scan_table_and_indexes(_pssm));
+    // W_DO(_porder_man->scan_table_and_indexes(_pssm));
+    // W_DO(_pitem_man->scan_table_and_indexes(_pssm));
+    // W_DO(_pcustomer_man->scan_table_and_indexes(_pssm));
+    // W_DO(_pwarehouse_man->scan_table_and_indexes(_pssm));
+    // W_DO(_pdistrict_man->scan_table_and_indexes(_pssm));
+    // W_DO(_pstock_man->scan_table_and_indexes(_pssm));
 #endif
 
     return (RCOK);

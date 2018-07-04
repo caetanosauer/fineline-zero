@@ -182,7 +182,7 @@ public:
     virtual int info() const;
     virtual int statistics();
 
-    int dump();
+    void dump();
 
     virtual void print_throughput(const double iQueriedSF,
                                   const int iSpread,

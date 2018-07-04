@@ -90,6 +90,9 @@ void KitsCommand::setupOptions()
             ->implicit_value(true),
             "If set, log and archive folders are emptied, database files \
             and backups are deleted, and dataset is loaded from scratch")
+        ("printTables", po::value<bool>(&opt_print_tables)->default_value(false)
+            ->implicit_value(true),
+            "Print tables before benchmark, in CSV format")
         ("trxs", po::value<int>(&opt_num_trxs)->default_value(0),
             "Number of transactions to execute")
         ("logVolume", po::value<unsigned>(&opt_log_volume)->default_value(0),
@@ -154,6 +157,10 @@ void KitsCommand::run()
 
     if (opt_skew && opt_skewShiftDelay > 0) {
         skew_shifter = std::make_shared<SkewShiftingThread>(opt_skewShiftDelay);
+    }
+
+    if (opt_print_tables) {
+       shoreEnv->dump();
     }
 
     if (runBenchAfterLoad()) {

@@ -566,24 +566,8 @@ w_rc_t table_man_t<T>::print_index(unsigned ind, ostream& os,
     return RCOK;
 }
 
-
-/* ---------------- */
-/* --- caching  --- */
-/* ---------------- */
-
-
-/*********************************************************************
- *
- *  @fn:    fetch_table
- *
- *  @brief: Fetch all the pages of the table and its indexes to buffer pool
- *
- *  @note:  This function should be called in the context of a trx.
- *
- *********************************************************************/
-
 template<class T>
-w_rc_t table_man_t<T>::fetch_table(Database* db, lock_mode_t /* alm */)
+w_rc_t table_man_t<T>::scan_table_and_indexes(Database* db, std::function<void(const char*, StoreID, table_row_t*)> callback)
 {
     assert (db);
     assert (_ptable);
@@ -607,9 +591,10 @@ w_rc_t table_man_t<T>::fetch_table(Database* db, lock_mode_t /* alm */)
     table_scan_iter_impl<T> t_scan(this);
     while(!eof) {
 	W_DO(t_scan.next(eof, *tuple));
+        callback(_ptable->name(), _ptable->get_primary_stid(), tuple);
 	counter++;
     }
-    TRACE( TRACE_ALWAYS, "%s:%d pages\n", _ptable->name(), counter);
+    // TRACE( TRACE_ALWAYS, "%s:%d pages\n", _ptable->name(), counter);
 
     // 2. scan the indexes
     for (auto index : _ptable->get_indexes()) {
@@ -618,9 +603,10 @@ w_rc_t table_man_t<T>::fetch_table(Database* db, lock_mode_t /* alm */)
         counter = -1;
         while(!eof) {
             W_DO(i_scan.next(eof, *tuple));
+            callback(index->name().c_str(), index->stid(), tuple);
             counter++;
         }
-        TRACE( TRACE_ALWAYS, "\t%s:%d pages\n", index->name().c_str(), counter);
+        // TRACE( TRACE_ALWAYS, "\t%s:%d pages\n", index->name().c_str(), counter);
     }
 
 #ifndef USE_LEVELDB

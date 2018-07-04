@@ -75,12 +75,33 @@ struct tpcc_customer_tuple {
     char    C_DATA_1   [STRSIZE(250)];
     char    C_DATA_2   [STRSIZE(250)];
 
-    // c_str tuple_to_str() {
-    //     return(c_str("CUST = %d|%d|%d|%s|%s|%s|%s|%s|%s|%s|%s|%s|%.2f|%s -",
-    //                  C_C_ID, C_D_ID, C_W_ID, C_FIRST, C_MIDDLE, C_LAST,
-    //                  C_STREET_1, C_STREET_2, C_CITY, C_STATE, C_ZIP,
-    //                  C_PHONE, C_SINCE, C_CREDIT));
-    // }
+    string to_string() {
+        stringstream ss;
+        ss <<
+          C_C_ID << "," <<
+          C_D_ID << "," <<
+          C_W_ID << "," <<
+          C_FIRST << "," <<
+          C_MIDDLE << "," <<
+          C_LAST << "," <<
+          C_STREET_1 << "," <<
+          C_STREET_2 << "," <<
+          C_CITY << "," <<
+          C_STATE << "," <<
+          C_ZIP << "," <<
+          C_PHONE << "," <<
+          C_SINCE << "," <<
+          C_CREDIT << "," <<
+          C_CREDIT_LIM.to_double() << "," <<
+          C_DISCOUNT.to_double() << "," <<
+          C_BALANCE.to_double() << "," <<
+          C_YTD_PAYMENT.to_double() << "," <<
+          C_LAST_PAYMENT.to_double() << "," <<
+          C_PAYMENT_CNT << "," <<
+          C_DATA_1 << "," <<
+          C_DATA_2;
+        return ss.str();
+    }
 
 
 };
@@ -268,6 +289,20 @@ struct tpcc_order_tuple {
     int    O_CARRIER_ID;
     int    O_OL_CNT;
     int    O_ALL_LOCAL;
+
+    string to_string() {
+        stringstream ss;
+        ss <<
+          O_ID << "," <<
+          O_C_ID << "," <<
+          O_D_ID << "," <<
+          O_W_ID << "," <<
+          O_ENTRY_D << "," <<
+          O_CARRIER_ID << "," <<
+          O_OL_CNT << "," <<
+          O_ALL_LOCAL;
+        return ss.str();
+    }
 };
 
 
@@ -359,12 +394,13 @@ struct tpcc_warehouse_tuple {
     decimal W_TAX;
     decimal W_YTD;
 
-    // c_str tuple_to_str() {
-    //     return(c_str("WH= %d|%s|%s|%s|%s|%s|%s|%.2f|%.2f",
-    //                  W_ID, W_NAME, W_STREET_1, W_STREET_2,
-    //                  W_CITY, W_STATE, W_ZIP,
-    //                  W_TAX.to_double(), W_YTD.to_double()));
-    // }
+    string to_string() {
+        stringstream ss;
+        ss << W_ID << "," << W_NAME << "," << W_STREET_1 << "," << W_STREET_2 << ","
+            << W_CITY << "," << W_STATE << "," << W_ZIP << ","
+            << W_TAX.to_double() << "," << W_YTD.to_double();
+        return ss.str();
+    }
 };
 
 struct tpcc_warehouse_tuple_key {

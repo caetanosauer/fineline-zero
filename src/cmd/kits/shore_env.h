@@ -291,7 +291,7 @@ public:
     virtual int resume()=0;
     virtual w_rc_t newrun()=0;
     virtual int statistics()=0;
-    virtual int dump()=0;
+    virtual void dump()=0;
     virtual int info() const=0;
 
 }; // EOF: db_iface
@@ -529,7 +529,7 @@ public:
     virtual int resume() { return(0); /* do nothing */ };
     virtual w_rc_t newrun()=0;
     virtual int statistics();
-    virtual int dump();
+    virtual void dump();
     virtual int info() const=0;
 
 

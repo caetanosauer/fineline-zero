@@ -89,10 +89,8 @@ public:
     }
 
     void format_empty() {
-        memset(this, 0, sizeof(generic_page_header));
         pid = stnode_page::stpid;
         tag = t_stnode_p;
-
         memset(&stnode, 0, sizeof(stnode_t) * max);
     }
 

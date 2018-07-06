@@ -169,7 +169,10 @@ public:
     template <class PagePtr>
     static bool _should_apply_img_compression(LogRecordType type, PagePtr page)
     {
+        // If page-img is already being generated, we would recurse indefinitely
         if (type == LogRecordType::page_img_format_log) { return false; }
+        // Image can only be generated if page does not contain uncommitted updates (note: we hold EX latch here)
+        if (ss_m::log->get_epoch_tracker().get_lowest_active_epoch() <= page->get_epoch()) { return false; }
 
         auto comp = ss_m::log->get_page_img_compression();
         if (comp == 0) { return false; }

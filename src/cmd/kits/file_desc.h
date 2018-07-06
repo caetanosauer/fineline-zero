@@ -39,8 +39,9 @@
 
 using std::list;
 
+// This seems to be the most "basic" Kits header, so we add these typedefs here
 #ifdef USE_LEVELDB
-#include <leveldb/db.h>
+#include "leveldb_interface.h"
 typedef leveldb::DB Database;
 typedef leveldb::Options DatabaseOptions;
 #else

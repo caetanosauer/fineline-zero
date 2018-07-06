@@ -823,6 +823,7 @@ int ShoreEnv::start_sm()
     if (_initialized == false) {
 #ifdef USE_LEVELDB
         string db_path = "leveldb"; // TODO read from options
+        _popts.write_buffer_size = 256 * 1024 * 1024; //256 MB
         if (_clobber) {
            // TODO delete directory
             _popts.error_if_exists = true;

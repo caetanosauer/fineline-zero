@@ -160,7 +160,7 @@ public:
             w_keystr_t pkeystr;
             pkeystr.construct_regularkey(pkey, elen);
 #ifdef USE_LEVELDB
-            loaded = levelDBProbe(_primary_idx->table()->db(), pkeystr, tuple._rep->_dest);
+            loaded = LevelDBInterface::levelDBProbe(_primary_idx->table()->db(), pkeystr, tuple._rep->_dest);
 #else
             ss_m::find_assoc(_primary_idx->stid(), pkeystr, tuple._rep->_dest, elen, loaded);
 #endif

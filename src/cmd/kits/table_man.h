@@ -350,36 +350,6 @@ public:
         table_man_t<bench::table##_t>::pcache_link::tls_get() \
             { return bench##_##table##_cache; }
 
-#ifdef USE_LEVELDB
-inline bool levelDBProbe(leveldb::DB* db, const w_keystr_t& kstr, char* dest)
-{
-   string value;
-   auto status = db->Get(leveldb::ReadOptions(), toSlice(kstr), &value);
-   if (status.IsNotFound()) {
-      return false;
-   } else {
-      w_assert1(status.ok());
-      w_assert1(value.length() > 0);
-      ::memcpy(dest, value.c_str(), value.length());
-      return true;
-   }
-}
-
-inline void levelDBInsert(leveldb::DB* db, const w_keystr_t& kstr, char* data, size_t len)
-{
-   w_assert1(reinterpret_cast<const char*>(kstr.buffer_as_keystr())[0] == '+');
-   w_assert1(reinterpret_cast<const char*>(kstr.buffer_as_keystr())[1] != 0);
-   auto status = db->Put(leveldb::WriteOptions(), toSlice(kstr), leveldb::Slice{data, len});
-   w_assert1(status.ok());
-}
-
-inline void levelDBDelete(leveldb::DB* db, const w_keystr_t& kstr)
-{
-   auto status = db->Delete(leveldb::WriteOptions(), toSlice(kstr));
-   w_assert1(status.ok());
-}
-#endif
-
 
 #if 0 // CS: disabled for now -- should be moved to other file anyway
 

@@ -103,12 +103,6 @@
 #include "index_desc.h"
 #include "row.h"
 
-#ifdef USE_LEVELDB
-#include <atomic>
-
-leveldb::Slice toSlice(const w_keystr_t& kstr);
-#endif
-
 // Shore -> Zero compatibility
 typedef okvl_mode::element_lock_mode lock_mode_t;
 

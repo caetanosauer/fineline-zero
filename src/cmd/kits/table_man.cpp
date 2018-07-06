@@ -107,7 +107,7 @@ w_rc_t table_man_t<T>::index_probe(Database* db,
 
         smsize_t len = ptuple->_rep->_bufsz;
 #ifdef USE_LEVELDB
-        found = levelDBProbe(db, kstr, ptuple->_rep->_dest);
+        found = LevelDBInterface::levelDBProbe(db, kstr, ptuple->_rep->_dest);
 #else
         W_DO(db->find_assoc(pindex->stid(), kstr, ptuple->_rep->_dest, len, found));
 #endif
@@ -128,7 +128,7 @@ w_rc_t table_man_t<T>::index_probe(Database* db,
         // int ref_sz = key_size(ptuple->_ptable->primary_idx());
         // ptuple->_rep_key->set(ref_sz);
 #ifdef USE_LEVELDB
-        found = levelDBProbe(db, kstr, ptuple->_rep_key->_dest);
+        found = LevelDBInterface::levelDBProbe(db, kstr, ptuple->_rep_key->_dest);
 #else
         W_DO(db->find_assoc(pindex->stid(), kstr, ptuple->_rep_key->_dest, len, found));
 #endif
@@ -138,7 +138,7 @@ w_rc_t table_man_t<T>::index_probe(Database* db,
         // read the tuple from the primary index
         kstr.construct_regularkey(ptuple->_rep_key->_dest, len);
 #ifdef USE_LEVELDB
-        found = levelDBProbe(db, kstr, ptuple->_rep_key->_dest);
+        found = LevelDBInterface::levelDBProbe(db, kstr, ptuple->_rep_key->_dest);
 #else
         W_DO(db->find_assoc(pindex->table()->get_primary_stid(), kstr, ptuple->_rep->_dest, len, found));
 #endif
@@ -200,7 +200,7 @@ w_rc_t table_man_t<T>::add_tuple(Database* db,
     kstr.construct_regularkey(ptuple->_rep_key->_dest, ksz);
 
 #ifdef USE_LEVELDB
-    levelDBInsert(db, kstr, ptuple->_rep->_dest, tsz);
+    LevelDBInterface::levelDBInsert(kstr, ptuple->_rep->_dest, tsz);
 #else
     W_DO(db->create_assoc(pindex->stid(), kstr, vec_t(ptuple->_rep->_dest, tsz)));
 #endif
@@ -215,7 +215,7 @@ w_rc_t table_man_t<T>::add_tuple(Database* db,
 
         // primary key value (i.e., pointer) is stored in _rep_key
 #ifdef USE_LEVELDB
-        levelDBInsert(db, sec_kstr, ptuple->_rep_key->_dest, ksz);
+        LevelDBInterface::levelDBInsert(sec_kstr, ptuple->_rep_key->_dest, ksz);
 #else
         W_DO(db->create_assoc(indexes[i]->stid(), sec_kstr, vec_t(ptuple->_rep_key->_dest, ksz)));
 #endif
@@ -270,7 +270,7 @@ w_rc_t table_man_t<T>::add_index_entry(Database* db,
     w_keystr_t sec_kstr;
     sec_kstr.construct_regularkey(ptuple->_rep->_dest, sec_ksz);
 #ifdef USE_LEVELDB
-    levelDBInsert(db, sec_kstr, ptuple->_rep_key->_dest, ksz);
+    LevelDBInterface::levelDBInsert(sec_kstr, ptuple->_rep_key->_dest, ksz);
 #else
     W_DO(db->create_assoc(pindex->stid(), sec_kstr, vec_t(ptuple->_rep_key->_dest, ksz)));
 #endif
@@ -322,7 +322,7 @@ w_rc_t table_man_t<T>::delete_tuple(Database* db,
         w_keystr_t kstr;
         kstr.construct_regularkey(ptuple->_rep->_dest, ksz);
 #ifdef USE_LEVELDB
-        levelDBDelete(db, kstr);
+        LevelDBInterface::levelDBDelete(kstr);
 #else
         W_DO(db->destroy_assoc(indexes[i]->stid(), kstr));
 #endif
@@ -333,7 +333,7 @@ w_rc_t table_man_t<T>::delete_tuple(Database* db,
     w_keystr_t kstr;
     kstr.construct_regularkey(ptuple->_rep_key->_dest, ksz);
 #ifdef USE_LEVELDB
-    levelDBDelete(db, kstr);
+    LevelDBInterface::levelDBDelete(kstr);
 #else
     W_DO(db->destroy_assoc(_ptable->primary_idx()->stid(), kstr));
 #endif
@@ -388,7 +388,7 @@ w_rc_t table_man_t<T>::delete_index_entry(Database* db,
     w_keystr_t kstr;
     kstr.construct_regularkey(ptuple->_rep->_dest, ksz);
 #ifdef USE_LEVELDB
-    levelDBDelete(db, kstr);
+    LevelDBInterface::levelDBDelete(kstr);
 #else
     W_DO(db->destroy_assoc(pindex->stid(), kstr));
 #endif
@@ -439,7 +439,7 @@ w_rc_t table_man_t<T>::update_tuple(Database* db,
     w_keystr_t kstr;
     kstr.construct_regularkey(ptuple->_rep_key->_dest, ksz);
 #ifdef USE_LEVELDB
-    levelDBInsert(db, kstr, ptuple->_rep->_dest, elen);
+    LevelDBInterface::levelDBInsert(kstr, ptuple->_rep->_dest, elen);
 #else
     W_DO(db->overwrite_assoc(table()->primary_idx()->stid(), kstr, ptuple->_rep->_dest, 0, elen));
 #endif

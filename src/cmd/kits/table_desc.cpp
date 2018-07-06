@@ -34,13 +34,6 @@
 
 #include "w_key.h"
 
-#ifdef USE_LEVELDB
-leveldb::Slice toSlice(const w_keystr_t& kstr)
-{
-   return leveldb::Slice{reinterpret_cast<const char*>(kstr.buffer_as_keystr()), kstr.get_length_as_keystr()};
-}
-#endif
-
 table_desc_t::table_desc_t(const char* name, int fieldcnt, uint32_t pd)
     : _name(name), _field_count(fieldcnt), _pd(pd), _db(NULL), _primary_idx(NULL),
     _maxsize(0)

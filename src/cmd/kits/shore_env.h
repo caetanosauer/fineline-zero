@@ -465,6 +465,7 @@ public:
     rc_t begin_xct()
     {
 #ifdef USE_LEVELDB
+       LevelDBInterface::beginTxn();
        return RCOK;
 #else
        return db()->begin_xct();
@@ -474,6 +475,9 @@ public:
     rc_t begin_xct(tid_t& tid)
     {
 #ifdef USE_LEVELDB
+       // TODO no tid for now
+       tid = 0;
+       LevelDBInterface::beginTxn();
        return RCOK;
 #else
        return db()->begin_xct(tid);
@@ -483,6 +487,8 @@ public:
     rc_t commit_xct(bool lazy)
     {
 #ifdef USE_LEVELDB
+       (void) lazy;
+       LevelDBInterface::commitTxn(db());
        return RCOK;
 #else
        return db()->commit_xct(lazy);
@@ -492,6 +498,7 @@ public:
     rc_t commit_xct()
     {
 #ifdef USE_LEVELDB
+       LevelDBInterface::commitTxn(db());
        return RCOK;
 #else
        return db()->commit_xct();
@@ -501,6 +508,7 @@ public:
     rc_t abort_xct()
     {
 #ifdef USE_LEVELDB
+       LevelDBInterface::abortTxn();
        return RCOK;
 #else
        return db()->abort_xct();

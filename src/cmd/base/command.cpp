@@ -362,6 +362,8 @@ void Command::setupSMOptions(po::options_description& options)
         "Enable/Disable write elision in buffer pool")
     ("sm_evict_unarchived", po::value<bool>(),
         "Evict pages with updates that have not reached the log archive yet")
+    ("sm_page_img_on_evict_threshold", po::value<int>(),
+        "Generate page-img log record on eviction if log volume of page is above this threshold (0 = disabled)")
     ("sm_archiver_eager", po::value<bool>(),
         "Enable/Disable eager archiving")
     ("sm_archiver_read_whole_blocks", po::value<bool>(),

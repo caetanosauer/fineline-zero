@@ -49,6 +49,7 @@ protected:
     bool                        _log_evictions;
     bool                        _random_pick;
     bool                        _use_clock;
+    uint32_t                    _page_img_on_evict_threshold;
 
     std::default_random_engine _rnd_gen;
     std::uniform_int_distribution<bf_idx> _rnd_distr;

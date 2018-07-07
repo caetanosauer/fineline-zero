@@ -21,6 +21,8 @@ page_evictioner_base::page_evictioner_base(bf_tree_m* bufferpool, const sm_optio
     _write_elision = options.get_bool_option("sm_write_elision", false);
     // _evict_unarchived is the FineLine-equivalent of write elision
     _evict_unarchived = options.get_bool_option("sm_evict_unarchived", false);
+    // Generate page image log record on eviction if log volume of page is above this threshold
+    _page_img_on_evict_threshold = options.get_int_option("sm_page_img_on_evict_threshold", 1024);
 
     if (_use_clock) { _clock_ref_bits.resize(_bufferpool->get_block_cnt(), false); }
 
@@ -89,10 +91,23 @@ bool page_evictioner_base::evict_one(bf_idx victim)
 
     // We're passed the point of no return: eviction must happen no mather what
 
-    w_assert1(cb.latch().is_mine());
+    generic_page* p = &_bufferpool->_buffer[victim];
     auto pid = cb._pid;
 
-    generic_page* p = &_bufferpool->_buffer[victim];
+    // Generate page-image log record to optimize future fetches of this page and
+    // keep log archive compact
+    if (_page_img_on_evict_threshold > 0) {
+        if (cb.get_log_volume() >= _page_img_on_evict_threshold) {
+            sys_xct_section_t sx;
+            fixable_page_h fpage;
+            fpage.fix_nonbufferpool_page(p);
+            XctLogger::log_p<LogRecordType::page_img_format_log>(&fpage);
+            W_COERCE(sx.end_sys_xct(RCOK));
+        }
+    }
+
+    // Log page eviction event
+    w_assert1(cb.latch().is_mine());
     if (_log_evictions) {
         Logger::log_sys<LogRecordType::evict_page_log>(pid, p->version);
     }
@@ -101,7 +116,7 @@ bool page_evictioner_base::evict_one(bf_idx victim)
         _bufferpool->add_evicted_page(pid, p->version);
     }
 
-    // remove it from hashtable.
+    // Remove pid from the buffer pool hash table
     w_assert1(cb._pin_cnt < 0);
     w_assert1(!cb._used);
     bool removed = _bufferpool->_hashtable->remove(pid);
@@ -110,6 +125,7 @@ bool page_evictioner_base::evict_one(bf_idx victim)
     DBG2(<< "EVICTED " << victim << " pid " << pid
             << " log-tail " << smlevel_0::log->curr_lsn());
 
+    // Latch can finally be released and frame can be occupied by another page
     cb.latch().latch_release();
 
     INC_TSTAT(bf_evict);
@@ -213,7 +229,9 @@ bf_idx page_evictioner_base::pick_victim()
                 || !cb._used
                 // ... frames prefetched by restore but not yet restored
                 || cb.is_pinned_for_restore()
-                // ... pages that contain updates in a non-durable epoch (FineLine)
+                // ... pages that might contain uncommitted updates (FineLine)
+                || p.get_epoch() >= ss_m::log->get_epoch_tracker().get_lowest_active_epoch()
+                // ... pages whose last update hasn't made it to the archive yet (FineLine)
                 || (!ignore_epoch && p.get_epoch() >= archived_epoch)
         )
         {

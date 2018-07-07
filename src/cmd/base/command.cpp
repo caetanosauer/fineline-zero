@@ -153,11 +153,11 @@ void Command::setupSMOptions(po::options_description& options)
     ("sm_truncate_archive", po::value<bool>()->default_value(false)
         ->implicit_value(true),
         "Whether to truncate log archive runs at SM shutdown")
-    ("sm_log_partition_size", po::value<int>()->default_value(1024),
+    ("sm_log_partition_size", po::value<int>(),
         "Size of a log partition in MB")
     ("sm_log_max_partitions", po::value<int>()->default_value(0),
         "Maximum number of partitions maintained in log directory")
-    ("sm_log_delete_old_partitions", po::value<bool>()->default_value(true),
+    ("sm_log_delete_old_partitions", po::value<bool>(),
         "Whether to delete old log partitions as cleaner and chkpt make progress")
     ("sm_group_commit_size", po::value<int>(),
         "Size in bytes of group commit window (higher -> larger log writes)")

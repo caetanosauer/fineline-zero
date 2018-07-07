@@ -8,11 +8,7 @@
 #include "tls.h"
 #include "smthread.h"
 
-/*
- * The sole purpose of this class is to replace sthread_t with as little code impact as
- * possible -- new code should use the C++11 thread library directly (as soon as the TODO
- * below about tls_manager is fixed...)
- */
+// SM version of finelog's thread_wrapper_t that initializes TLS memory management and handles SM stats
 class sm_thread_wrapper_t
 {
 public:

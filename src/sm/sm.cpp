@@ -71,6 +71,7 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include "allocator.h"
 #include "logarchiver.h"
 #include "xct_logger.h"
+#include "ticker_thread.h"
 
 
 sm_tls_allocator smlevel_0::allocator;
@@ -107,7 +108,7 @@ LogArchiver* smlevel_0::logArchiver = 0;
 lock_m* smlevel_0::lm = 0;
 btree_m* smlevel_0::bt = 0;
 oldest_lsn_tracker_t* smlevel_0::oldest_lsn_tracker = 0;
-
+ticker_thread_t* smlevel_0::ticker_thread = 0;
 ss_m* smlevel_top::SSM = 0;
 
 /*
@@ -295,6 +296,9 @@ ss_m::_construct_once()
 
     bf->post_init();
 
+    ticker_thread = new ticker_thread_t();
+    ticker_thread->fork();
+
     ERROUT(<< "[" << timer.time_ms() << "] Finished SM initialization");
 }
 
@@ -331,6 +335,9 @@ ss_m::_destruct_once()
     lsn_t shutdown_lsn = log->durable_lsn();
     fs::path current_log_path = log->get_storage()->make_log_path(shutdown_lsn.hi());
 
+    ticker_thread->shutdown();
+    ticker_thread->join();
+    delete ticker_thread;
 
     // get rid of all non-prepared transactions
     // First... disassociate me from any tx

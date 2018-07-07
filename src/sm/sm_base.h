@@ -93,6 +93,7 @@ class LogArchiver;
 class alloc_cache_t;
 class stnode_cache_t;
 class oldest_lsn_tracker_t;
+class ticker_thread_t;
 
 class option_t;
 class rid_t;
@@ -287,6 +288,7 @@ public:
     static LogManager* log;
     static LogArchiver* logArchiver;
     static oldest_lsn_tracker_t* oldest_lsn_tracker;
+    static ticker_thread_t* ticker_thread;
 
     static int    dcommit_timeout; // to convey option to coordinator,
                                    // if it is created by VAS

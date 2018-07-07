@@ -190,7 +190,8 @@ struct UndoLogrecSerializer<LogRecordType::btree_update_log>
         const cvec_t& /*new_el*/)
     {
         // Undo logrec has before-image
-        return (new (dest) serialized_kv_pair_t(key, cvec_t{old_el, old_elen}))->size();
+        w_assert1(old_elen >= 0);
+        return (new (dest) serialized_kv_pair_t(key, cvec_t{old_el, static_cast<size_t>(old_elen)}))->size();
     }
 
     template <typename... T>

@@ -48,7 +48,7 @@ public:
         w_assert1(ZeroLogInterface::getFlags(LR) == logrec_t::t_system);
 
         lsn_t lsn;
-        W_COERCE(ss_m::log->insert(*logrec, &lsn));
+        ss_m::log->insert(*logrec, &lsn);
         // logrec->set_lsn(lsn);
 
         delete logrec;

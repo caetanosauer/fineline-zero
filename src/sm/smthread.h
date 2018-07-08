@@ -203,8 +203,8 @@ class smthread_t {
         logrec_t _logbuf;
         logrec_t _logbuf2; // for "piggy-backed" SSX
         UndoBuffer _undo_buf;
-        static constexpr size_t BufferSize = 1024 * 1024;
-        RedoBuffer _redo_buf{BufferSize};
+        static constexpr size_t RedoBufferSize = 10 * 1024 * 1024;
+        RedoBuffer _redo_buf{RedoBufferSize};
 
         xct_t*   xct;
         int      pin_count;      // number of rsrc_m pins

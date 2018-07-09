@@ -470,20 +470,21 @@ private:
     static thread_local SprIterator _localSprIter;
 
     // Table of evicted pages and their versions (FineLine-equivalent of page recovery index for write elision)
-    std::unordered_map<PageID, uint32_t> _evicted_pages;
+    std::unordered_map<PageID, std::pair<uint32_t, bool>> _evicted_pages;
     srwlock_t _evicted_pages_latch;
 
     // Evicted-table methods (FineLine)
-    void add_evicted_page(PageID pid, uint32_t version)
+    void add_evicted_page(PageID pid, uint32_t version, bool img_generated)
     {
+        // If image was generated
         spinlock_write_critical_section cs(&_evicted_pages_latch);
-        _evicted_pages[pid] = version;
+        _evicted_pages[pid] = std::pair<uint32_t, bool>{version, img_generated};
     }
-    uint32_t get_evicted_page_version(PageID pid)
+    std::pair<uint32_t, bool> get_evicted_page_version(PageID pid)
     {
         spinlock_read_critical_section cs(&_evicted_pages_latch);
         auto iter = _evicted_pages.find(pid);
-        if (iter == _evicted_pages.end()) { return 0; }
+        if (iter == _evicted_pages.end()) { return std::pair<uint32_t, bool>{0, false}; }
         return iter->second;
     }
 

@@ -402,7 +402,12 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
 
     // FineLine: replay log records on recovery log if needed
     if (_evict_unarchived) {
-        const auto expected_version = get_evicted_page_version(pid);
+        uint32_t expected_version;
+        bool img_generated;
+        tie(expected_version, img_generated) = get_evicted_page_version(pid);
+        // If image was generated prior to eviction, expected version can be safely decremented
+        if (img_generated) { expected_version--; }
+
         auto curr_partition = _localSprIter.getLastProbedRun() + 1;
         while (p.version() < expected_version) {
             auto logp = smlevel_0::log->get_storage()->get_partition(curr_partition);
@@ -427,6 +432,8 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
             curr_partition++;
         }
         w_assert1(expected_version == 0 || p.version() == expected_version);
+        // If image was generated prior to eviction, page version can be incremented here
+        if (img_generated) { p.incr_version(); }
     }
 
     w_assert0(page->pid == pid);

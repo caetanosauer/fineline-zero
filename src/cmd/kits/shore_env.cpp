@@ -45,6 +45,9 @@
 // #include "sm/shore/shore_flusher.h"
 // #include "sm/shore/shore_helper_loader.h"
 
+#define BOOST_FILESYSTEM_NO_DEPRECATED
+#include <boost/filesystem.hpp>
+
 using namespace boost;
 
 // #warning IP: TODO pass arbitrary -sm_* options from shore.conf to shore
@@ -794,7 +797,21 @@ int ShoreEnv::configure_sm()
     upd_worker_cnt();
 
 #ifdef USE_LEVELDB
-    // TODO set relevant levelDB options from optionValues
+    _leveldb_path = optionValues["leveldb_logdir"].as<string>();
+    _popts.write_buffer_size = optionValues["leveldb_write_buffer_size"].as<int64_t>();
+    _popts.max_open_files = optionValues["leveldb_max_open_files"].as<int64_t>();
+    _popts.block_size = optionValues["leveldb_block_size"].as<int64_t>();
+    _popts.max_file_size = optionValues["leveldb_max_file_size"].as<int64_t>();
+    int64_t block_cache_size = optionValues["leveldb_block_cache_size"].as<int64_t>();
+    _popts.block_cache = leveldb::NewLRUCache(block_cache_size);
+
+    cout << "LevelDB options:" << endl;
+    cout << "  logdir = " << _leveldb_path << endl;
+    cout << "  write_buffer_size = " << _popts.write_buffer_size << endl;
+    cout << "  max_open_files = " << _popts.max_open_files << endl;
+    cout << "  block_size = " << _popts.block_size << endl;
+    cout << "  max_file_size = " << _popts.max_file_size << endl;
+    cout << "  block_cache_size = " << block_cache_size << endl;
 #else
     Command::setSMOptions(_popts, optionValues);
 #endif
@@ -824,14 +841,12 @@ int ShoreEnv::start_sm()
 
     if (_initialized == false) {
 #ifdef USE_LEVELDB
-        string db_path = "leveldb"; // TODO read from options
-        _popts.write_buffer_size = 256 * 1024 * 1024; //256 MB
         if (_clobber) {
-           // TODO delete directory
+            boost::filesystem::remove_all(boost::filesystem::path{_leveldb_path});
             _popts.error_if_exists = true;
             _popts.create_if_missing = true;
         }
-        auto status = leveldb::DB::Open(_popts, db_path, &_pssm);
+        auto status = leveldb::DB::Open(_popts, _leveldb_path, &_pssm);
         if (!status.ok()) {
             cerr << status.ToString() << endl;
             w_assert0(status.ok());

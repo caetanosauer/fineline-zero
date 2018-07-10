@@ -136,6 +136,15 @@ void KitsCommand::setupOptions()
             "Start counting crash delay only after SM is initialized (and recovered if in ARIES)")
         ("skewShiftDelay", po::value<int>(&opt_skewShiftDelay)->default_value(0),
             "Shift skewed are every N seconds")
+#ifdef USE_LEVELDB
+        // Options for leveldb storage -- see leveldb docs
+        ("leveldb_logdir", po::value<string>()->default_value("leveldb"), "")
+        ("leveldb_write_buffer_size", po::value<int64_t>()->default_value(4*1024*1024), "")
+        ("leveldb_max_open_files", po::value<int64_t>()->default_value(10000), "")
+        ("leveldb_block_size", po::value<int64_t>()->default_value(4*1024), "")
+        ("leveldb_max_file_size", po::value<int64_t>()->default_value(2*1024*1024), "")
+        ("leveldb_block_cache_size", po::value<int64_t>()->default_value(8*1024*1024), "")
+#endif
     ;
     options.add(kits);
 }

@@ -757,6 +757,10 @@ protected:
     int _set_sys_params();
     bool _asynch_commit;
 
+#ifdef USE_LEVELDB
+    std::string _leveldb_path;
+#endif
+
 }; // EOF ShoreEnv
 
 

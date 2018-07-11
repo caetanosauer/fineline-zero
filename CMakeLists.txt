@@ -196,6 +196,9 @@ SET (SM_DREADLOCK_FINGERS 3)
 SET (W_USE_COMPAT_STRSTREAM "true")
 SET (BP_MAINTAIN_PARENT_PTR "true")
 
+# Let finelog library know that it's running inside Zero to enable certain hard-coded features
+add_definitions(-DZERO_SM)
+
 # Use LevelDB as storage engine instead of Zero
 option (USE_LEVELDB "Use LevelDB as storage engine instead of Zero" OFF)
 if (USE_LEVELDB)

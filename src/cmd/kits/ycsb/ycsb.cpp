@@ -15,6 +15,13 @@ constexpr unsigned RecordsPerSF = 100'000;
 // Records inserted on each populate transaction
 constexpr unsigned RecordsPerPopXct = 1000;
 static_assert(RecordsPerSF % RecordsPerPopXct == 0, "");
+// First 2 bytes of the 8-byte YCSB key are used for Prefix
+constexpr unsigned PrefixByteCount = 2;
+constexpr uint64_t BuildKey(uint64_t prefix, uint64_t userKey)
+{
+   constexpr unsigned BitsToShift = (sizeof(uint64_t) - PrefixByteCount) * 8;
+   return (prefix << BitsToShift) | userKey;
+}
 
 // Thread-local Env stats
 static thread_local ShoreYCSBTrxStats my_stats;
@@ -43,7 +50,7 @@ int get_key(int sf, int specificPrefix, int tspread)
     }
     w_assert1(prefix < std::numeric_limits<uint16_t>::max());
     int user = URand(0, RecordsPerSF-1);
-    uint64_t key = (static_cast<uint64_t>(prefix) << 24) | static_cast<uint64_t>(user);
+    uint64_t key = BuildKey(prefix, user);
     // cout << "probing prefix " << prefix << " user " << user << " key " << key <<endl;
     return key;
 }
@@ -233,10 +240,11 @@ public:
         for(uint64_t i=0; i < _count; i++) {
             uint64_t prefix = _start + i;
             for(uint64_t j=0; j < RecordsPerSF; j += RecordsPerPopXct) {
-               uint64_t firstKey = (prefix << 24) | j;
+               uint64_t firstKey = BuildKey(prefix, j);
                populate_db_input_t in{firstKey, RecordsPerPopXct};
                W_COERCE(_env->xct_populate_db(prefix, in));
             }
+            cout << "Finished loading prefix " << prefix << endl;
         }
         TRACE(TRACE_STATISTICS, "Finished loading prefixes %ld .. %ld \n", _start, _start+_count);
     }

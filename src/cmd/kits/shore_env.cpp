@@ -50,27 +50,7 @@
 
 using namespace boost;
 
-// #warning IP: TODO pass arbitrary -sm_* options from shore.conf to shore
-
-// Exported variables //
-
 ShoreEnv* _g_shore_env = NULL;
-
-// procmonitor_t* _g_mon = NULL;
-
-
-
-// Exported functions //
-
-
-
-/********************************************************************
- *
- *  @fn:    print_env_stats
- *
- *  @brief: Prints trx statistics
- *
- ********************************************************************/
 
 void env_stats_t::print_env_stats() const
 {
@@ -81,18 +61,6 @@ void env_stats_t::print_env_stats() const
     TRACE( TRACE_STATISTICS, "Aborted  : %d\n", (_ntrx_att-_ntrx_com));
     TRACE( TRACE_STATISTICS, "===============================\n");
 }
-
-
-
-
-/********************************************************************
- *
- *  @class: ShoreEnv
- *
- *  @brief: The base class for all the environments (== databases)
- *          in Shore-MT
- *
- ********************************************************************/
 
 ShoreEnv::ShoreEnv(po::variables_map& vm)
     : db_iface(),

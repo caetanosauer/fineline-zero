@@ -24,6 +24,9 @@ set(kits_SRCS
     ${CMAKE_CURRENT_SOURCE_DIR}/shore_worker.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/sort.cpp
 
+    # LEVELDB (code should contain guards with USE_LEVELDB)
+    ${CMAKE_CURRENT_SOURCE_DIR}/leveldb_interface.cpp
+
     # YCSB
     ${CMAKE_CURRENT_SOURCE_DIR}/ycsb/ycsb.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ycsb/templates.cpp

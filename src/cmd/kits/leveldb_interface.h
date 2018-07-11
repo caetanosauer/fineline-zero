@@ -3,9 +3,13 @@
 #ifdef USE_LEVELDB
 
 #include <atomic>
+#include <string>
 #include <leveldb/db.h>
 #include <leveldb/cache.h>
 #include <leveldb/write_batch.h>
+
+#include "w_key.h"
+#include "finelog_basics.h"
 
 struct LevelDBTxn
 {
@@ -24,9 +28,11 @@ private:
 
 public:
 
+   static bool useWriteBatches;
+
    static bool levelDBProbe(leveldb::DB* db, const w_keystr_t& kstr, char* dest)
    {
-      string value;
+      std::string value;
       // cout << "Probing key: ";
       // for (int j = 0; j < kstr.get_length_as_keystr(); j++) {
       //    unsigned char c = reinterpret_cast<const unsigned char*>(kstr.buffer_as_keystr())[j];
@@ -52,41 +58,56 @@ public:
 
    static void beginTxn()
    {
-      auto& txn = getTxn();
-      w_assert1(txn.count == 0);
+      if (useWriteBatches) {
+         w_assert1(getTxn().count == 0);
+      }
    }
 
    static void commitTxn(leveldb::DB* db)
    {
-      auto& txn = getTxn();
-      if (txn.count > 0) {
-         auto status = db->Write(leveldb::WriteOptions(), &txn.wb);
-         w_assert1(status.ok());
-         txn.count = 0;
+      if (useWriteBatches) {
+         auto& txn = getTxn();
+         if (txn.count > 0) {
+            auto status = db->Write(leveldb::WriteOptions(), &txn.wb);
+            w_assert1(status.ok());
+            txn.count = 0;
+         }
       }
    }
 
    static void abortTxn()
    {
-      auto& txn = getTxn();
-      txn.wb.Clear();
-      txn.count = 0;
+      if (useWriteBatches) {
+         auto& txn = getTxn();
+         txn.wb.Clear();
+         txn.count = 0;
+      }
    }
 
-   static void levelDBInsert(const w_keystr_t& kstr, char* data, size_t len)
+   static void levelDBInsert(leveldb::DB* db, const w_keystr_t& kstr, char* data, size_t len)
    {
-      auto& txn = getTxn();
+      // Check that key prefixes conform to Zero's format and that stid is present
       w_assert1(reinterpret_cast<const char*>(kstr.buffer_as_keystr())[0] == '+');
       w_assert1(reinterpret_cast<const char*>(kstr.buffer_as_keystr())[1] != 0);
-      txn.wb.Put(keystrToSlice(kstr), leveldb::Slice{data, len});
-      txn.count++;
+
+      if (useWriteBatches) {
+         auto& txn = getTxn();
+         txn.wb.Put(keystrToSlice(kstr), leveldb::Slice{data, len});
+         txn.count++;
+      } else {
+         db->Put(leveldb::WriteOptions(), keystrToSlice(kstr), leveldb::Slice{data, len});
+      }
    }
 
-   static void levelDBDelete(const w_keystr_t& kstr)
+   static void levelDBDelete(leveldb::DB* db, const w_keystr_t& kstr)
    {
-      auto& txn = getTxn();
-      txn.wb.Delete(keystrToSlice(kstr));
-      txn.count++;
+      if (useWriteBatches) {
+         auto& txn = getTxn();
+         txn.wb.Delete(keystrToSlice(kstr));
+         txn.count++;
+      } else {
+         db->Delete(leveldb::WriteOptions(), keystrToSlice(kstr));
+      }
    }
 
    static leveldb::Slice keystrToSlice(const w_keystr_t& kstr)

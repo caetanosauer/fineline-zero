@@ -163,8 +163,16 @@ void KitsCommand::run()
     init();
 
     if (opt_load) {
+#ifdef USE_LEVELDB
+        // Disable write batches, as they have much worse performance with bulk loading
+        bool wbPreviousValue = LevelDBInterface::useWriteBatches;
+        LevelDBInterface::useWriteBatches = false;
+#endif
         shoreEnv->load();
         cout << "Loading finished!" << endl;
+#ifdef USE_LEVELDB
+        LevelDBInterface::useWriteBatches = wbPreviousValue;
+#endif
     }
 
     if (opt_skew && opt_skewShiftDelay > 0) {
@@ -238,6 +246,10 @@ void KitsCommand::runBenchmark()
         runBenchmarkSpec<tpcc::baseline_tpcc_client_t, tpcc::ShoreTPCCEnv>();
     }
     else if (opt_benchmark == "ycsb") {
+#ifdef USE_LEVELDB
+        // Disable write batches in YCSB, since the transactions are single-row anyway
+        LevelDBInterface::useWriteBatches = false;
+#endif
         runBenchmarkSpec<ycsb::baseline_ycsb_client_t, ycsb::ShoreYCSBEnv>();
     }
     else {

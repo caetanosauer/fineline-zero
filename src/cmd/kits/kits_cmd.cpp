@@ -144,6 +144,7 @@ void KitsCommand::setupOptions()
         ("leveldb_block_size", po::value<int64_t>()->default_value(4*1024), "")
         ("leveldb_max_file_size", po::value<int64_t>()->default_value(2*1024*1024), "")
         ("leveldb_block_cache_size", po::value<int64_t>()->default_value(8*1024*1024), "")
+        ("leveldb_use_compression", po::value<bool>()->default_value(true), "")
 #endif
     ;
     options.add(kits);

@@ -772,6 +772,8 @@ int ShoreEnv::configure_sm()
     _popts.max_file_size = optionValues["leveldb_max_file_size"].as<int64_t>();
     int64_t block_cache_size = optionValues["leveldb_block_cache_size"].as<int64_t>();
     _popts.block_cache = leveldb::NewLRUCache(block_cache_size);
+    bool use_compression = optionValues["leveldb_use_compression"].as<bool>();
+    _popts.compression = use_compression ? leveldb::kSnappyCompression : leveldb::kNoCompression;
 
     cout << "LevelDB options:" << endl;
     cout << "  logdir = " << _leveldb_path << endl;
@@ -780,6 +782,7 @@ int ShoreEnv::configure_sm()
     cout << "  block_size = " << _popts.block_size << endl;
     cout << "  max_file_size = " << _popts.max_file_size << endl;
     cout << "  block_cache_size = " << block_cache_size << endl;
+    cout << "  use_compression = " << use_compression << endl;
 #else
     Command::setSMOptions(_popts, optionValues);
 #endif

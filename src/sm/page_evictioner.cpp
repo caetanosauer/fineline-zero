@@ -206,7 +206,7 @@ bf_idx page_evictioner_base::pick_victim()
 
         // FineLine eviction: only evict pages whose last modification is older than
         // the archived epoch ...
-        auto archived_epoch = _bufferpool->_archived_epoch.load();
+        auto archived_epoch = ArchiveIndex::archived_epoch.load();
         // ... unless _evict_unarchived is set and we tried one round already
         constexpr unsigned max_archived_attempts = 100;
         bool ignore_epoch = _evict_unarchived && (attempts > max_archived_attempts);

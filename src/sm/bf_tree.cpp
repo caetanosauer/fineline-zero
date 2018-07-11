@@ -221,8 +221,6 @@ bf_tree_m::bf_tree_m(const sm_options& options)
     _evictioner = std::make_shared<page_evictioner_base>(this, options);
     _async_eviction = options.get_bool_option("sm_async_eviction", false);
     if (_async_eviction) { _evictioner->fork(); }
-
-    _archived_run = smlevel_0::logArchiver->getIndex()->getLastRun();
 }
 
 void bf_tree_m::shutdown()
@@ -444,13 +442,6 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
     if (_log_fetches) {
         Logger::log_sys<LogRecordType::fetch_page_log>(pid, page->version, page->store);
     }
-}
-
-void bf_tree_m::notify_archived_run(run_number_t archived_run)
-{
-    _archived_run = archived_run;
-    _archived_epoch = smlevel_0::log->get_log_file_epoch(archived_run);
-    cerr << "archived_epoch = " << _archived_epoch << endl;
 }
 
 ///////////////////////////////////   Page fix/unfix BEGIN         ///////////////////////////////////

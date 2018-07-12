@@ -368,6 +368,7 @@ ss_m::_destruct_once()
 
     ERROUT(<< "Terminating log archiver");
     log->flush_all();
+    log->stop_flush_daemon();
     if (logArchiver) { logArchiver->shutdown(); }
 
     ERROUT(<< "Terminating buffer manager");

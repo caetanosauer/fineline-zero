@@ -170,11 +170,11 @@ w_rc_t ShoreTPCBEnv::run_one_xct(Request* prequest)
     assert (prequest);
 
     if(_start_imbalance > 0 && !_bAlarmSet) {
-	CRITICAL_SECTION(alarm_cs, _alarm_lock);
-	if(!_bAlarmSet) {
-	    alarm(_start_imbalance);
-	    _bAlarmSet = true;
-	}
+	// CRITICAL_SECTION(alarm_cs, _alarm_lock);
+	// if(!_bAlarmSet) {
+	//     alarm(_start_imbalance);
+	//     _bAlarmSet = true;
+	// }
     }
 
     int rand;

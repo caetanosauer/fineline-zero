@@ -55,8 +55,8 @@ void MergeRuns::run()
         out = std::make_shared<ArchiveIndex>(outdir, nullptr /*logStorage*/, false /*format*/);
     }
 
-    MergerDaemon merge(in, out);
-    merge.doMerge(level, fanin);
+    MergerDaemon merge(in, fanin, out);
+    merge.doMerge(level);
 
     if (replFactor > 0) {
         out->deleteRuns(replFactor);

@@ -299,10 +299,8 @@ void Command::setupSMOptions(po::options_description& options)
         "Frequency at which fsync is called on archive writer (once very N bocks)")
     ("sm_archiver_block_size", po::value<int>(),
         "Archiver Block size")
-    ("sm_archiver_merging", po::value<bool>(),
-        "Whether to turn on asynchronous merging with log archiver")
-    ("sm_archiver_fanin", po::value<int>(),
-        "Log archiver merge fan-in")
+    ("sm_archiver_merge_fanin", po::value<int>(),
+        "Merge fan-in used by asynchronous merging with log archiver (0 to disable async merges)")
     ("sm_archiver_replication_factor", po::value<int>(),
         "Replication factor maintained by the log archive \
          run recycler (0 = never delete a run)")

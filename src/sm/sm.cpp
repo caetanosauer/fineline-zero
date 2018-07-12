@@ -245,8 +245,8 @@ ss_m::_construct_once()
     // FineLine: log archiver always on; restart recovery consists of archiving
     // the unsorted portion of the log
     auto archdir = _options.get_string_option("sm_archdir", "archive");
-    bool merge = _options.get_bool_option("sm_archiver_merging", false);
-    logArchiver = new LogArchiver(archdir, log, format, merge);
+    int merge_fanin = _options.get_int_option("sm_archiver_merge_fanin", 0);
+    logArchiver = new LogArchiver(archdir, log, format, merge_fanin);
     logArchiver->fork();
     lsn_t durable_lsn = log->durable_lsn();
     if (durable_lsn > lsn_t(1,0)) {

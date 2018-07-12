@@ -17,20 +17,6 @@
 #undef SM_LOG_PARTITIONS
 
 /*
- * Enforce acceptable page size. Set with configure.
- * Users should not touch this here.   Use argument to configure instead.
- */
-#if SM_PAGESIZE==1024
-#elif SM_PAGESIZE==2048
-#elif SM_PAGESIZE==4096
-#elif SM_PAGESIZE==8192
-#elif SM_PAGESIZE==1024*16
-#elif SM_PAGESIZE==1024*32
-#else
-#error configured with illegitimate page size.  Must be (1,2,4,8,16 or 32) * 1024
-#endif
-
-/*
  * Experimental expensive latch stats.
  * Turn this on to get a better idea (approx) of latch waits
  * (split out for different page types).

@@ -52,6 +52,11 @@ Alternatively, a debug version without optimizations is also supported:
 cmake -DCMAKE_BUILD_TYPE=Debug ..
 ```
 
+A specific version of Boost can be specified with:
+```
+cmake -DBOOST_ROOT=<path> ..
+```
+
 Finally, to compile:
 
 ```

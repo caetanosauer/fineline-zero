@@ -55,9 +55,7 @@ set(sm_STAT_SRCS
 add_library(sm STATIC ${sm_STAT_SRCS})
 target_link_libraries(sm
     common
-    boost_program_options
-    boost_system
-    boost_filesystem
+    ${Boost_LIBRARIES}
     )
 
 # generate a library that performs swizzling but no pin_cnt increments/decrements

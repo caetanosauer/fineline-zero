@@ -252,8 +252,8 @@ public:
                {
                    PageID pid;
                    uint32_t count;
-                   PageID end = pid + count - 1;
                    deserialize_log_fields(&lr, pid, count);
+                   PageID end = pid + count - 1;
                    o << " pids: " << pid << "-" << end;
                    break;
                }

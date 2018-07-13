@@ -72,17 +72,6 @@ namespace memory_block {
 } // keep emacs happy...
 #endif
 
-/* GCC can't handle zero length arrays, but has an extension to handle
-   unsized ones at the end of a struct. Meanwhile, SunStudio can't
-   handle unsized arrays, but has an extension to allow zero-length
-   arrays.
- */
-#ifdef __GNUC__
-#define EMPTY_ARRAY_DIM
-#else
-#define EMPTY_ARRAY_DIM 0
-#endif
-
 // forward decl...
 struct block_list;
 
@@ -179,7 +168,6 @@ struct block {
     block_list*     _owner;
     block*          _next;
     // The memory managed:
-    // char            _data[EMPTY_ARRAY_DIM];
     char            _data[0];
 };
 

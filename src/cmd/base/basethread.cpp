@@ -68,7 +68,7 @@ void basethread_t::start_archiver(string archdir, size_t wsize, size_t bsize)
     cerr << "Initializing log archiver ... " << flush;
     // _options.set_int_option("sm_archiver_workspace_size", wsize);
     // _options.set_int_option("sm_archiver_block_size", bsize);
-    logArchiver = new LogArchiver(archdir, smlevel_0::log, false /*format*/, false /*merge*/);
+    logArchiver = new LogArchiver(archdir, smlevel_0::log, false /*format*/, false /*merge*/, 0 /*compression*/);
     cerr << "OK" << endl;
 
     smlevel_0::logArchiver = logArchiver;

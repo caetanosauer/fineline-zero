@@ -34,7 +34,7 @@ void GenArchive::run()
     Logger::log_sys<LogRecordType::comment_log>("o hi there");
     log->flush_all();
 
-    LogArchiver* la = new LogArchiver(archdir, log, true /*format*/, false /*merge*/);
+    LogArchiver* la = new LogArchiver(archdir, log, true /*format*/, false /*merge*/, 0 /*compression*/);
 
     lsn_t durableLSN = log->durable_lsn();
     cerr << "Activating log archiver until LSN " << durableLSN << endl;

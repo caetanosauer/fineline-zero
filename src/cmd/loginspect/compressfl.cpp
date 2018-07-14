@@ -8,7 +8,7 @@
 
 void CompressFl::setupOptions()
 {
-    boost::program_options::options_description opt("VerifyLog Options");
+    boost::program_options::options_description opt("CompressFL Options");
     opt.add_options()
         ("archdir", po::value<string>(&archdir), "Path to archdir")
         ("logdir", po::value<string>(&logdir), "Path to logdir")
@@ -23,7 +23,7 @@ void CompressFl::run()
     auto log = std::make_unique<LogManager>(logdir, false /*format*/);
     smlevel_0::log = log.get();
     log->init();
-    auto arch = std::make_unique<LogArchiver>(archdir, log.get(), true /*format*/, false /*merge*/);
+    auto arch = std::make_unique<LogArchiver>(archdir, log.get(), true /*format*/, false /*merge*/, 0 /*compression*/);
     smlevel_0::logArchiver = arch.get();
     arch->fork();
     auto bf = std::make_unique<bf_tree_m>(options);

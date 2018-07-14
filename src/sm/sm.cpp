@@ -246,7 +246,8 @@ ss_m::_construct_once()
     // the unsorted portion of the log
     auto archdir = _options.get_string_option("sm_archdir", "archive");
     int merge_fanin = _options.get_int_option("sm_archiver_merge_fanin", 0);
-    logArchiver = new LogArchiver(archdir, log, format, merge_fanin);
+    int compression = _options.get_int_option("sm_page_img_compression", 0);
+    logArchiver = new LogArchiver(archdir, log, format, merge_fanin, compression);
     logArchiver->fork();
     lsn_t durable_lsn = log->durable_lsn();
     if (durable_lsn > lsn_t(1,0)) {

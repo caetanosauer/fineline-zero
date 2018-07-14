@@ -1,6 +1,7 @@
 #include "ycsb.h"
 
 #include "trx_worker.h"
+#include <fstream>
 
 DEFINE_ROW_CACHE_TLS(ycsb, ycsbtable);
 
@@ -9,6 +10,12 @@ namespace ycsb {
 // related to dynamic skew for load imbalance
 skewer_t y_skewer;
 bool _change_load = false;
+
+#ifdef USE_LEVELDB
+class ycsb_ticker_thread_t;
+std::atomic<unsigned> txnCounter;
+std::unique_ptr<ycsb_ticker_thread_t> tickerThread;
+#endif
 
 // SF=1 should be around 100MB, i.e., 100 thousand records of 1KB
 constexpr unsigned RecordsPerSF = 100'000;
@@ -89,6 +96,27 @@ ycsbtable_t::ycsbtable_t(const uint32_t& pd)
      uint keys[1] = {0};
      create_primary_idx_desc(keys, 1, pd);
 }
+
+#ifdef USE_LEVELDB
+class ycsb_ticker_thread_t : public sm_thread_wrapper_t
+{
+public:
+    ycsb_ticker_thread_t() { stop = false; }
+    void shutdown() { stop = true; }
+    void run()
+    {
+        std::ofstream ofs;
+        ofs.open("tput.txt", std::ofstream::out | std::ofstream::trunc);
+        while (true) {
+            if (stop) { break; }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+            ofs << txnCounter.exchange(0) << endl;
+        }
+        ofs.close();
+    }
+    std::atomic<bool> stop;
+};
+#endif
 
 rc_t ycsbtable_man_impl::index_probe(Database* db, table_row_t* ptuple, const uint64_t id)
 {
@@ -213,11 +241,18 @@ int ShoreYCSBEnv::statistics()
 
 int ShoreYCSBEnv::start()
 {
+#ifdef USE_LEVELDB
+    tickerThread = make_unique<ycsb_ticker_thread_t>();
+#endif
     return (ShoreEnv::start());
 }
 
 int ShoreYCSBEnv::stop()
 {
+#ifdef USE_LEVELDB
+    tickerThread->shutdown();
+    tickerThread = nullptr;
+#endif
     return (ShoreEnv::stop());
 }
 

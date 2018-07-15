@@ -45,8 +45,10 @@ uint64_t get_key(int sf, int specificPrefix, int tspread)
     // Skew only applies to the prefix. A "90-10" type of skew should use at least SF=10.
     // Within a prefix, static chunks are partitioned to worker threads just like the
     // warehouses in TPC-C, according to the tspread argument.
-    int prefix = _change_load ? y_skewer.get_input() : URand(1, sf);
+    int prefix = _change_load ? y_skewer.get_input() : URand(0, sf-1);
     if (specificPrefix > 0) {
+        // TODO Hack: prefixes are generated from 0 to SF-1, but worker threads have IDs that start with 1
+        specificPrefix--;
         // If prefix is given, it is essentially the worker thread number
         w_assert1(tspread > 0);
         w_assert1(specificPrefix <= tspread);

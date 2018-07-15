@@ -41,6 +41,8 @@
 
 #include <map>
 
+// TODO replace with NodeFetch from finelog
+
 /*
  * A log-record iterator that encapsulates a log archive scan and a recovery
  * log scan. It reads from the former until it runs out, after which it reads
@@ -57,6 +59,7 @@ public:
     void open(PageID pid);
     void apply(fixable_page_h& page);
     void redo(fixable_page_h& p, logrec_t* lr);
+    void close();
 
     // Required for eviction of pages with updates not yet archived (FineLine)
     void reopen(PageID pid);

@@ -434,6 +434,8 @@ void bf_tree_m::recover_if_needed(bf_tree_cb_t& cb, generic_page* page)
         if (img_generated) { p.incr_version(); }
     }
 
+    _localSprIter.close();
+
     w_assert0(page->pid == pid);
     w_assert0(cb._pid == pid);
     w_assert0(page->version > 0);

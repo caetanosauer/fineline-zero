@@ -58,3 +58,8 @@ void SprIterator::apply(fixable_page_h &p)
         replayed++;
     }
 }
+
+void SprIterator::close()
+{
+    archive_scan.close();
+}

@@ -7,8 +7,8 @@
 class ticker_thread_t : public sm_thread_wrapper_t
 {
 public:
-    ticker_thread_t(bool msec = false, bool print_tput = true)
-        : msec(msec), print_tput(print_tput), even_round(true)
+    ticker_thread_t(bool msec = false, bool print_tput = true, bool log_ticks = true)
+        : msec(msec), print_tput(print_tput), log_ticks(log_ticks), even_round(true)
     {
         interval_usec = 1000; // 1ms
         if (!msec) { interval_usec *= 1000; }
@@ -57,8 +57,10 @@ public:
                 // ofs2 << evict_time << "\t" << evict_attempts << std::endl;
             }
 
-            if (msec) { Logger::log_sys<LogRecordType::tick_msec_log>(); }
-            else { Logger::log_sys<LogRecordType::tick_sec_log>(); }
+            if (log_ticks) {
+               if (msec) { Logger::log_sys<LogRecordType::tick_msec_log>(); }
+               else { Logger::log_sys<LogRecordType::tick_sec_log>(); }
+            }
 
             even_round ^= true;
         }
@@ -71,6 +73,7 @@ private:
     int interval_usec;
     bool msec;
     bool print_tput;
+    bool log_ticks;
     std::atomic<bool> stop;
 
     std::array<sm_stats_t, 2> stats;

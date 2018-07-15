@@ -686,6 +686,8 @@ rc_t xct_t::commit(bool sync_log)
     // Static thread-local variables used to measure transaction latency
     static thread_local unsigned long _accum_latency = 0;
     static thread_local unsigned int _latency_count = 0;
+    // TODO should be a runtime option?
+    static constexpr bool _latency_dump = false;
 
     bool sys_xct = is_sys_xct();
     if (!sys_xct) {
@@ -725,15 +727,17 @@ rc_t xct_t::commit(bool sync_log)
      *  Xct is now committed
      */
 
-    auto end_tstamp = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_tstamp - _begin_tstamp);
-    _accum_latency += elapsed.count();
-    _latency_count++;
-    // dump average latency every 100 commits
-    if (_latency_count % 100 == 0) {
-        Logger::log_sys<LogRecordType::xct_latency_dump_log>(_accum_latency / _latency_count);
-        _accum_latency = 0;
-        _latency_count = 0;
+    if (_latency_dump) {
+       auto end_tstamp = std::chrono::high_resolution_clock::now();
+       auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(end_tstamp - _begin_tstamp);
+       _accum_latency += elapsed.count();
+       _latency_count++;
+       // dump average latency every 100 commits
+       if (_latency_count % 100 == 0) {
+           Logger::log_sys<LogRecordType::xct_latency_dump_log>(_accum_latency / _latency_count);
+           _accum_latency = 0;
+           _latency_count = 0;
+       }
     }
 
     return RCOK;

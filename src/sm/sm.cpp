@@ -297,7 +297,7 @@ ss_m::_construct_once()
 
     bf->post_init();
 
-    ticker_thread = new ticker_thread_t();
+    ticker_thread = new ticker_thread_t(false /*msec*/, true /*print_tput*/, false /*log_ticks*/);
     ticker_thread->fork();
 
     ERROUT(<< "[" << timer.time_ms() << "] Finished SM initialization");

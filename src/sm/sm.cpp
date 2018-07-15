@@ -73,11 +73,11 @@ Rome Research Laboratory Contract No. F30602-97-2-0247.
 #include "xct_logger.h"
 #include "ticker_thread.h"
 
+#include <iomanip> //for put_time
 
 sm_tls_allocator smlevel_0::allocator;
 
 memalign_allocator<char, smlevel_0::IO_ALIGN> smlevel_0::aligned_allocator;
-
 
 bool         smlevel_0::shutdown_filthy = false;
 bool         smlevel_0::shutdown_clean = false;
@@ -110,6 +110,14 @@ btree_m* smlevel_0::bt = 0;
 oldest_lsn_tracker_t* smlevel_0::oldest_lsn_tracker = 0;
 ticker_thread_t* smlevel_0::ticker_thread = 0;
 ss_m* smlevel_top::SSM = 0;
+
+static void printTimestamp(ostream& out)
+{
+    using namespace std::chrono;
+    auto now = system_clock::now();
+    auto now_c = system_clock::to_time_t(now);
+    out << std::put_time(std::localtime(&now_c), "%c");
+}
 
 /*
  *  Class ss_m code
@@ -301,6 +309,10 @@ ss_m::_construct_once()
     ticker_thread->fork();
 
     ERROUT(<< "[" << timer.time_ms() << "] Finished SM initialization");
+
+    cerr << "SM initialization end timestamp: ";
+    printTimestamp(cerr);
+    cerr << endl;
 }
 
 ss_m::~ss_m()
@@ -317,6 +329,12 @@ ss_m::~ss_m()
 void
 ss_m::_destruct_once()
 {
+    stopwatch_t timer;
+
+    cerr << "SM termination begin timestamp: ";
+    printTimestamp(cerr);
+    cerr << endl;
+
     if (shutdown_filthy)
         shutdown_clean = false;
     --_instance_cnt;
@@ -346,9 +364,13 @@ ss_m::_destruct_once()
         smthread_t::detach_xct(xct());
     }
 
+    ERROUT(<< "[" << timer.time_ms() << "] Terminating transactions");
+
     // remove all transactions, aborting them in case of clean shutdown
     xct_t::cleanup(shutdown_clean);
     w_assert1(xct_t::num_active_xcts() == 0);
+
+    ERROUT(<< "[" << timer.time_ms() << "] Terminating buffer manager services");
 
     // log truncation requires clean shutdown
     bool truncate = _options.get_bool_option("sm_truncate_log", false);
@@ -367,15 +389,15 @@ ss_m::_destruct_once()
     // Stop cleaner and evictioner
     bf->shutdown();
 
-    ERROUT(<< "Terminating log archiver");
-    log->flush_all();
+    ERROUT(<< "[" << timer.time_ms() << "] Terminating log archiver");
+    // log->flush_all();
     log->stop_flush_daemon();
     if (logArchiver) { logArchiver->shutdown(); }
 
-    ERROUT(<< "Terminating buffer manager");
+    ERROUT(<< "[" << timer.time_ms() << "] Terminating buffer manager");
     delete bf; bf = 0;
 
-    ERROUT(<< "Terminating other services");
+    ERROUT(<< "[" << timer.time_ms() << "] Terminating other services");
     lm->assert_empty(); // no locks should be left
     bt->destruct_once();
     delete bt; bt = 0; // btree manager
@@ -386,7 +408,7 @@ ss_m::_destruct_once()
         logArchiver = 0;    //     so we delete it only after bf is gone
     }
 
-    ERROUT(<< "Terminating log manager");
+    ERROUT(<< "[" << timer.time_ms() << "] Terminating log manager");
     log->shutdown();
     delete log; log = 0;
     delete oldest_lsn_tracker;

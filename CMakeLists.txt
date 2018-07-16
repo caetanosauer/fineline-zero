@@ -42,6 +42,9 @@ IF(NOT CMAKE_BUILD_TYPE)
 ENDIF(NOT CMAKE_BUILD_TYPE)
 
 find_package(Threads REQUIRED) # find pthread library
+find_package(Boost 1.48 REQUIRED COMPONENTS program_options system filesystem)
+include_directories(${Boost_INCLUDE_DIRS})
+link_directories(${Boost_LIBRARY_DIRS})
 
 # libprofiler x86_64 has some issue on libunwind.
 # it's so ugly and hard to fix. Just give up using libprofiler on some platform.
